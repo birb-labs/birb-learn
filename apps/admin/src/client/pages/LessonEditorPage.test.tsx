@@ -94,7 +94,61 @@ describe('LessonEditorPage', () => {
     expect(postCall).toBeDefined();
     const body = JSON.parse((postCall![1] as RequestInit).body as string);
     expect(body.type).toBe('text');
-    expect(body.translations['pt-BR']).toEqual({ bodyMdx: '' });
+    expect(body.translations['pt-BR']).toEqual({ bodyMdx: 'Novo bloco de texto.' });
+  });
+
+  it('clicking "+ Simulador" POSTs a new simulator block with a non-blank simulatorKey', async () => {
+    const fetchSpy = mockFetch([
+      {
+        match: (url, init) => url === '/api/lessons/lessons/1' && (init?.method ?? 'GET') === 'GET',
+        body: { translations: { 'pt-BR': { title: 'Lição' } }, blocks: [] },
+      },
+      {
+        match: (url, init) => url === '/api/lessons/lessons/1/blocks' && init?.method === 'POST',
+        body: { id: 5 },
+        status: 201,
+      },
+      previewHandler,
+    ]);
+
+    const user = userEvent.setup();
+    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
+
+    await screen.findByDisplayValue('Lição');
+    await user.click(screen.getByRole('button', { name: '+ Simulador' }));
+
+    const postCall = fetchSpy.mock.calls.find(
+      ([url, init]) => url === '/api/lessons/lessons/1/blocks' && (init as RequestInit)?.method === 'POST',
+    );
+    expect(postCall).toBeDefined();
+    const body = JSON.parse((postCall![1] as RequestInit).body as string);
+    expect(body.type).toBe('simulator');
+    expect(body.translations['pt-BR']).toEqual({ caption: '' });
+    expect(typeof body.simulatorKey).toBe('string');
+    expect(body.simulatorKey.trim().length).toBeGreaterThan(0);
+  });
+
+  it('shows the server error message when adding a block fails', async () => {
+    mockFetch([
+      {
+        match: (url, init) => url === '/api/lessons/lessons/1' && (init?.method ?? 'GET') === 'GET',
+        body: { translations: { 'pt-BR': { title: 'Lição' } }, blocks: [] },
+      },
+      {
+        match: (url, init) => url === '/api/lessons/lessons/1/blocks' && init?.method === 'POST',
+        body: { error: 'Blocos de texto precisam de conteúdo.' },
+        status: 400,
+      },
+      previewHandler,
+    ]);
+
+    const user = userEvent.setup();
+    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
+
+    await screen.findByDisplayValue('Lição');
+    await user.click(screen.getByRole('button', { name: '+ Texto' }));
+
+    expect(await screen.findByText('Blocos de texto precisam de conteúdo.')).toBeInTheDocument();
   });
 
   it("editing a block's content field PATCHes just that locale's translation", async () => {

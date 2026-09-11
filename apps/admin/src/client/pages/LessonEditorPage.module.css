@@ -34,6 +34,10 @@
   font-size: var(--font-size-lg);
 }
 
+.error {
+  color: var(--color-danger);
+}
+
 .saveButton {
   align-self: flex-start;
   border-radius: var(--radius-sm);

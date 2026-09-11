@@ -37,16 +37,26 @@ interface Lesson {
   blocks: Block[];
 }
 
+// Non-blank placeholder content: the server rejects blank required fields
+// (see `validateLessonBlockTranslation` in the worker's lessons routes), so
+// a brand-new block needs a starting value the author edits into real
+// content, not an empty string that would fail validation silently.
 function emptyTranslationFor(type: BlockType): BlockTranslation {
-  if (type === 'text') return { bodyMdx: '' };
-  if (type === 'curiosity' || type === 'real_world_application') return { title: '', bodyMdx: '' };
-  if (type === 'solved_exercise') return { promptMdx: '', resolutionMdx: '' };
+  if (type === 'text') return { bodyMdx: 'Novo bloco de texto.' };
+  if (type === 'curiosity' || type === 'real_world_application') return { title: 'Novo título', bodyMdx: 'Novo conteúdo.' };
+  if (type === 'solved_exercise') return { promptMdx: 'Novo enunciado.', resolutionMdx: 'Nova resolução.' };
   return { caption: '' };
 }
+
+// The one simulator this project will eventually have (built in a later
+// task). If/when other simulators exist, the admin should change this after
+// adding the block -- there's no picker yet.
+const DEFAULT_SIMULATOR_KEY = 'function-approach-grapher';
 
 export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDone: () => void }) {
   const [activeLocale, setActiveLocale] = useState<Locale>('pt-BR');
   const [lesson, setLesson] = useState<Lesson>({ translations: {}, blocks: [] });
+  const [error, setError] = useState<string | null>(null);
 
   function reload() {
     apiFetch(`/api/lessons/lessons/${lessonId}`)
@@ -71,16 +81,35 @@ export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDon
   }
 
   async function handleAddBlock(type: BlockType) {
-    await apiFetch(`/api/lessons/lessons/${lessonId}/blocks`, {
+    const response = await apiFetch(`/api/lessons/lessons/${lessonId}/blocks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, translations: { 'pt-BR': emptyTranslationFor(type) } }),
+      body: JSON.stringify({
+        type,
+        // simulatorKey is required by the server unconditionally for
+        // `type: 'simulator'` (not gated behind translations), so it must be
+        // sent on creation -- defaulted here since there's no picker yet.
+        ...(type === 'simulator' ? { simulatorKey: DEFAULT_SIMULATOR_KEY } : {}),
+        translations: { 'pt-BR': emptyTranslationFor(type) },
+      }),
     });
+    if (!response.ok) {
+      const data = await response.json<{ error: string }>();
+      setError(data.error);
+      return;
+    }
+    setError(null);
     reload();
   }
 
   async function handleRemoveBlock(blockId: number) {
-    await apiFetch(`/api/lessons/lessons/${lessonId}/blocks/${blockId}`, { method: 'DELETE' });
+    const response = await apiFetch(`/api/lessons/lessons/${lessonId}/blocks/${blockId}`, { method: 'DELETE' });
+    if (!response.ok) {
+      const data = await response.json<{ error: string }>();
+      setError(data.error);
+      return;
+    }
+    setError(null);
     reload();
   }
 
@@ -89,33 +118,51 @@ export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDon
     if (targetIndex < 0 || targetIndex >= lesson.blocks.length) return;
     const reordered = [...lesson.blocks];
     [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
-    await apiFetch(`/api/lessons/lessons/${lessonId}/blocks/reorder`, {
+    const response = await apiFetch(`/api/lessons/lessons/${lessonId}/blocks/reorder`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ blockIds: reordered.map((b) => b.id) }),
     });
+    if (!response.ok) {
+      const data = await response.json<{ error: string }>();
+      setError(data.error);
+      return;
+    }
+    setError(null);
     reload();
   }
 
   async function handleSaveBlock(block: Block, patch: Partial<{ simulatorKey: string; simulatorParams: string }>) {
-    await apiFetch(`/api/lessons/lessons/${lessonId}/blocks/${block.id}`, {
+    const response = await apiFetch(`/api/lessons/lessons/${lessonId}/blocks/${block.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     });
+    if (!response.ok) {
+      const data = await response.json<{ error: string }>();
+      setError(data.error);
+      return;
+    }
+    setError(null);
     reload();
   }
 
   async function handleSaveBlockContent(block: Block, content: BlockTranslation) {
-    setLesson((prev) => ({
-      ...prev,
-      blocks: prev.blocks.map((b) => (b.id === block.id ? { ...b, translations: { ...b.translations, [activeLocale]: content } } : b)),
-    }));
-    await apiFetch(`/api/lessons/lessons/${lessonId}/blocks/${block.id}`, {
+    const response = await apiFetch(`/api/lessons/lessons/${lessonId}/blocks/${block.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ translations: { [activeLocale]: content } }),
     });
+    if (!response.ok) {
+      const data = await response.json<{ error: string }>();
+      setError(data.error);
+      return;
+    }
+    setError(null);
+    setLesson((prev) => ({
+      ...prev,
+      blocks: prev.blocks.map((b) => (b.id === block.id ? { ...b, translations: { ...b.translations, [activeLocale]: content } } : b)),
+    }));
   }
 
   return (
@@ -132,6 +179,8 @@ export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDon
           </button>
         ))}
       </div>
+
+      {error && <p className={styles.error}>{error}</p>}
 
       <input className={styles.titleInput} value={title} onChange={(event) => updateTitle(event.target.value)} onBlur={handleSaveTitle} />
 
