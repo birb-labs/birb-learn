@@ -20,7 +20,7 @@
 html {
   --color-background: #ffffff;
   --color-foreground: #1a1a2e;
-  --color-accent: #6366f1;
+  --color-accent: #5a5df0;
   --color-muted: #6b7280;
   --color-border: #e5e7eb;
   --color-surface: #f8f9fc;
@@ -66,6 +66,13 @@ html {
   --radius-md: 0.5rem;
   --radius-lg: 1rem;
   --radius-full: 9999px;
+
+  /* Shadow tokens mirror light mode here as a pre-hydration fallback (see
+     file-level comment above); html[data-mode="light"] below re-asserts
+     the same values once data-mode is set. */
+  --shadow-sm: 0 1px 2px rgba(15, 15, 26, 0.06);
+  --shadow-md: 0 4px 12px rgba(15, 15, 26, 0.08);
+  --shadow-lg: 0 12px 32px rgba(15, 15, 26, 0.12);
 }
 
 /* Shadows vary by mode only -- see the file-level comment above. */
@@ -84,7 +91,7 @@ html[data-mode="dark"] {
 html[data-theme="default"][data-mode="light"] {
   --color-background: #ffffff;
   --color-foreground: #1a1a2e;
-  --color-accent: #6366f1;
+  --color-accent: #5a5df0;
   --color-muted: #6b7280;
   --color-border: #e5e7eb;
   --color-surface: #f8f9fc;
@@ -99,7 +106,7 @@ html[data-theme="default"][data-mode="light"] {
 html[data-theme="default"][data-mode="dark"] {
   --color-background: #0f0f1a;
   --color-foreground: #f4f4f5;
-  --color-accent: #818cf8;
+  --color-accent: #737ff7;
   --color-muted: #9ca3af;
   --color-border: #27272a;
   --color-surface: #17172a;
@@ -114,7 +121,7 @@ html[data-theme="default"][data-mode="dark"] {
 html[data-theme="solarized"][data-mode="light"] {
   --color-background: #fdf6e3;
   --color-foreground: #073642;
-  --color-accent: #268bd2;
+  --color-accent: #2074af;
   --color-muted: #93a1a1;
   --color-border: #eee8d5;
   --color-surface: #f5efdc;
@@ -129,7 +136,7 @@ html[data-theme="solarized"][data-mode="light"] {
 html[data-theme="solarized"][data-mode="dark"] {
   --color-background: #002b36;
   --color-foreground: #eee8d5;
-  --color-accent: #268bd2;
+  --color-accent: #3b99dc;
   --color-muted: #586e75;
   --color-border: #073642;
   --color-surface: #073642;
@@ -144,7 +151,7 @@ html[data-theme="solarized"][data-mode="dark"] {
 html[data-theme="monokai"][data-mode="light"] {
   --color-background: #fafafa;
   --color-foreground: #272822;
-  --color-accent: #a6e22e;
+  --color-accent: #a0e021;
   --color-muted: #75715e;
   --color-border: #e0e0e0;
   --color-surface: #f0f0f0;
@@ -159,7 +166,7 @@ html[data-theme="monokai"][data-mode="light"] {
 html[data-theme="monokai"][data-mode="dark"] {
   --color-background: #272822;
   --color-foreground: #f8f8f2;
-  --color-accent: #a6e22e;
+  --color-accent: #ace43b;
   --color-muted: #75715e;
   --color-border: #3e3d32;
   --color-surface: #2d2e27;
@@ -174,7 +181,7 @@ html[data-theme="monokai"][data-mode="dark"] {
 html[data-theme="mocha"][data-mode="light"] {
   --color-background: #eff1f5;
   --color-foreground: #4c4f69;
-  --color-accent: #8839ef;
+  --color-accent: #7f2bee;
   --color-muted: #6c6f85;
   --color-border: #ccd0da;
   --color-surface: #e6e9ef;
@@ -189,7 +196,7 @@ html[data-theme="mocha"][data-mode="light"] {
 html[data-theme="mocha"][data-mode="dark"] {
   --color-background: #1e1e2e;
   --color-foreground: #cdd6f4;
-  --color-accent: #cba6f7;
+  --color-accent: #c398f6;
   --color-muted: #a6adc8;
   --color-border: #313244;
   --color-surface: #232334;
