@@ -108,14 +108,14 @@ export const lessonTranslations = sqliteTable(
   (table) => [unique().on(table.lessonId, table.locale)],
 );
 
-export type LessonBlockType = 'text' | 'curiosity' | 'real_world_application' | 'solved_exercise' | 'simulator';
-export const LESSON_BLOCK_TYPES: LessonBlockType[] = [
+export const LESSON_BLOCK_TYPES = [
   'text',
   'curiosity',
   'real_world_application',
   'solved_exercise',
   'simulator',
-];
+] as const;
+export type LessonBlockType = (typeof LESSON_BLOCK_TYPES)[number];
 
 export const lessonBlocks = sqliteTable('lesson_blocks', {
   id: integer('id').primaryKey({ autoIncrement: true }),
