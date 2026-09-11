@@ -104,9 +104,52 @@ export const lessonTranslations = sqliteTable(
       .references(() => lessons.id),
     locale: text('locale', { enum: LOCALES }).notNull(),
     title: text('title').notNull(),
-    bodyMdx: text('body_mdx').notNull(),
   },
   (table) => [unique().on(table.lessonId, table.locale)],
+);
+
+export type LessonBlockType = 'text' | 'curiosity' | 'real_world_application' | 'solved_exercise' | 'simulator';
+export const LESSON_BLOCK_TYPES: LessonBlockType[] = [
+  'text',
+  'curiosity',
+  'real_world_application',
+  'solved_exercise',
+  'simulator',
+];
+
+export const lessonBlocks = sqliteTable('lesson_blocks', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  lessonId: integer('lesson_id')
+    .notNull()
+    .references(() => lessons.id),
+  order: integer('order').notNull(),
+  type: text('type', { enum: LESSON_BLOCK_TYPES }).notNull(),
+  // Only set (and only meaningful) when type === 'simulator': which
+  // registered component to render, and its freeform JSON configuration.
+  // Both are structural (shared across locales) -- see the design doc's
+  // "Data model" section.
+  simulatorKey: text('simulator_key'),
+  simulatorParams: text('simulator_params'),
+});
+
+export const lessonBlockTranslations = sqliteTable(
+  'lesson_block_translations',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    blockId: integer('block_id')
+      .notNull()
+      .references(() => lessonBlocks.id),
+    locale: text('locale', { enum: LOCALES }).notNull(),
+    // Nullable because each block `type` only uses a subset -- see
+    // `LESSON_BLOCK_REQUIRED_FIELDS` in queries.ts (Task 2) for which
+    // columns each type requires to be non-null/non-blank.
+    title: text('title'),
+    bodyMdx: text('body_mdx'),
+    promptMdx: text('prompt_mdx'),
+    resolutionMdx: text('resolution_mdx'),
+    caption: text('caption'),
+  },
+  (table) => [unique().on(table.blockId, table.locale)],
 );
 
 export const questions = sqliteTable('questions', {

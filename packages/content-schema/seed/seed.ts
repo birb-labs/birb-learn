@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { getDb } from '../src/client';
 import {
+  lessonBlockTranslations,
+  lessonBlocks,
   lessonTranslations,
   lessons,
   questionOptionTranslations,
@@ -29,6 +31,8 @@ db.delete(questionTranslations).run();
 db.delete(questions).run();
 db.delete(tagTranslations).run();
 db.delete(tags).run();
+db.delete(lessonBlockTranslations).run();
+db.delete(lessonBlocks).run();
 db.delete(lessonTranslations).run();
 db.delete(lessons).run();
 db.delete(sectionTranslations).run();
@@ -73,6 +77,16 @@ db.insert(lessonTranslations)
     lessonId: lesson.id,
     locale: 'pt-BR',
     title: 'Lição de Exemplo',
+  })
+  .run();
+db.insert(lessonBlocks)
+  .values({ lessonId: lesson.id, order: 1, type: 'text' })
+  .run();
+const exampleBlock = db.select().from(lessonBlocks).all()[0];
+db.insert(lessonBlockTranslations)
+  .values({
+    blockId: exampleBlock.id,
+    locale: 'pt-BR',
     bodyMdx: `# Lição de Exemplo
 
 Este é um conteúdo de placeholder para provar que o pipeline de
