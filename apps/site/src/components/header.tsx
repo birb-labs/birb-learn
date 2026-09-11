@@ -29,7 +29,7 @@ export function Header() {
         </Link>
       </nav>
       <div className={styles.controls}>
-        <span className={styles.controlGroup}>
+        <div className={styles.controlGroup}>
           <Icon name="palette" size={16} aria-hidden />
           <ThemeSwitcher
             labels={{
@@ -48,7 +48,7 @@ export function Header() {
               },
             }}
           />
-        </span>
+        </div>
         <span className={styles.controlGroup}>
           <Icon name="languages" size={16} aria-hidden />
           <LocaleSwitcher
