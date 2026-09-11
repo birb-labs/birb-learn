@@ -713,6 +713,47 @@ describe('lesson content blocks', () => {
     expect(lesson.blocks.find((b) => b.id === block.id)!.simulatorParams).toBe('{"fn":"1/x"}');
   });
 
+  it('PATCH /lessons/:id/blocks/:blockId ignores an attempt to change the block type', async () => {
+    const lessonId = await createLesson('patch-type-immutable');
+    const created = await createBlock(lessonId, {
+      type: 'text',
+      translations: { 'pt-BR': { bodyMdx: 'Conteúdo original' } },
+    });
+    const block = await created.json<{ id: number }>();
+
+    const response = await SELF.fetch(`https://admin.test/api/lessons/lessons/${lessonId}/blocks/${block.id}`, {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify({ type: 'simulator', simulatorKey: 'x' }),
+    });
+    expect(response.status).toBe(200);
+
+    const lesson = await getLesson(lessonId);
+    expect(lesson.blocks.find((b) => b.id === block.id)!.type).toBe('text');
+  });
+
+  it('PATCH /lessons/:id/blocks/:blockId rejects invalid simulatorParams JSON even without translations', async () => {
+    const lessonId = await createLesson('patch-params-no-translations');
+    const created = await createBlock(lessonId, {
+      type: 'simulator',
+      simulatorKey: 'limit-explorer',
+      translations: { 'pt-BR': { caption: 'Explore o limite.' } },
+    });
+    const block = await created.json<{ id: number }>();
+
+    const response = await SELF.fetch(`https://admin.test/api/lessons/lessons/${lessonId}/blocks/${block.id}`, {
+      method: 'PATCH',
+      headers: headers(),
+      body: JSON.stringify({ simulatorParams: '{not valid json' }),
+    });
+    expect(response.status).toBe(400);
+    const { error } = await response.json<{ error: string }>();
+    expect(error).toBe('simulatorParams precisa ser um JSON válido.');
+
+    const lesson = await getLesson(lessonId);
+    expect(lesson.blocks.find((b) => b.id === block.id)!.simulatorParams).toBeNull();
+  });
+
   it('PATCH /lessons/:id/blocks/:blockId returns 404 for an unknown block', async () => {
     const lessonId = await createLesson('patch-missing');
 

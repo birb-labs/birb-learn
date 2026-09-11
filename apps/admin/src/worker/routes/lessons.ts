@@ -202,6 +202,23 @@ function validateLessonBlockTranslation(type: LessonBlockType, t: LessonBlockTra
   return null;
 }
 
+/**
+ * `simulatorParams` is stored as a raw JSON string, so this is the one check
+ * that must run on every write that includes the field -- not just writes
+ * that also touch `translations` -- otherwise a structural-only PATCH can
+ * persist malformed JSON with no validation at all.
+ */
+function validateSimulatorParamsJson(simulatorParams: string | undefined): string | null {
+  if (simulatorParams !== undefined) {
+    try {
+      JSON.parse(simulatorParams);
+    } catch {
+      return 'simulatorParams precisa ser um JSON válido.';
+    }
+  }
+  return null;
+}
+
 function validateLessonBlockInput(body: LessonBlockInput, { requirePtBr }: { requirePtBr: boolean }): string | null {
   if (!LESSON_BLOCK_TYPES.includes(body.type)) {
     return `Tipo de bloco inválido: ${body.type}.`;
@@ -209,13 +226,8 @@ function validateLessonBlockInput(body: LessonBlockInput, { requirePtBr }: { req
   if (body.type === 'simulator' && !body.simulatorKey?.trim()) {
     return 'Blocos de simulador precisam de uma simulatorKey.';
   }
-  if (body.simulatorParams !== undefined) {
-    try {
-      JSON.parse(body.simulatorParams);
-    } catch {
-      return 'simulatorParams precisa ser um JSON válido.';
-    }
-  }
+  const simulatorParamsError = validateSimulatorParamsJson(body.simulatorParams);
+  if (simulatorParamsError) return simulatorParamsError;
   const localeError = validateTranslationLocales(body.translations, { requirePtBr });
   if (localeError) return localeError;
   for (const locale of Object.keys(body.translations) as Locale[]) {
@@ -371,14 +383,26 @@ lessonsRoutes.patch('/lessons/:id/blocks/reorder', async (c) => {
 lessonsRoutes.patch('/lessons/:id/blocks/:blockId', async (c) => {
   const db = getD1Db(c.env.DB);
   const blockId = Number(c.req.param('blockId'));
+  // `type` is intentionally omitted here: block type is structural and
+  // immutable once created. It is also explicitly stripped below (rather
+  // than relying solely on this annotation) so a caller can't smuggle a
+  // `type` field into `structuralFields` at runtime, since `c.req.json<T>()`
+  // is only a type assertion and performs no runtime validation.
   const body = await c.req.json<
-    Partial<{ simulatorKey: string; simulatorParams: string; translations: Partial<Record<Locale, LessonBlockTranslationInput>> }>
+    Partial<{ simulatorKey: string; simulatorParams: string; translations: Partial<Record<Locale, LessonBlockTranslationInput>>; type?: unknown }>
   >();
 
   const existing = await db.select().from(lessonBlocks).where(eq(lessonBlocks.id, blockId)).get();
   if (!existing) return c.json({ error: 'Not found' }, 404);
 
-  const { translations, ...structuralFields } = body;
+  const { translations, type: _ignoredType, ...structuralFields } = body;
+
+  // This must run whenever `simulatorParams` is present, independent of
+  // `translations` -- otherwise a structural-only PATCH (no `translations`
+  // key) skips JSON validation entirely and persists malformed JSON.
+  const simulatorParamsError = validateSimulatorParamsJson(body.simulatorParams);
+  if (simulatorParamsError) return c.json({ error: simulatorParamsError }, 400);
+
   if (translations) {
     const validationError = validateLessonBlockInput(
       { type: existing.type, simulatorKey: body.simulatorKey ?? existing.simulatorKey ?? undefined, simulatorParams: body.simulatorParams ?? existing.simulatorParams ?? undefined, translations },
