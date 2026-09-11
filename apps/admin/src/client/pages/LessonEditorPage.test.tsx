@@ -1,39 +1,137 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LessonEditorPage } from './LessonEditorPage';
+
+// Generic responder used across tests: routes on URL + method so it doesn't
+// matter in what order requests actually fire (MdxEditor's own debounced
+// /api/preview request races the assertions under real timers, same
+// footgun documented in QuestionEditorPage.test.tsx).
+function mockFetch(handlers: { match: (url: string, init?: RequestInit) => boolean; body: unknown; status?: number }[]) {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    const method = (init as RequestInit | undefined)?.method ?? 'GET';
+    const handler = handlers.find((h) => h.match(url, init as RequestInit));
+    if (!handler) {
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    }
+    return Promise.resolve(new Response(JSON.stringify(handler.body), { status: handler.status ?? 200 }));
+  });
+}
+
+const previewHandler = {
+  match: (url: string) => url === '/api/preview',
+  body: { html: '' },
+};
 
 describe('LessonEditorPage', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('loads the lesson, lets it be edited, and saves via PATCH', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ translations: { 'pt-BR': { title: 'Título', bodyMdx: '# Corpo' } } }), {
-          status: 200,
-        }),
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ html: '<h1>Corpo</h1>' }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+  it('renders block cards with the right type labels', async () => {
+    mockFetch([
+      {
+        match: (url, init) => url === '/api/lessons/lessons/1' && (init?.method ?? 'GET') === 'GET',
+        body: {
+          translations: { 'pt-BR': { title: 'Lição de limites' } },
+          blocks: [
+            {
+              id: 1,
+              order: 1,
+              type: 'text',
+              simulatorKey: null,
+              simulatorParams: null,
+              translations: { 'pt-BR': { bodyMdx: 'Corpo original' } },
+            },
+            {
+              id: 2,
+              order: 2,
+              type: 'solved_exercise',
+              simulatorKey: null,
+              simulatorParams: null,
+              translations: { 'pt-BR': { promptMdx: 'Calcule o limite.', resolutionMdx: 'Resolução aqui.' } },
+            },
+          ],
+        },
+      },
+      previewHandler,
+    ]);
 
-    const onDone = vi.fn();
+    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
+
+    expect(await screen.findByDisplayValue('Lição de limites')).toBeInTheDocument();
+    expect(screen.getByText('Texto', { exact: true })).toBeInTheDocument();
+    expect(screen.getByText('Exercício resolvido', { exact: true })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Corpo original')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Calcule o limite.')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Resolução aqui.')).toBeInTheDocument();
+  });
+
+  it('clicking "+ Texto" POSTs a new text block', async () => {
+    const fetchSpy = mockFetch([
+      {
+        match: (url, init) => url === '/api/lessons/lessons/1' && (init?.method ?? 'GET') === 'GET',
+        body: { translations: { 'pt-BR': { title: 'Lição' } }, blocks: [] },
+      },
+      {
+        match: (url, init) => url === '/api/lessons/lessons/1/blocks' && init?.method === 'POST',
+        body: { id: 5 },
+        status: 201,
+      },
+      previewHandler,
+    ]);
+
     const user = userEvent.setup();
+    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
 
-    render(<LessonEditorPage lessonId={1} onDone={onDone} />);
+    await screen.findByDisplayValue('Lição');
+    await user.click(screen.getByRole('button', { name: '+ Texto' }));
 
-    expect(await screen.findByDisplayValue('Título')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    const postCall = fetchSpy.mock.calls.find(
+      ([url, init]) => url === '/api/lessons/lessons/1/blocks' && (init as RequestInit)?.method === 'POST',
+    );
+    expect(postCall).toBeDefined();
+    const body = JSON.parse((postCall![1] as RequestInit).body as string);
+    expect(body.type).toBe('text');
+    expect(body.translations['pt-BR']).toEqual({ bodyMdx: '' });
+  });
 
-    expect(onDone).toHaveBeenCalledOnce();
-    // Matched by URL+method among all calls, not "last call" -- MdxEditor's
-    // own debounced /api/preview fetch (fired on mount from the loaded
-    // bodyMdx) races the Save click's PATCH under real timers, so which
-    // fetch call actually lands last is not deterministic. Same fix already
-    // applied to QuestionEditorPage.test.tsx's POST assertion.
-    const patchCall = fetchSpy.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'PATCH');
-    expect(patchCall?.[0]).toBe('/api/lessons/lessons/1');
+  it("editing a block's content field PATCHes just that locale's translation", async () => {
+    const fetchSpy = mockFetch([
+      {
+        match: (url, init) => url === '/api/lessons/lessons/1' && (init?.method ?? 'GET') === 'GET',
+        body: {
+          translations: { 'pt-BR': { title: 'Lição' } },
+          blocks: [
+            {
+              id: 1,
+              order: 1,
+              type: 'text',
+              simulatorKey: null,
+              simulatorParams: null,
+              translations: { 'pt-BR': { bodyMdx: 'Corpo original' } },
+            },
+          ],
+        },
+      },
+      {
+        match: (url, init) => url === '/api/lessons/lessons/1/blocks/1' && init?.method === 'PATCH',
+        body: { ok: true },
+      },
+      previewHandler,
+    ]);
+
+    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
+
+    const textarea = await screen.findByDisplayValue('Corpo original');
+    fireEvent.change(textarea, { target: { value: 'Corpo editado' } });
+
+    const patchCall = fetchSpy.mock.calls.find(
+      ([url, init]) => url === '/api/lessons/lessons/1/blocks/1' && (init as RequestInit)?.method === 'PATCH',
+    );
+    expect(patchCall).toBeDefined();
+    const body = JSON.parse((patchCall![1] as RequestInit).body as string);
+    expect(body).toEqual({ translations: { 'pt-BR': { bodyMdx: 'Corpo editado' } } });
   });
 });

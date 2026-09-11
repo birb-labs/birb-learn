@@ -43,3 +43,46 @@
   border: none;
   cursor: pointer;
 }
+
+.blockList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.blockCard {
+  border: 1px solid var(--color-surface-border);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.blockHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.blockType {
+  font-weight: 600;
+  margin-right: auto;
+}
+
+.paramsTextarea {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: inherit;
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  font-family: monospace;
+  min-height: 4rem;
+}
+
+.addBlockRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
