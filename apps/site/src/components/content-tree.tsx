@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import type { ContentTree as ContentTreeData } from '@birb-math/content-schema';
+import { Icon } from '@birb-math/theme';
 import { Link } from '@/i18n/navigation';
 import { useReadingProgress } from '@/hooks/use-reading-progress';
 import styles from './content-tree.module.css';
@@ -78,7 +79,13 @@ export function ContentTree({ tree }: { tree: ContentTreeData[] }) {
                         </summary>
                         <ul className={styles.lessonList}>
                           {section.lessons.map((lesson) => (
-                            <li key={lesson.slug}>
+                            <li key={lesson.slug} className={styles.lessonItem}>
+                              <Icon
+                                name={isComplete(lesson.slug) ? 'check-circle-2' : 'circle'}
+                                size={16}
+                                aria-hidden
+                                className={isComplete(lesson.slug) ? styles.lessonDone : styles.lessonPending}
+                              />
                               <Link href={`/content/${lesson.slug}`}>{lesson.title}</Link>
                             </li>
                           ))}

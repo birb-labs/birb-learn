@@ -1,7 +1,7 @@
 .main {
   margin: 0 auto;
   max-width: 42rem;
-  padding: 4rem 1.5rem;
+  padding: var(--space-3xl) var(--space-lg);
 }
 
 .mainCentered {
@@ -10,28 +10,36 @@
 }
 
 .description {
-  margin-top: 1rem;
+  margin-top: var(--space-md);
+  color: var(--color-muted);
+}
+
+.emptyState {
+  margin-top: var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
   color: var(--color-muted);
 }
 
 .actions {
-  margin-top: 2rem;
+  margin-top: var(--space-xl);
   display: flex;
   justify-content: center;
-  gap: 1rem;
+  gap: var(--space-md);
 }
 
 .primaryAction {
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   background: var(--color-accent);
-  color: #fff;
-  padding: 0.5rem 1rem;
+  color: var(--color-on-accent);
+  padding: var(--space-sm) var(--space-md);
   text-decoration: none;
 }
 
 .secondaryAction {
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
-  padding: 0.5rem 1rem;
+  padding: var(--space-sm) var(--space-md);
   text-decoration: none;
 }
