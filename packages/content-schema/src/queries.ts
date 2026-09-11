@@ -3,6 +3,9 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type { DrizzleD1Database } from 'drizzle-orm/d1';
 import {
   type Locale,
+  type LessonBlockType,
+  lessonBlocks,
+  lessonBlockTranslations,
   lessons,
   lessonTranslations,
   questionAcceptedAnswers,
@@ -122,10 +125,23 @@ export async function getAllLessonSlugs(db: Db): Promise<string[]> {
   return rows.map((row) => row.slug);
 }
 
+export interface LessonBlockContent {
+  id: number;
+  order: number;
+  type: LessonBlockType;
+  title: string | null;
+  bodyMdx: string | null;
+  promptMdx: string | null;
+  resolutionMdx: string | null;
+  caption: string | null;
+  simulatorKey: string | null;
+  simulatorParams: string | null;
+}
+
 export interface LessonWithAncestors {
   slug: string;
   title: string;
-  bodyMdx: string;
+  blocks: LessonBlockContent[];
   isFallback: boolean;
   section: { slug: string; name: string };
   topic: { slug: string; name: string };
@@ -158,17 +174,42 @@ export async function getLessonBySlug(db: Db, slug: string, locale: Locale): Pro
   const allSectionTranslations = await typedDb.select().from(sectionTranslations).all();
   const allTopicTranslations = await typedDb.select().from(topicTranslations).all();
   const allSubjectTranslations = await typedDb.select().from(subjectTranslations).all();
+  const allBlocks = await typedDb
+    .select()
+    .from(lessonBlocks)
+    .where(eq(lessonBlocks.lessonId, row.lessonId))
+    .orderBy(lessonBlocks.order)
+    .all();
+  const allBlockTranslations = await typedDb.select().from(lessonBlockTranslations).all();
 
-  const { row: lessonT, isFallback } = resolveTranslation(allLessonTranslations, row.lessonId, 'lessonId', locale);
+  const { row: lessonT, isFallback: titleFallback } = resolveTranslation(allLessonTranslations, row.lessonId, 'lessonId', locale);
   const { row: sectionT } = resolveTranslation(allSectionTranslations, row.sectionId, 'sectionId', locale);
   const { row: topicT } = resolveTranslation(allTopicTranslations, row.topicId, 'topicId', locale);
   const { row: subjectT } = resolveTranslation(allSubjectTranslations, row.subjectId, 'subjectId', locale);
 
+  let anyBlockFallback = false;
+  const blockContents: LessonBlockContent[] = allBlocks.map((block) => {
+    const { row: blockT, isFallback } = resolveTranslation(allBlockTranslations, block.id, 'blockId', locale);
+    if (isFallback) anyBlockFallback = true;
+    return {
+      id: block.id,
+      order: block.order,
+      type: block.type,
+      title: blockT.title,
+      bodyMdx: blockT.bodyMdx,
+      promptMdx: blockT.promptMdx,
+      resolutionMdx: blockT.resolutionMdx,
+      caption: blockT.caption,
+      simulatorKey: block.simulatorKey,
+      simulatorParams: block.simulatorParams,
+    };
+  });
+
   return {
     slug: row.slug,
     title: lessonT.title,
-    bodyMdx: lessonT.bodyMdx,
-    isFallback,
+    blocks: blockContents,
+    isFallback: titleFallback || anyBlockFallback,
     section: { slug: row.sectionSlug, name: sectionT.name },
     topic: { slug: row.topicSlug, name: topicT.name },
     subject: { slug: row.subjectSlug, name: subjectT.name },
@@ -375,5 +416,76 @@ export async function getQuestionForAdminEdit(db: Db, id: number): Promise<Admin
     translations,
     acceptedAnswersShared: acceptedAnswerRows.filter((a) => a.locale === null).map((a) => a.text),
     acceptedAnswersByLocale,
+  };
+}
+
+export interface AdminLessonBlockTranslation {
+  title: string | null;
+  bodyMdx: string | null;
+  promptMdx: string | null;
+  resolutionMdx: string | null;
+  caption: string | null;
+}
+
+export interface AdminLessonBlockEdit {
+  id: number;
+  order: number;
+  type: LessonBlockType;
+  simulatorKey: string | null;
+  simulatorParams: string | null;
+  translations: Partial<Record<Locale, AdminLessonBlockTranslation>>;
+}
+
+export interface AdminLessonEdit {
+  id: number;
+  sectionId: number;
+  slug: string;
+  order: number;
+  translations: Partial<Record<Locale, { title: string }>>;
+  blocks: AdminLessonBlockEdit[];
+}
+
+export async function getLessonForAdminEdit(db: Db, id: number): Promise<AdminLessonEdit | undefined> {
+  const typedDb = db as BetterSQLite3Database<Record<string, unknown>>;
+  const lesson = await typedDb.select().from(lessons).where(eq(lessons.id, id)).get();
+  if (!lesson) return undefined;
+
+  const lessonTranslationRows = await typedDb.select().from(lessonTranslations).where(eq(lessonTranslations.lessonId, id)).all();
+  const translations: Partial<Record<Locale, { title: string }>> = {};
+  for (const t of lessonTranslationRows) {
+    translations[t.locale as Locale] = { title: t.title };
+  }
+
+  const blockRows = await typedDb.select().from(lessonBlocks).where(eq(lessonBlocks.lessonId, id)).orderBy(lessonBlocks.order).all();
+  const blockTranslationRows = await typedDb.select().from(lessonBlockTranslations).all();
+
+  const blocks: AdminLessonBlockEdit[] = blockRows.map((block) => {
+    const blockTranslations: Partial<Record<Locale, AdminLessonBlockTranslation>> = {};
+    for (const t of blockTranslationRows.filter((bt) => bt.blockId === block.id)) {
+      blockTranslations[t.locale as Locale] = {
+        title: t.title,
+        bodyMdx: t.bodyMdx,
+        promptMdx: t.promptMdx,
+        resolutionMdx: t.resolutionMdx,
+        caption: t.caption,
+      };
+    }
+    return {
+      id: block.id,
+      order: block.order,
+      type: block.type,
+      simulatorKey: block.simulatorKey,
+      simulatorParams: block.simulatorParams,
+      translations: blockTranslations,
+    };
+  });
+
+  return {
+    id: lesson.id,
+    sectionId: lesson.sectionId,
+    slug: lesson.slug,
+    order: lesson.order,
+    translations,
+    blocks,
   };
 }

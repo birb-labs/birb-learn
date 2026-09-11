@@ -10,6 +10,7 @@ import {
   getAllLessonSlugs,
   getContentTree,
   getLessonBySlug,
+  getLessonForAdminEdit,
   getQuestionForAdminEdit,
   getQuestionsForExport,
   getTagTree,
@@ -58,18 +59,27 @@ function seedFixture(db: TestDb) {
   const exemploLesson = lessons.find((l) => l.slug === 'limites-laterais-exemplo')!;
   db.insert(schema.lessonTranslations)
     .values([
-      {
-        lessonId: definicaoLesson.id,
-        locale: 'pt-BR',
-        title: 'Definição de Limite',
-        bodyMdx: '# Definição\n\nConteúdo de exemplo.',
-      },
-      {
-        lessonId: exemploLesson.id,
-        locale: 'pt-BR',
-        title: 'Exemplo de Limite Lateral',
-        bodyMdx: '# Exemplo\n\nOutro conteúdo.',
-      },
+      { lessonId: definicaoLesson.id, locale: 'pt-BR', title: 'Definição de Limite' },
+      { lessonId: exemploLesson.id, locale: 'pt-BR', title: 'Exemplo de Limite Lateral' },
+    ])
+    .run();
+
+  db.insert(schema.lessonBlocks)
+    .values([
+      { lessonId: definicaoLesson.id, order: 1, type: 'text' },
+      { lessonId: definicaoLesson.id, order: 2, type: 'curiosity' },
+      { lessonId: exemploLesson.id, order: 1, type: 'text' },
+    ])
+    .run();
+  const blocks = db.select().from(schema.lessonBlocks).all();
+  const definicaoTextBlock = blocks.find((b) => b.lessonId === definicaoLesson.id && b.type === 'text')!;
+  const definicaoCuriosityBlock = blocks.find((b) => b.lessonId === definicaoLesson.id && b.type === 'curiosity')!;
+  const exemploTextBlock = blocks.find((b) => b.lessonId === exemploLesson.id)!;
+  db.insert(schema.lessonBlockTranslations)
+    .values([
+      { blockId: definicaoTextBlock.id, locale: 'pt-BR', bodyMdx: '# Definição\n\nConteúdo de exemplo.' },
+      { blockId: definicaoCuriosityBlock.id, locale: 'pt-BR', title: 'Você sabia?', bodyMdx: 'Uma curiosidade de exemplo.' },
+      { blockId: exemploTextBlock.id, locale: 'pt-BR', bodyMdx: '# Exemplo\n\nOutro conteúdo.' },
     ])
     .run();
 
@@ -379,7 +389,11 @@ describe('content-schema queries', () => {
 
     expect(lesson).toBeDefined();
     expect(lesson!.title).toBe('Definição de Limite');
-    expect(lesson!.bodyMdx).toContain('Conteúdo de exemplo');
+    expect(lesson!.blocks).toHaveLength(2);
+    expect(lesson!.blocks[0].type).toBe('text');
+    expect(lesson!.blocks[0].bodyMdx).toContain('Conteúdo de exemplo');
+    expect(lesson!.blocks[1].type).toBe('curiosity');
+    expect(lesson!.blocks[1].title).toBe('Você sabia?');
     expect(lesson!.section).toEqual({ slug: 'limites-laterais', name: 'Limites Laterais' });
     expect(lesson!.topic).toEqual({ slug: 'limites', name: 'Limites' });
     expect(lesson!.subject).toEqual({ slug: 'calculo', name: 'Cálculo' });
@@ -397,17 +411,58 @@ describe('content-schema queries', () => {
   it('getLessonBySlug prefers the real translation over the fallback when one exists', async () => {
     const lessonRow = db.select().from(schema.lessons).where(eq(schema.lessons.slug, 'definicao-de-limite')).get()!;
     db.insert(schema.lessonTranslations)
-      .values({ lessonId: lessonRow.id, locale: 'en-US', title: 'Definition of Limit', bodyMdx: '# Definition\n\nSample content.' })
+      .values({ lessonId: lessonRow.id, locale: 'en-US', title: 'Definition of Limit' })
       .run();
 
     const lesson = await getLessonBySlug(db, 'definicao-de-limite', 'en-US');
 
     expect(lesson!.title).toBe('Definition of Limit');
-    expect(lesson!.isFallback).toBe(false);
+    // isFallback is still true overall: this lesson's blocks have no en-US
+    // translations, so they fall back to pt-BR even though the title doesn't.
+    expect(lesson!.isFallback).toBe(true);
   });
 
   it('getLessonBySlug returns undefined for an unknown slug', async () => {
     expect(await getLessonBySlug(db, 'does-not-exist', 'pt-BR')).toBeUndefined();
+  });
+
+  it('getLessonBySlug marks isFallback true when a block has no translation for the requested locale', async () => {
+    const lessonRow = db.select().from(schema.lessons).where(eq(schema.lessons.slug, 'definicao-de-limite')).get()!;
+    db.insert(schema.lessonTranslations)
+      .values({ lessonId: lessonRow.id, locale: 'en-US', title: 'Definition of Limit' })
+      .run();
+    const blocksForLesson = db.select().from(schema.lessonBlocks).where(eq(schema.lessonBlocks.lessonId, lessonRow.id)).all();
+    db.insert(schema.lessonBlockTranslations)
+      .values({ blockId: blocksForLesson[0].id, locale: 'en-US', bodyMdx: '# Definition\n\nSample content.' })
+      .run();
+    // The second block (curiosity) is deliberately left untranslated for en-US.
+
+    const lesson = await getLessonBySlug(db, 'definicao-de-limite', 'en-US');
+
+    expect(lesson!.title).toBe('Definition of Limit'); // has its own en-US row
+    expect(lesson!.blocks[0].bodyMdx).toContain('Sample content'); // has its own en-US row
+    expect(lesson!.blocks[1].title).toBe('Você sabia?'); // fell back to pt-BR
+    expect(lesson!.isFallback).toBe(true); // lesson-level flag is true because ANY block fell back
+  });
+
+  it('getLessonForAdminEdit returns lesson structure and every block with its per-locale translations', async () => {
+    const lessonRow = db.select().from(schema.lessons).where(eq(schema.lessons.slug, 'definicao-de-limite')).get()!;
+
+    const edit = await getLessonForAdminEdit(db, lessonRow.id);
+
+    expect(edit).toBeDefined();
+    expect(edit!.slug).toBe('definicao-de-limite');
+    expect(edit!.translations['pt-BR']!.title).toBe('Definição de Limite');
+    expect(edit!.blocks).toHaveLength(2);
+    expect(edit!.blocks[0].type).toBe('text');
+    expect(edit!.blocks[0].translations['pt-BR']!.bodyMdx).toContain('Conteúdo de exemplo');
+    expect(edit!.blocks[1].type).toBe('curiosity');
+    expect(edit!.blocks[1].translations['pt-BR']!.title).toBe('Você sabia?');
+    expect(edit!.blocks[1].translations['en-US']).toBeUndefined();
+  });
+
+  it('getLessonForAdminEdit returns undefined for an unknown id', async () => {
+    expect(await getLessonForAdminEdit(db, 999999)).toBeUndefined();
   });
 
   it('getTagTree returns topics with their subtopics nested in the requested locale', async () => {
