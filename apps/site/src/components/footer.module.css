@@ -1,12 +1,12 @@
 .footer {
   border-top: 1px solid var(--color-border);
-  padding: 1rem 1.5rem;
-  font-size: 0.75rem;
+  padding: var(--space-md) var(--space-lg);
+  font-size: var(--font-size-sm);
   color: var(--color-muted);
 }
 
 .links {
   display: flex;
-  gap: 0.75rem;
-  margin-top: 0.25rem;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
 }

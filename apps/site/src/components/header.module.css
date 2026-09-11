@@ -2,11 +2,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-md);
   border-bottom: 1px solid var(--color-border);
-  padding: 1rem 1.5rem;
+  padding: var(--space-md) var(--space-lg);
 }
 
 .logo {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-lg);
   font-weight: 700;
   text-decoration: none;
 }
@@ -14,6 +17,26 @@
 .nav {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  font-size: 0.875rem;
+  gap: var(--space-md);
+  font-size: var(--font-size-sm);
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  text-decoration: none;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.controlGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-muted);
 }
