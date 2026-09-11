@@ -1,12 +1,12 @@
 .button {
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   background: var(--color-accent);
-  color: #fff;
-  padding: 0.4rem 1rem;
+  color: var(--color-on-accent);
+  padding: 0.4rem var(--space-md);
   border: none;
   cursor: pointer;
 }
 
 .status {
-  margin-left: 0.5rem;
+  margin-left: var(--space-sm);
 }
