@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { Icon } from '@birb-math/theme';
 import type { GradedQuestionResult, GradedResult } from '@/lib/grade-simulado';
 import { formatNumericAnswerForDisplay } from '@/lib/numeric-answer';
 import { parseSelectedOptionIds } from '@/lib/multi-response-answer';
@@ -129,6 +130,7 @@ export function SimuladoResults({
           return (
             <div key={question.id} className={styles.question}>
               <p className={isCorrect ? `${styles.status} ${styles.statusCorrect}` : `${styles.status} ${styles.statusIncorrect}`}>
+                <Icon name={isCorrect ? 'check-circle' : 'x-circle'} size={16} aria-hidden />
                 {isCorrect ? t('correct') : t('incorrect')}
               </p>
               {question.isFallback && <FallbackNotice />}
