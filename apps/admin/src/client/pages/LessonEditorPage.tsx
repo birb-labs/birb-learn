@@ -147,7 +147,21 @@ export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDon
     reload();
   }
 
+  // Every keystroke in the MdxEditor's fully-controlled textarea fires an
+  // independent call here, each with its own in-flight PATCH. Applying the
+  // optimistic update synchronously -- before the network call -- means
+  // typing never waits on (or gets clobbered by) a response: if an older
+  // keystroke's PATCH resolves after a newer one's, there is no stale
+  // response handler left that could overwrite the latest local state.
+  // The response is used only to surface failures; on success there is
+  // nothing new to apply since the optimistic update already reflects the
+  // correct value, and on failure we deliberately do not revert or reload,
+  // since either would risk clobbering newer edits made after the failed one.
   async function handleSaveBlockContent(block: Block, content: BlockTranslation) {
+    setLesson((prev) => ({
+      ...prev,
+      blocks: prev.blocks.map((b) => (b.id === block.id ? { ...b, translations: { ...b.translations, [activeLocale]: content } } : b)),
+    }));
     const response = await apiFetch(`/api/lessons/lessons/${lessonId}/blocks/${block.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -159,10 +173,6 @@ export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDon
       return;
     }
     setError(null);
-    setLesson((prev) => ({
-      ...prev,
-      blocks: prev.blocks.map((b) => (b.id === block.id ? { ...b, translations: { ...b.translations, [activeLocale]: content } } : b)),
-    }));
   }
 
   return (

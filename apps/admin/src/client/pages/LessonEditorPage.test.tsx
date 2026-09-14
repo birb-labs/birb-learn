@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LessonEditorPage } from './LessonEditorPage';
 
@@ -187,5 +187,79 @@ describe('LessonEditorPage', () => {
     expect(patchCall).toBeDefined();
     const body = JSON.parse((patchCall![1] as RequestInit).body as string);
     expect(body).toEqual({ translations: { 'pt-BR': { bodyMdx: 'Corpo editado' } } });
+  });
+
+  it('keeps the latest keystroke even when an older PATCH response resolves after a newer one', async () => {
+    // Regression test: MdxEditor's textarea is fully controlled and every
+    // keystroke fires its own independent PATCH. If the optimistic
+    // setLesson(...) update ever moves to run only after an awaited
+    // response, two concurrent requests resolving out of order can let a
+    // stale response overwrite newer local state -- silently reverting the
+    // author's most recent typing. This reproduces exactly that ordering:
+    // the FIRST keystroke's PATCH resolves AFTER the SECOND keystroke's.
+    const patchResolvers: Array<() => void> = [];
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = (init as RequestInit | undefined)?.method ?? 'GET';
+
+      if (url === '/api/lessons/lessons/1' && method === 'GET') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              translations: { 'pt-BR': { title: 'Lição' } },
+              blocks: [
+                {
+                  id: 1,
+                  order: 1,
+                  type: 'text',
+                  simulatorKey: null,
+                  simulatorParams: null,
+                  translations: { 'pt-BR': { bodyMdx: 'Corpo original' } },
+                },
+              ],
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      if (url === '/api/preview') {
+        return Promise.resolve(new Response(JSON.stringify({ html: '' }), { status: 200 }));
+      }
+      if (url === '/api/lessons/lessons/1/blocks/1' && method === 'PATCH') {
+        return new Promise<Response>((resolve) => {
+          patchResolvers.push(() => resolve(new Response(JSON.stringify({ ok: true }), { status: 200 })));
+        });
+      }
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+
+    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
+    const textarea = await screen.findByDisplayValue('Corpo original');
+
+    // Two rapid keystrokes, neither PATCH has resolved yet.
+    fireEvent.change(textarea, { target: { value: 'Corpo A' } });
+    fireEvent.change(textarea, { target: { value: 'Corpo AB' } });
+
+    // The textarea must reflect the latest typed value immediately -- it
+    // never waits on a network response.
+    expect(screen.getByDisplayValue('Corpo AB')).toBeInTheDocument();
+    expect(fetchSpy.mock.calls.filter(([url, init]) => url === '/api/lessons/lessons/1/blocks/1' && (init as RequestInit)?.method === 'PATCH')).toHaveLength(2);
+    expect(patchResolvers).toHaveLength(2);
+
+    // Resolve out of order: the OLDER keystroke's ("Corpo A") response
+    // arrives after the NEWER keystroke's ("Corpo AB") response.
+    await act(async () => {
+      patchResolvers[1]();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      patchResolvers[0]();
+      await Promise.resolve();
+    });
+
+    // The latest typed content must still be displayed -- not reverted to
+    // the stale value from the older, later-resolving response.
+    expect(screen.getByDisplayValue('Corpo AB')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Corpo A')).not.toBeInTheDocument();
   });
 });
