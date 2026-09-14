@@ -12,7 +12,7 @@ async function renderBlock(block: LessonBlockContent, showResolutionLabel: strin
 
   if (block.type === 'curiosity') {
     return (
-      <ContentCallout key={block.id} icon="lightbulb" title={block.title ?? ''}>
+      <ContentCallout key={block.id} icon="lightbulb" title={block.title ?? ''} color="accent">
         {await compileLessonMdx(block.bodyMdx ?? '')}
       </ContentCallout>
     );
@@ -20,7 +20,7 @@ async function renderBlock(block: LessonBlockContent, showResolutionLabel: strin
 
   if (block.type === 'real_world_application') {
     return (
-      <ContentCallout key={block.id} icon="compass" title={block.title ?? ''}>
+      <ContentCallout key={block.id} icon="compass" title={block.title ?? ''} color="info">
         {await compileLessonMdx(block.bodyMdx ?? '')}
       </ContentCallout>
     );

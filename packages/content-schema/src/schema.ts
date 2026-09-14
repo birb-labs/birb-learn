@@ -141,8 +141,8 @@ export const lessonBlockTranslations = sqliteTable(
       .references(() => lessonBlocks.id),
     locale: text('locale', { enum: LOCALES }).notNull(),
     // Nullable because each block `type` only uses a subset -- see
-    // `LESSON_BLOCK_REQUIRED_FIELDS` in queries.ts (Task 2) for which
-    // columns each type requires to be non-null/non-blank.
+    // `validateLessonBlockTranslation` in apps/admin/src/worker/routes/lessons.ts
+    // for which columns each type requires to be non-null/non-blank.
     title: text('title'),
     bodyMdx: text('body_mdx'),
     promptMdx: text('prompt_mdx'),
