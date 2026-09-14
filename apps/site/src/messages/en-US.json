@@ -84,5 +84,12 @@
     "contact": "Contact",
     "sourceCode": "Source code",
     "donate": "Support the project"
+  },
+  "simulators": {
+    "unknownSimulator": "Unknown simulator: \"{key}\".",
+    "invalidParams": "The \"{key}\" simulator's parameters are invalid JSON.",
+    "invalidDomain": "This simulator's configured domain is invalid.",
+    "graphAriaLabel": "Interactive function graph",
+    "undefinedValue": "undefined"
   }
 }

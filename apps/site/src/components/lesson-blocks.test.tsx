@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { NextIntlClientProvider } from 'next-intl';
+import ptBR from '@/messages/pt-BR.json';
 import { LessonBlocks } from './lesson-blocks';
 import type { LessonBlockContent } from '@birb-math/content-schema';
 
@@ -14,7 +16,7 @@ const fixtureBlocks: LessonBlockContent[] = [
 describe('LessonBlocks', () => {
   it('renders every block type with its icon/title where applicable', async () => {
     const jsx = await LessonBlocks({ blocks: fixtureBlocks, showResolutionLabel: 'Ver resolução' });
-    render(jsx);
+    render(<NextIntlClientProvider locale="pt-BR" messages={ptBR}>{jsx}</NextIntlClientProvider>);
 
     expect(screen.getByText('Texto normal.')).toBeInTheDocument();
     expect(screen.getByText('Você sabia?')).toBeInTheDocument();

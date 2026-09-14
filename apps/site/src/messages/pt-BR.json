@@ -84,5 +84,12 @@
     "contact": "Contato",
     "sourceCode": "Código-fonte",
     "donate": "Apoie o projeto"
+  },
+  "simulators": {
+    "unknownSimulator": "Simulador desconhecido: \"{key}\".",
+    "invalidParams": "Parâmetros do simulador \"{key}\" são um JSON inválido.",
+    "invalidDomain": "O domínio configurado para este simulador é inválido.",
+    "graphAriaLabel": "Gráfico de função interativo",
+    "undefinedValue": "indefinido"
   }
 }
