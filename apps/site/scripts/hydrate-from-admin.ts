@@ -1,5 +1,7 @@
 import {
   lessons,
+  lessonBlocks,
+  lessonBlockTranslations,
   lessonTranslations,
   questionAcceptedAnswers,
   questionMatchingPairs,
@@ -29,6 +31,8 @@ interface AdminExport {
   sectionTranslations: (typeof sectionTranslations.$inferSelect)[];
   lessons: (typeof lessons.$inferSelect)[];
   lessonTranslations: (typeof lessonTranslations.$inferSelect)[];
+  lessonBlocks: (typeof lessonBlocks.$inferSelect)[];
+  lessonBlockTranslations: (typeof lessonBlockTranslations.$inferSelect)[];
   tags: (typeof tags.$inferSelect)[];
   tagTranslations: (typeof tagTranslations.$inferSelect)[];
   questions: (typeof questions.$inferSelect)[];
@@ -72,6 +76,8 @@ async function main() {
   if (data.sectionTranslations.length > 0) db.insert(sectionTranslations).values(data.sectionTranslations).run();
   if (data.lessons.length > 0) db.insert(lessons).values(data.lessons).run();
   if (data.lessonTranslations.length > 0) db.insert(lessonTranslations).values(data.lessonTranslations).run();
+  if (data.lessonBlocks.length > 0) db.insert(lessonBlocks).values(data.lessonBlocks).run();
+  if (data.lessonBlockTranslations.length > 0) db.insert(lessonBlockTranslations).values(data.lessonBlockTranslations).run();
   if (sortedTags.length > 0) db.insert(tags).values(sortedTags).run();
   if (data.tagTranslations.length > 0) db.insert(tagTranslations).values(data.tagTranslations).run();
   if (data.questions.length > 0) db.insert(questions).values(data.questions).run();
