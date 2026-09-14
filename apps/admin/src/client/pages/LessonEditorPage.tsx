@@ -41,6 +41,11 @@ interface Lesson {
 // (see `validateLessonBlockTranslation` in the worker's lessons routes), so
 // a brand-new block needs a starting value the author edits into real
 // content, not an empty string that would fail validation silently.
+//
+// This is ONLY for seeding a NEW block's initial pt-BR content on creation
+// (see `handleAddBlock`). It must NOT be used as the display default for an
+// existing block's untranslated locale tab -- see `blankTranslationFor`
+// below for that case.
 function emptyTranslationFor(type: BlockType): BlockTranslation {
   if (type === 'text') return { bodyMdx: 'Novo bloco de texto.' };
   if (type === 'curiosity' || type === 'real_world_application') return { title: 'Novo título', bodyMdx: 'Novo conteúdo.' };
@@ -48,9 +53,40 @@ function emptyTranslationFor(type: BlockType): BlockTranslation {
   return { caption: '' };
 }
 
-// The one simulator this project will eventually have (built in a later
-// task). If/when other simulators exist, the admin should change this after
-// adding the block -- there's no picker yet.
+// Genuinely empty display default for an EXISTING block's locale tab that
+// has no translation yet. Using `emptyTranslationFor`'s non-blank
+// placeholders here would be actively harmful: an author could partially
+// edit a tab (e.g. type a real English title but leave the placeholder body
+// untouched) and the partial save would persist the Portuguese placeholder
+// text as if it were real translated content, defeating the fallback/
+// isFallback mechanism silently -- no `<FallbackNotice>` shows because the
+// block now technically "has" a translation for that locale.
+function blankTranslationFor(type: BlockType): BlockTranslation {
+  if (type === 'text') return { bodyMdx: '' };
+  if (type === 'curiosity' || type === 'real_world_application') return { title: '', bodyMdx: '' };
+  if (type === 'solved_exercise') return { promptMdx: '', resolutionMdx: '' };
+  return { caption: '' };
+}
+
+// A translator switching to an empty locale tab benefits from seeing the
+// pt-BR value they're translating. Returns that reference value only when
+// the active locale is not pt-BR and genuinely has no translation yet for
+// this block (so it never has anything to show once a real translation
+// exists, and never triggers on the pt-BR tab itself).
+function referenceValueFor(block: Block, activeLocale: Locale, field: keyof BlockTranslation): string | undefined {
+  if (activeLocale === 'pt-BR') return undefined;
+  if (block.translations[activeLocale]) return undefined;
+  return block.translations['pt-BR']?.[field] || undefined;
+}
+
+function ReferenceHint({ value }: { value?: string }) {
+  if (!value) return null;
+  return <p className={styles.referenceText}>pt-BR: {value}</p>;
+}
+
+// The registered simulator this project currently has. If/when other
+// simulators exist, the admin should change this after adding the block --
+// there's no picker yet.
 const DEFAULT_SIMULATOR_KEY = 'function-approach-grapher';
 
 export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDone: () => void }) {
@@ -132,7 +168,20 @@ export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDon
     reload();
   }
 
+  // Same shape as `handleSaveBlockContent` below, for the same reason: the
+  // simulatorKey/simulatorParams inputs are fully-controlled and every
+  // keystroke fires its own PATCH, and the server validates
+  // `simulatorParams` as JSON on every write (even a structural-only PATCH).
+  // A partial JSON string like `{` gets rejected with a 400 -- without an
+  // immediate local update, the controlled textarea would snap back to the
+  // old value on every rejected keystroke, since no prefix of a JSON object
+  // is itself valid JSON. Apply the optimistic update synchronously and use
+  // the response only to surface a failure; never revert or reload.
   async function handleSaveBlock(block: Block, patch: Partial<{ simulatorKey: string; simulatorParams: string }>) {
+    setLesson((prev) => ({
+      ...prev,
+      blocks: prev.blocks.map((b) => (b.id === block.id ? { ...b, ...patch } : b)),
+    }));
     const response = await apiFetch(`/api/lessons/lessons/${lessonId}/blocks/${block.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -144,7 +193,6 @@ export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDon
       return;
     }
     setError(null);
-    reload();
   }
 
   // Every keystroke in the MdxEditor's fully-controlled textarea fires an
@@ -196,7 +244,7 @@ export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDon
 
       <div className={styles.blockList}>
         {lesson.blocks.map((block, index) => {
-          const content = block.translations[activeLocale] ?? emptyTranslationFor(block.type);
+          const content = block.translations[activeLocale] ?? blankTranslationFor(block.type);
           return (
             <div key={block.id} className={styles.blockCard}>
               <div className={styles.blockHeader}>
@@ -232,16 +280,20 @@ export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDon
                     value={content.caption ?? ''}
                     onChange={(event) => handleSaveBlockContent(block, { ...content, caption: event.target.value })}
                   />
+                  <ReferenceHint value={referenceValueFor(block, activeLocale, 'caption')} />
                 </>
               ) : (
                 <>
                   {(block.type === 'curiosity' || block.type === 'real_world_application') && (
-                    <input
-                      className={styles.titleInput}
-                      placeholder="Título"
-                      value={content.title ?? ''}
-                      onChange={(event) => handleSaveBlockContent(block, { ...content, title: event.target.value })}
-                    />
+                    <>
+                      <input
+                        className={styles.titleInput}
+                        placeholder="Título"
+                        value={content.title ?? ''}
+                        onChange={(event) => handleSaveBlockContent(block, { ...content, title: event.target.value })}
+                      />
+                      <ReferenceHint value={referenceValueFor(block, activeLocale, 'title')} />
+                    </>
                   )}
                   {block.type === 'solved_exercise' ? (
                     <>
@@ -250,17 +302,22 @@ export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDon
                         value={content.promptMdx ?? ''}
                         onChange={(promptMdx) => handleSaveBlockContent(block, { ...content, promptMdx })}
                       />
+                      <ReferenceHint value={referenceValueFor(block, activeLocale, 'promptMdx')} />
                       <MdxEditor
                         label="Resolução"
                         value={content.resolutionMdx ?? ''}
                         onChange={(resolutionMdx) => handleSaveBlockContent(block, { ...content, resolutionMdx })}
                       />
+                      <ReferenceHint value={referenceValueFor(block, activeLocale, 'resolutionMdx')} />
                     </>
                   ) : (
-                    <MdxEditor
-                      value={content.bodyMdx ?? ''}
-                      onChange={(bodyMdx) => handleSaveBlockContent(block, { ...content, bodyMdx })}
-                    />
+                    <>
+                      <MdxEditor
+                        value={content.bodyMdx ?? ''}
+                        onChange={(bodyMdx) => handleSaveBlockContent(block, { ...content, bodyMdx })}
+                      />
+                      <ReferenceHint value={referenceValueFor(block, activeLocale, 'bodyMdx')} />
+                    </>
                   )}
                 </>
               )}

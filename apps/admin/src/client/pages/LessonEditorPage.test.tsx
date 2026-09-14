@@ -262,4 +262,131 @@ describe('LessonEditorPage', () => {
     expect(screen.getByDisplayValue('Corpo AB')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('Corpo A')).not.toBeInTheDocument();
   });
+
+  it('clicking "Remover" DELETEs the block', async () => {
+    const fetchSpy = mockFetch([
+      {
+        match: (url, init) => url === '/api/lessons/lessons/1' && (init?.method ?? 'GET') === 'GET',
+        body: {
+          translations: { 'pt-BR': { title: 'Lição' } },
+          blocks: [
+            {
+              id: 1,
+              order: 1,
+              type: 'text',
+              simulatorKey: null,
+              simulatorParams: null,
+              translations: { 'pt-BR': { bodyMdx: 'Corpo original' } },
+            },
+          ],
+        },
+      },
+      {
+        match: (url, init) => url === '/api/lessons/lessons/1/blocks/1' && init?.method === 'DELETE',
+        body: { ok: true },
+      },
+      previewHandler,
+    ]);
+
+    const user = userEvent.setup();
+    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
+
+    await screen.findByDisplayValue('Corpo original');
+    await user.click(screen.getByRole('button', { name: 'Remover' }));
+
+    const deleteCall = fetchSpy.mock.calls.find(
+      ([url, init]) => url === '/api/lessons/lessons/1/blocks/1' && (init as RequestInit)?.method === 'DELETE',
+    );
+    expect(deleteCall).toBeDefined();
+  });
+
+  it('clicking ↓ PATCHes the reordered blockIds', async () => {
+    const fetchSpy = mockFetch([
+      {
+        match: (url, init) => url === '/api/lessons/lessons/1' && (init?.method ?? 'GET') === 'GET',
+        body: {
+          translations: { 'pt-BR': { title: 'Lição' } },
+          blocks: [
+            {
+              id: 1,
+              order: 1,
+              type: 'text',
+              simulatorKey: null,
+              simulatorParams: null,
+              translations: { 'pt-BR': { bodyMdx: 'Primeiro bloco' } },
+            },
+            {
+              id: 2,
+              order: 2,
+              type: 'text',
+              simulatorKey: null,
+              simulatorParams: null,
+              translations: { 'pt-BR': { bodyMdx: 'Segundo bloco' } },
+            },
+          ],
+        },
+      },
+      {
+        match: (url, init) => url === '/api/lessons/lessons/1/blocks/reorder' && init?.method === 'PATCH',
+        body: { ok: true },
+      },
+      previewHandler,
+    ]);
+
+    const user = userEvent.setup();
+    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
+
+    await screen.findByDisplayValue('Primeiro bloco');
+    const downButtons = screen.getAllByRole('button', { name: '↓' });
+    await user.click(downButtons[0]);
+
+    const reorderCall = fetchSpy.mock.calls.find(
+      ([url, init]) => url === '/api/lessons/lessons/1/blocks/reorder' && (init as RequestInit)?.method === 'PATCH',
+    );
+    expect(reorderCall).toBeDefined();
+    const body = JSON.parse((reorderCall![1] as RequestInit).body as string);
+    expect(body).toEqual({ blockIds: [2, 1] });
+  });
+
+  it('shows blank fields (not pt-BR placeholder text) when switching to a locale with no translation for an existing block', async () => {
+    mockFetch([
+      {
+        match: (url, init) => url === '/api/lessons/lessons/1' && (init?.method ?? 'GET') === 'GET',
+        body: {
+          translations: { 'pt-BR': { title: 'Lição' } },
+          blocks: [
+            {
+              id: 1,
+              order: 1,
+              type: 'solved_exercise',
+              simulatorKey: null,
+              simulatorParams: null,
+              translations: { 'pt-BR': { promptMdx: 'Calcule o limite.', resolutionMdx: 'Resolução aqui.' } },
+            },
+          ],
+        },
+      },
+      previewHandler,
+    ]);
+
+    const user = userEvent.setup();
+    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
+
+    await screen.findByDisplayValue('Calcule o limite.');
+    await user.click(screen.getByRole('button', { name: 'en-US' }));
+
+    // The block "has" only a pt-BR translation, so the en-US tab's fields
+    // must render blank -- never pre-filled with pt-BR-looking placeholder
+    // text an author could accidentally save as if it were a real
+    // translation.
+    const promptField = await screen.findByLabelText('Enunciado');
+    expect(promptField).toHaveValue('');
+    const resolutionField = screen.getByLabelText('Resolução');
+    expect(resolutionField).toHaveValue('');
+
+    // A read-only pt-BR reference hint should still be visible near the
+    // empty fields so the translator can see what they're translating.
+    expect(screen.getByText(/Calcule o limite\./)).toBeInTheDocument();
+    expect(screen.getByText(/Resolução aqui\./)).toBeInTheDocument();
+  });
 });
