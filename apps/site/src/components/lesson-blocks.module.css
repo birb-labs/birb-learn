@@ -1,0 +1,21 @@
+.blocks {
+  display: flex;
+  flex-direction: column;
+}
+
+.exercise {
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-lg) 0;
+  margin: var(--space-lg) 0;
+}
+
+.resolution {
+  margin-top: var(--space-md);
+}
+
+.resolution summary {
+  cursor: pointer;
+  color: var(--color-accent);
+  font-weight: 600;
+}

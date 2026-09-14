@@ -5,9 +5,11 @@ import {
   ChevronRight,
   Circle,
   ClipboardList,
+  Compass,
   Home,
   Inbox,
   Languages,
+  Lightbulb,
   Palette,
   XCircle,
   type LucideProps,
@@ -25,6 +27,8 @@ const ICONS = {
   circle: Circle,
   'x-circle': XCircle,
   inbox: Inbox,
+  lightbulb: Lightbulb,
+  compass: Compass,
 } as const;
 
 export type IconName = keyof typeof ICONS;

@@ -39,7 +39,8 @@
     "lessonsCompleted": "{completed} of {total} lessons completed",
     "breadcrumbSeparator": "›",
     "breadcrumbLabel": "Breadcrumb",
-    "notTranslatedYet": "This content hasn't been translated into your language yet. Showing it in Portuguese."
+    "notTranslatedYet": "This content hasn't been translated into your language yet. Showing it in Portuguese.",
+    "showResolution": "Show resolution"
   },
   "simulado": {
     "title": "Practice test",

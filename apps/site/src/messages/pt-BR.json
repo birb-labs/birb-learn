@@ -39,7 +39,8 @@
     "lessonsCompleted": "{completed} de {total} lições concluídas",
     "breadcrumbSeparator": "›",
     "breadcrumbLabel": "Trilha de navegação",
-    "notTranslatedYet": "Este conteúdo ainda não foi traduzido para o seu idioma. Mostrando em português."
+    "notTranslatedYet": "Este conteúdo ainda não foi traduzido para o seu idioma. Mostrando em português.",
+    "showResolution": "Ver resolução"
   },
   "simulado": {
     "title": "Simulado",

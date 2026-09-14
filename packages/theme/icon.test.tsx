@@ -8,6 +8,16 @@ describe('Icon', () => {
     expect(container.querySelector('svg')).toBeInTheDocument();
   });
 
+  it('renders an svg for the "lightbulb" icon name', () => {
+    const { container } = render(<Icon name="lightbulb" aria-label="lightbulb" />);
+    expect(container.querySelector('svg')).toBeInTheDocument();
+  });
+
+  it('renders an svg for the "compass" icon name', () => {
+    const { container } = render(<Icon name="compass" aria-label="compass" />);
+    expect(container.querySelector('svg')).toBeInTheDocument();
+  });
+
   it('throws a clear error for an unknown icon name', () => {
     expect(() => render(<Icon name={'not-a-real-icon' as IconName} />)).toThrow(
       'Unknown icon: "not-a-real-icon"',

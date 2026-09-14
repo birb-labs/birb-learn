@@ -39,7 +39,8 @@
     "lessonsCompleted": "{completed} de {total} lecciones completadas",
     "breadcrumbSeparator": "›",
     "breadcrumbLabel": "Ruta de navegación",
-    "notTranslatedYet": "Este contenido aún no ha sido traducido a tu idioma. Mostrando en portugués."
+    "notTranslatedYet": "Este contenido aún no ha sido traducido a tu idioma. Mostrando en portugués.",
+    "showResolution": "Ver resolución"
   },
   "simulado": {
     "title": "Simulacro",

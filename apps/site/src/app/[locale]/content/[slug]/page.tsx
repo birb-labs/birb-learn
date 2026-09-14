@@ -1,8 +1,8 @@
-import { setRequestLocale } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { getAllLessonSlugs, getLessonBySlug, type Locale } from '@birb-math/content-schema';
 import { getDb } from '@birb-math/content-schema/src/client';
-import { compileLessonMdx } from '@/lib/compile-lesson-mdx';
+import { LessonBlocks } from '@/components/lesson-blocks';
 import { LessonBreadcrumb } from '@/components/lesson-breadcrumb';
 import { ReadingProgressTracker } from '@/components/reading-progress-tracker';
 import { FallbackNotice } from '@/components/fallback-notice';
@@ -30,9 +30,10 @@ export default async function LessonPage({
   const lesson = await getLessonBySlug(getDb(), slug, locale);
   if (!lesson) notFound();
 
+  const showResolutionLabel = (await getTranslations('content'))('showResolution');
   let body;
   try {
-    body = await compileLessonMdx(lesson.bodyMdx);
+    body = await LessonBlocks({ blocks: lesson.blocks, showResolutionLabel });
   } catch (cause) {
     throw new Error(`Failed to compile lesson "${lesson.slug}"`, { cause });
   }
