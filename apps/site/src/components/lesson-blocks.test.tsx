@@ -8,6 +8,7 @@ const fixtureBlocks: LessonBlockContent[] = [
   { id: 2, order: 2, type: 'curiosity', title: 'Você sabia?', bodyMdx: 'Uma curiosidade.', promptMdx: null, resolutionMdx: null, caption: null, simulatorKey: null, simulatorParams: null },
   { id: 3, order: 3, type: 'real_world_application', title: 'No mundo real', bodyMdx: 'Uma aplicação.', promptMdx: null, resolutionMdx: null, caption: null, simulatorKey: null, simulatorParams: null },
   { id: 4, order: 4, type: 'solved_exercise', title: null, bodyMdx: null, promptMdx: 'Enunciado do exercício.', resolutionMdx: 'Resolução do exercício.', caption: null, simulatorKey: null, simulatorParams: null },
+  { id: 5, order: 5, type: 'simulator', title: null, bodyMdx: null, promptMdx: null, resolutionMdx: null, caption: 'Legenda do simulador.', simulatorKey: 'function-approach-grapher', simulatorParams: '{"expression":"x^2","approachPoint":1,"domain":[-2,2]}' },
 ];
 
 describe('LessonBlocks', () => {
@@ -21,5 +22,7 @@ describe('LessonBlocks', () => {
     expect(screen.getByText('No mundo real')).toBeInTheDocument();
     expect(screen.getByText('Enunciado do exercício.')).toBeInTheDocument();
     expect(screen.getByText('Ver resolução')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Gráfico de função interativo' })).toBeInTheDocument();
+    expect(screen.getByText('Legenda do simulador.')).toBeInTheDocument();
   });
 });

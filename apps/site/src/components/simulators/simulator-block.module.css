@@ -1,0 +1,17 @@
+.wrapper {
+  margin: var(--space-lg) 0;
+}
+
+.caption {
+  margin-top: var(--space-sm);
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.error {
+  color: var(--color-danger);
+  padding: var(--space-md);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+}

@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import type { LessonBlockContent } from '@birb-math/content-schema';
 import { compileLessonMdx } from '@/lib/compile-lesson-mdx';
 import { ContentCallout } from './content-callout';
+import { SimulatorBlock } from './simulators/simulator-block';
 import styles from './lesson-blocks.module.css';
 
 async function renderBlock(block: LessonBlockContent, showResolutionLabel: string): Promise<ReactElement> {
@@ -37,9 +38,7 @@ async function renderBlock(block: LessonBlockContent, showResolutionLabel: strin
     );
   }
 
-  // type === 'simulator': rendered by <SimulatorBlock> (see Task 7). This
-  // placeholder keeps the site buildable/testable before Task 7 lands.
-  return <div key={block.id} data-testid={`simulator-placeholder-${block.id}`} />;
+  return <SimulatorBlock key={block.id} simulatorKey={block.simulatorKey ?? ''} params={block.simulatorParams} caption={block.caption} />;
 }
 
 export async function LessonBlocks({ blocks, showResolutionLabel }: { blocks: LessonBlockContent[]; showResolutionLabel: string }) {
