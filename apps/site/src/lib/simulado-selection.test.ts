@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { selectQuestions } from './simulado-selection';
 import type { ExportedQuestion } from './simulado-selection';
-import type { SimuladoConfig } from '@/components/simulado-setup';
+import type { SimuladoConfig, SimuladoModule } from '@/components/simulado-setup';
 
 function makeQuestion(overrides: Partial<ExportedQuestion>): ExportedQuestion {
   return {
@@ -21,49 +21,66 @@ function makeQuestion(overrides: Partial<ExportedQuestion>): ExportedQuestion {
   };
 }
 
+function makeModule(overrides: Partial<SimuladoModule>): SimuladoModule {
+  return { id: 'module-1', questionCount: 10, difficulty: 'any', tagIds: [], ...overrides };
+}
+
+function makeConfig(modules: SimuladoModule[], shuffleModules = false): SimuladoConfig {
+  return { shuffleModules, modules };
+}
+
 describe('selectQuestions', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('filters by tag when tagIds is non-empty', () => {
+  it('filters by tag when a module has non-empty tagIds', () => {
     const questions = [
       makeQuestion({ id: 1, tagIds: [10] }),
       makeQuestion({ id: 2, tagIds: [20] }),
     ];
-    const config: SimuladoConfig = { questionCount: 10, tagIds: [10], difficulties: ['easy', 'medium', 'hard'] };
+    const config = makeConfig([makeModule({ tagIds: [10] })]);
 
     const result = selectQuestions(questions, config);
 
-    expect(result.map((q) => q.id)).toEqual([1]);
+    expect(result.questions.map((q) => q.id)).toEqual([1]);
   });
 
-  it('includes all questions when tagIds is empty (no topic filter applied)', () => {
+  it('includes all questions when a module has no topic filter applied', () => {
     const questions = [makeQuestion({ id: 1, tagIds: [10] }), makeQuestion({ id: 2, tagIds: [20] })];
-    const config: SimuladoConfig = { questionCount: 10, tagIds: [], difficulties: ['easy', 'medium', 'hard'] };
+    const config = makeConfig([makeModule({ tagIds: [] })]);
 
-    expect(selectQuestions(questions, config)).toHaveLength(2);
+    expect(selectQuestions(questions, config).questions).toHaveLength(2);
   });
 
-  it('filters by difficulty', () => {
+  it('filters by difficulty when a module requests a specific difficulty', () => {
     const questions = [
       makeQuestion({ id: 1, difficulty: 'easy' }),
       makeQuestion({ id: 2, difficulty: 'hard' }),
     ];
-    const config: SimuladoConfig = { questionCount: 10, tagIds: [], difficulties: ['easy'] };
+    const config = makeConfig([makeModule({ difficulty: 'easy' })]);
 
-    expect(selectQuestions(questions, config).map((q) => q.id)).toEqual([1]);
+    expect(selectQuestions(questions, config).questions.map((q) => q.id)).toEqual([1]);
   });
 
-  it('caps the result at questionCount, sampling randomly', () => {
+  it('includes every difficulty when a module requests "any"', () => {
+    const questions = [
+      makeQuestion({ id: 1, difficulty: 'easy' }),
+      makeQuestion({ id: 2, difficulty: 'hard' }),
+    ];
+    const config = makeConfig([makeModule({ difficulty: 'any' })]);
+
+    expect(selectQuestions(questions, config).questions).toHaveLength(2);
+  });
+
+  it('caps a module result at its questionCount, sampling randomly', () => {
     const questions = Array.from({ length: 10 }, (_, i) => makeQuestion({ id: i }));
-    const config: SimuladoConfig = { questionCount: 3, tagIds: [], difficulties: ['easy', 'medium', 'hard'] };
+    const config = makeConfig([makeModule({ questionCount: 3 })]);
 
     const result = selectQuestions(questions, config);
 
-    expect(result).toHaveLength(3);
-    // Every selected question must be one of the originals, with no duplicates.
-    const ids = result.map((q) => q.id);
+    expect(result.questions).toHaveLength(3);
+    const ids = result.questions.map((q) => q.id);
     expect(new Set(ids).size).toBe(3);
     for (const id of ids) {
       expect(id).toBeGreaterThanOrEqual(0);
@@ -71,10 +88,63 @@ describe('selectQuestions', () => {
     }
   });
 
-  it('returns fewer than questionCount if fewer questions match the filters', () => {
+  it('reports a shortfall when fewer questions than requested match a module', () => {
     const questions = [makeQuestion({ id: 1 }), makeQuestion({ id: 2 })];
-    const config: SimuladoConfig = { questionCount: 10, tagIds: [], difficulties: ['easy', 'medium', 'hard'] };
+    const config = makeConfig([makeModule({ questionCount: 10 })]);
 
-    expect(selectQuestions(questions, config)).toHaveLength(2);
+    const result = selectQuestions(questions, config);
+
+    expect(result.questions).toHaveLength(2);
+    expect(result.shortfalls).toEqual([{ moduleIndex: 0, requested: 10, available: 2 }]);
+  });
+
+  it('selects independently per module and concatenates in module order when shuffleModules is false', () => {
+    const questions = [
+      makeQuestion({ id: 1, tagIds: [10] }),
+      makeQuestion({ id: 2, tagIds: [20] }),
+    ];
+    const config = makeConfig([
+      makeModule({ id: 'a', tagIds: [10], questionCount: 1 }),
+      makeModule({ id: 'b', tagIds: [20], questionCount: 1 }),
+    ]);
+
+    const result = selectQuestions(questions, config);
+
+    expect(result.questions.map((q) => q.id)).toEqual([1, 2]);
+    expect(result.shortfalls).toEqual([]);
+  });
+
+  it('reports one shortfall per module that falls short, with the correct moduleIndex', () => {
+    const questions = [makeQuestion({ id: 1, tagIds: [10] })];
+    const config = makeConfig([
+      makeModule({ id: 'a', tagIds: [10], questionCount: 5 }),
+      makeModule({ id: 'b', tagIds: [999], questionCount: 2 }),
+    ]);
+
+    const result = selectQuestions(questions, config);
+
+    expect(result.shortfalls).toEqual([
+      { moduleIndex: 0, requested: 5, available: 1 },
+      { moduleIndex: 1, requested: 2, available: 0 },
+    ]);
+  });
+
+  it('shuffles the combined question list across modules when shuffleModules is true', () => {
+    const questions = [
+      ...Array.from({ length: 5 }, (_, i) => makeQuestion({ id: i, tagIds: [10] })),
+      ...Array.from({ length: 5 }, (_, i) => makeQuestion({ id: i + 5, tagIds: [20] })),
+    ];
+    const config = makeConfig(
+      [
+        makeModule({ id: 'a', tagIds: [10], questionCount: 5 }),
+        makeModule({ id: 'b', tagIds: [20], questionCount: 5 }),
+      ],
+      true,
+    );
+
+    const result = selectQuestions(questions, config);
+
+    expect(result.questions).toHaveLength(10);
+    expect(new Set(result.questions.map((q) => q.id)).size).toBe(10);
   });
 });

@@ -46,9 +46,39 @@
   max-width: 6rem;
 }
 
-.difficultyRow {
+.difficultySelect {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: inherit;
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  max-width: 12rem;
+}
+
+.moduleCard {
   display: flex;
+  flex-direction: column;
   gap: var(--space-md);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.moduleCard legend {
+  font-weight: 600;
+  padding: 0 var(--space-sm);
+}
+
+.addModuleButton,
+.removeModuleButton {
+  align-self: flex-start;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: inherit;
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  font-size: var(--font-size-base);
 }
 
 .startButton {

@@ -98,7 +98,7 @@ describe('SimuladoPageClient', () => {
     await user.click(screen.getByRole('button', { name: 'Gerar simulado' }));
 
     // Stays on setup: the "Gerar simulado" button (and thus the setup form) is still there.
-    expect(await screen.findByText(/Só há 0 questão\(ões\) disponível\(eis\)/)).toBeInTheDocument();
+    expect(await screen.findByText(/Módulo 1: só há 0 questão\(ões\) disponível\(eis\)/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Gerar simulado' })).toBeInTheDocument();
   });
 
@@ -116,7 +116,7 @@ describe('SimuladoPageClient', () => {
     await user.click(screen.getByRole('button', { name: 'Gerar simulado' }));
 
     expect(await screen.findByText('Quanto é 1+1?')).toBeInTheDocument();
-    expect(screen.getByText(/Só há 1 questão\(ões\) disponível\(eis\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Módulo 1: só há 1 questão\(ões\) disponível\(eis\)/)).toBeInTheDocument();
   });
 
   it('shows an error message and stays usable when the question bank fails to load', async () => {

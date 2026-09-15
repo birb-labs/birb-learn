@@ -46,15 +46,20 @@
     "title": "Simulacro",
     "empty": "Todavía no hay suficientes preguntas para generar un simulacro.",
     "setup": {
+      "shuffleModules": "Mezclar módulos",
+      "moduleTitle": "Módulo {number}",
+      "addModule": "Agregar módulo",
+      "removeModule": "Eliminar módulo",
       "questionCount": "Número de preguntas",
       "topics": "Temas",
       "difficulty": "Dificultad",
+      "difficultyAny": "Cualquiera",
       "difficultyEasy": "Fácil",
       "difficultyMedium": "Media",
       "difficultyHard": "Difícil",
       "start": "Generar simulacro",
       "loading": "Generando simulacro...",
-      "notEnoughQuestions": "Solo hay {available} pregunta(s) disponible(s) para los filtros elegidos (pediste {requested}).",
+      "notEnoughQuestionsModule": "Módulo {module}: solo hay {available} pregunta(s) disponible(s) para los filtros elegidos (pediste {requested}).",
       "loadError": "No se pudo cargar el banco de preguntas. Inténtalo de nuevo."
     },
     "taking": {

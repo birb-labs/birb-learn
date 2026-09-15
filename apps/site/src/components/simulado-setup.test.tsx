@@ -16,20 +16,24 @@ const fixtureTagTree: TopicNode[] = [
 ];
 
 describe('SimuladoSetup', () => {
-  it('renders topic and subtopic checkboxes, difficulty options, and a question-count input', () => {
+  it('renders one module by default with topic/subtopic checkboxes, a difficulty select, a question-count input, and no remove button', () => {
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
         <SimuladoSetup tagTree={fixtureTagTree} onStart={() => {}} />
       </NextIntlClientProvider>,
     );
 
+    expect(screen.getByRole('checkbox', { name: 'Embaralhar módulos' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Limites' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Limites Laterais' })).toBeInTheDocument();
     expect(screen.getByLabelText('Número de questões')).toBeInTheDocument();
+    expect(screen.getByLabelText('Dificuldade')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Adicionar módulo' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remover módulo' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Gerar simulado' })).toBeInTheDocument();
   });
 
-  it('calls onStart with the selected configuration', async () => {
+  it('calls onStart with the selected configuration for a single module', async () => {
     const user = userEvent.setup();
     const onStart = vi.fn();
 
@@ -42,13 +46,85 @@ describe('SimuladoSetup', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Limites' }));
     await user.clear(screen.getByLabelText('Número de questões'));
     await user.type(screen.getByLabelText('Número de questões'), '5');
+    await user.selectOptions(screen.getByLabelText('Dificuldade'), 'Fácil');
     await user.click(screen.getByRole('button', { name: 'Gerar simulado' }));
 
-    expect(onStart).toHaveBeenCalledExactlyOnceWith({
-      questionCount: 5,
-      tagIds: [1, 2],
-      difficulties: ['easy', 'medium', 'hard'],
-    });
+    expect(onStart).toHaveBeenCalledTimes(1);
+    const config = onStart.mock.calls[0][0];
+    expect(config.shuffleModules).toBe(false);
+    expect(config.modules).toHaveLength(1);
+    expect(config.modules[0]).toMatchObject({ questionCount: 5, difficulty: 'easy', tagIds: [1, 2] });
+  });
+
+  it('toggling "Embaralhar módulos" is reflected in the submitted configuration', async () => {
+    const user = userEvent.setup();
+    const onStart = vi.fn();
+
+    render(
+      <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
+        <SimuladoSetup tagTree={fixtureTagTree} onStart={onStart} />
+      </NextIntlClientProvider>,
+    );
+
+    await user.click(screen.getByRole('checkbox', { name: 'Embaralhar módulos' }));
+    await user.click(screen.getByRole('button', { name: 'Gerar simulado' }));
+
+    expect(onStart.mock.calls[0][0].shuffleModules).toBe(true);
+  });
+
+  it('"Adicionar módulo" adds an independent module with its own fields, and both modules gain a remove button', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
+        <SimuladoSetup tagTree={fixtureTagTree} onStart={() => {}} />
+      </NextIntlClientProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Adicionar módulo' }));
+
+    expect(screen.getAllByLabelText('Número de questões')).toHaveLength(2);
+    expect(screen.getAllByLabelText('Dificuldade')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Remover módulo' })).toHaveLength(2);
+  });
+
+  it('"Remover módulo" removes only that module, and the last remaining module cannot be removed', async () => {
+    const user = userEvent.setup();
+    const onStart = vi.fn();
+
+    render(
+      <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
+        <SimuladoSetup tagTree={fixtureTagTree} onStart={onStart} />
+      </NextIntlClientProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Adicionar módulo' }));
+    await user.click(screen.getAllByRole('button', { name: 'Remover módulo' })[0]);
+
+    expect(screen.getAllByLabelText('Número de questões')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Remover módulo' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Gerar simulado' }));
+    expect(onStart.mock.calls[0][0].modules).toHaveLength(1);
+  });
+
+  it('each module tracks its own topic selection independently', async () => {
+    const user = userEvent.setup();
+    const onStart = vi.fn();
+
+    render(
+      <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
+        <SimuladoSetup tagTree={fixtureTagTree} onStart={onStart} />
+      </NextIntlClientProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Adicionar módulo' }));
+    await user.click(screen.getAllByRole('checkbox', { name: 'Limites' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Gerar simulado' }));
+
+    const config = onStart.mock.calls[0][0];
+    expect(config.modules[0].tagIds).toEqual([1, 2]);
+    expect(config.modules[1].tagIds).toEqual([]);
   });
 
   it('selecting a topic also selects all of its subtopics', async () => {

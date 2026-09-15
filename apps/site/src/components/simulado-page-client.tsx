@@ -42,10 +42,20 @@ export function SimuladoPageClient({ tagTree, locale }: { tagTree: TopicNode[]; 
       return;
     }
 
-    const selected = selectQuestions(allQuestions, config);
+    const { questions: selected, shortfalls } = selectQuestions(allQuestions, config);
 
-    if (selected.length < config.questionCount) {
-      setNotice(t('notEnoughQuestions', { available: selected.length, requested: config.questionCount }));
+    if (shortfalls.length > 0) {
+      setNotice(
+        shortfalls
+          .map((shortfall) =>
+            t('notEnoughQuestionsModule', {
+              module: shortfall.moduleIndex + 1,
+              available: shortfall.available,
+              requested: shortfall.requested,
+            }),
+          )
+          .join(' '),
+      );
     }
 
     if (selected.length === 0) {

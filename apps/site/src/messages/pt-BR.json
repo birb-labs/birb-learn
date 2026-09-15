@@ -46,15 +46,20 @@
     "title": "Simulado",
     "empty": "Ainda não há questões suficientes para gerar um simulado.",
     "setup": {
+      "shuffleModules": "Embaralhar módulos",
+      "moduleTitle": "Módulo {number}",
+      "addModule": "Adicionar módulo",
+      "removeModule": "Remover módulo",
       "questionCount": "Número de questões",
       "topics": "Tópicos",
       "difficulty": "Dificuldade",
+      "difficultyAny": "Qualquer",
       "difficultyEasy": "Fácil",
       "difficultyMedium": "Médio",
       "difficultyHard": "Difícil",
       "start": "Gerar simulado",
       "loading": "Gerando simulado...",
-      "notEnoughQuestions": "Só há {available} questão(ões) disponível(eis) para os filtros escolhidos (você pediu {requested}).",
+      "notEnoughQuestionsModule": "Módulo {module}: só há {available} questão(ões) disponível(eis) para os filtros escolhidos (você pediu {requested}).",
       "loadError": "Não foi possível carregar o banco de questões. Tente novamente."
     },
     "taking": {
