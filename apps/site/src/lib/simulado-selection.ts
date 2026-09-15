@@ -1,5 +1,6 @@
 export type { ExportedAcceptedAnswer, ExportedOption, ExportedMatchingPair, ExportedQuestion } from './export-question';
 
+import type { TopicNode } from '@birb-math/content-schema';
 import type { SimuladoConfig, SimuladoModule } from '@/components/simulado-setup';
 import type { ExportedQuestion } from './export-question';
 import { shuffle } from './shuffle';
@@ -15,9 +16,20 @@ export interface SimuladoSelectionResult {
   shortfalls: ModuleShortfall[];
 }
 
-function selectForModule(all: ExportedQuestion[], module: SimuladoModule): ExportedQuestion[] {
+function flattenTagIds(tree: TopicNode[]): number[] {
+  return tree.flatMap((topic) => [topic.id, ...topic.subtopics.map((subtopic) => subtopic.id)]);
+}
+
+function selectForModule(
+  all: ExportedQuestion[],
+  module: SimuladoModule,
+  tagTreesBySubject: Record<number, TopicNode[]>,
+): ExportedQuestion[] {
+  const effectiveTagIds =
+    module.tagIds.length > 0 ? module.tagIds : flattenTagIds(tagTreesBySubject[module.subjectId] ?? []);
+
   const filtered = all.filter((question) => {
-    const matchesTags = module.tagIds.length === 0 || question.tagIds.some((id) => module.tagIds.includes(id));
+    const matchesTags = question.tagIds.some((id) => effectiveTagIds.includes(id));
     const matchesDifficulty = module.difficulty === 'any' || module.difficulty === question.difficulty;
     return matchesTags && matchesDifficulty;
   });
@@ -25,10 +37,14 @@ function selectForModule(all: ExportedQuestion[], module: SimuladoModule): Expor
   return shuffle(filtered).slice(0, module.questionCount);
 }
 
-export function selectQuestions(all: ExportedQuestion[], config: SimuladoConfig): SimuladoSelectionResult {
+export function selectQuestions(
+  all: ExportedQuestion[],
+  config: SimuladoConfig,
+  tagTreesBySubject: Record<number, TopicNode[]>,
+): SimuladoSelectionResult {
   const shortfalls: ModuleShortfall[] = [];
   const perModule = config.modules.map((module, moduleIndex) => {
-    const selected = selectForModule(all, module);
+    const selected = selectForModule(all, module, tagTreesBySubject);
     if (selected.length < module.questionCount) {
       shortfalls.push({ moduleIndex, requested: module.questionCount, available: selected.length });
     }

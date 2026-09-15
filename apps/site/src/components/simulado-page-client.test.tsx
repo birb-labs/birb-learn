@@ -4,10 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import ptBR from '@/messages/pt-BR.json';
 import { SimuladoPageClient } from './simulado-page-client';
-import type { TopicNode } from '@birb-math/content-schema';
+import type { SubjectSummary, TopicNode } from '@birb-math/content-schema';
 import type { ExportedQuestion } from '@/lib/export-question';
 
-const fixtureTagTree: TopicNode[] = [{ id: 1, slug: 'limites', name: 'Limites', subtopics: [] }];
+const fixtureSubjects: SubjectSummary[] = [{ id: 1, slug: 'matematica', name: 'Matemática' }];
+const fixtureTagTreesBySubject: Record<number, TopicNode[]> = {
+  1: [{ id: 1, slug: 'limites', name: 'Limites', subtopics: [] }],
+};
 
 const fixtureQuestions: ExportedQuestion[] = [
   {
@@ -65,7 +68,7 @@ describe('SimuladoPageClient', () => {
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoPageClient tagTree={fixtureTagTree} locale="pt-BR" />
+        <SimuladoPageClient subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} locale="pt-BR" />
       </NextIntlClientProvider>,
     );
 
@@ -91,7 +94,7 @@ describe('SimuladoPageClient', () => {
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoPageClient tagTree={fixtureTagTree} locale="pt-BR" />
+        <SimuladoPageClient subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} locale="pt-BR" />
       </NextIntlClientProvider>,
     );
 
@@ -107,7 +110,7 @@ describe('SimuladoPageClient', () => {
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoPageClient tagTree={fixtureTagTree} locale="pt-BR" />
+        <SimuladoPageClient subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} locale="pt-BR" />
       </NextIntlClientProvider>,
     );
 
@@ -125,7 +128,7 @@ describe('SimuladoPageClient', () => {
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoPageClient tagTree={fixtureTagTree} locale="pt-BR" />
+        <SimuladoPageClient subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} locale="pt-BR" />
       </NextIntlClientProvider>,
     );
 
@@ -143,7 +146,7 @@ describe('SimuladoPageClient', () => {
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoPageClient tagTree={fixtureTagTree} locale="pt-BR" />
+        <SimuladoPageClient subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} locale="pt-BR" />
       </NextIntlClientProvider>,
     );
 
@@ -163,7 +166,7 @@ describe('SimuladoPageClient', () => {
 
     const { container } = render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoPageClient tagTree={fixtureTagTree} locale="pt-BR" />
+        <SimuladoPageClient subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} locale="pt-BR" />
       </NextIntlClientProvider>,
     );
 
@@ -203,7 +206,7 @@ describe('SimuladoPageClient', () => {
     const user = userEvent.setup();
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoPageClientWithFailingGrader tagTree={fixtureTagTree} locale="pt-BR" />
+        <SimuladoPageClientWithFailingGrader subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} locale="pt-BR" />
       </NextIntlClientProvider>,
     );
 

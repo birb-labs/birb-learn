@@ -2,6 +2,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { selectQuestions } from './simulado-selection';
 import type { ExportedQuestion } from './simulado-selection';
 import type { SimuladoConfig, SimuladoModule } from '@/components/simulado-setup';
+import type { TopicNode } from '@birb-math/content-schema';
 
 function makeQuestion(overrides: Partial<ExportedQuestion>): ExportedQuestion {
   return {
@@ -22,11 +23,26 @@ function makeQuestion(overrides: Partial<ExportedQuestion>): ExportedQuestion {
 }
 
 function makeModule(overrides: Partial<SimuladoModule>): SimuladoModule {
-  return { id: 'module-1', questionCount: 10, difficulty: 'any', tagIds: [], ...overrides };
+  return { id: 'module-1', subjectId: 1, questionCount: 10, difficulty: 'any', tagIds: [], ...overrides };
 }
 
 function makeConfig(modules: SimuladoModule[], shuffleModules = false): SimuladoConfig {
   return { shuffleModules, modules };
+}
+
+const defaultTagTreesBySubject: Record<number, TopicNode[]> = {
+  1: [
+    { id: 10, slug: 't10', name: 'T10', subtopics: [] },
+    { id: 20, slug: 't20', name: 'T20', subtopics: [] },
+  ],
+};
+
+function select(
+  questions: ExportedQuestion[],
+  config: SimuladoConfig,
+  tagTreesBySubject: Record<number, TopicNode[]> = defaultTagTreesBySubject,
+) {
+  return selectQuestions(questions, config, tagTreesBySubject);
 }
 
 describe('selectQuestions', () => {
@@ -41,43 +57,50 @@ describe('selectQuestions', () => {
     ];
     const config = makeConfig([makeModule({ tagIds: [10] })]);
 
-    const result = selectQuestions(questions, config);
+    const result = select(questions, config);
 
     expect(result.questions.map((q) => q.id)).toEqual([1]);
   });
 
-  it('includes all questions when a module has no topic filter applied', () => {
+  it('includes all of a subject\'s questions when a module has no topic filter applied', () => {
     const questions = [makeQuestion({ id: 1, tagIds: [10] }), makeQuestion({ id: 2, tagIds: [20] })];
     const config = makeConfig([makeModule({ tagIds: [] })]);
 
-    expect(selectQuestions(questions, config).questions).toHaveLength(2);
+    expect(select(questions, config).questions).toHaveLength(2);
+  });
+
+  it('excludes questions from another subject when a module has no topic filter applied', () => {
+    const questions = [makeQuestion({ id: 1, tagIds: [10] }), makeQuestion({ id: 2, tagIds: [99] })];
+    const config = makeConfig([makeModule({ tagIds: [] })]);
+
+    expect(select(questions, config).questions.map((q) => q.id)).toEqual([1]);
   });
 
   it('filters by difficulty when a module requests a specific difficulty', () => {
     const questions = [
-      makeQuestion({ id: 1, difficulty: 'easy' }),
-      makeQuestion({ id: 2, difficulty: 'hard' }),
+      makeQuestion({ id: 1, difficulty: 'easy', tagIds: [10] }),
+      makeQuestion({ id: 2, difficulty: 'hard', tagIds: [10] }),
     ];
     const config = makeConfig([makeModule({ difficulty: 'easy' })]);
 
-    expect(selectQuestions(questions, config).questions.map((q) => q.id)).toEqual([1]);
+    expect(select(questions, config).questions.map((q) => q.id)).toEqual([1]);
   });
 
   it('includes every difficulty when a module requests "any"', () => {
     const questions = [
-      makeQuestion({ id: 1, difficulty: 'easy' }),
-      makeQuestion({ id: 2, difficulty: 'hard' }),
+      makeQuestion({ id: 1, difficulty: 'easy', tagIds: [10] }),
+      makeQuestion({ id: 2, difficulty: 'hard', tagIds: [10] }),
     ];
     const config = makeConfig([makeModule({ difficulty: 'any' })]);
 
-    expect(selectQuestions(questions, config).questions).toHaveLength(2);
+    expect(select(questions, config).questions).toHaveLength(2);
   });
 
   it('caps a module result at its questionCount, sampling randomly', () => {
-    const questions = Array.from({ length: 10 }, (_, i) => makeQuestion({ id: i }));
+    const questions = Array.from({ length: 10 }, (_, i) => makeQuestion({ id: i, tagIds: [10] }));
     const config = makeConfig([makeModule({ questionCount: 3 })]);
 
-    const result = selectQuestions(questions, config);
+    const result = select(questions, config);
 
     expect(result.questions).toHaveLength(3);
     const ids = result.questions.map((q) => q.id);
@@ -89,10 +112,10 @@ describe('selectQuestions', () => {
   });
 
   it('reports a shortfall when fewer questions than requested match a module', () => {
-    const questions = [makeQuestion({ id: 1 }), makeQuestion({ id: 2 })];
+    const questions = [makeQuestion({ id: 1, tagIds: [10] }), makeQuestion({ id: 2, tagIds: [10] })];
     const config = makeConfig([makeModule({ questionCount: 10 })]);
 
-    const result = selectQuestions(questions, config);
+    const result = select(questions, config);
 
     expect(result.questions).toHaveLength(2);
     expect(result.shortfalls).toEqual([{ moduleIndex: 0, requested: 10, available: 2 }]);
@@ -108,7 +131,7 @@ describe('selectQuestions', () => {
       makeModule({ id: 'b', tagIds: [20], questionCount: 1 }),
     ]);
 
-    const result = selectQuestions(questions, config);
+    const result = select(questions, config);
 
     expect(result.questions.map((q) => q.id)).toEqual([1, 2]);
     expect(result.shortfalls).toEqual([]);
@@ -121,7 +144,7 @@ describe('selectQuestions', () => {
       makeModule({ id: 'b', tagIds: [999], questionCount: 2 }),
     ]);
 
-    const result = selectQuestions(questions, config);
+    const result = select(questions, config);
 
     expect(result.shortfalls).toEqual([
       { moduleIndex: 0, requested: 5, available: 1 },
@@ -142,9 +165,25 @@ describe('selectQuestions', () => {
       true,
     );
 
-    const result = selectQuestions(questions, config);
+    const result = select(questions, config);
 
     expect(result.questions).toHaveLength(10);
     expect(new Set(result.questions.map((q) => q.id)).size).toBe(10);
+  });
+
+  it('scopes an empty topic filter to the module\'s own subject when multiple subjects exist', () => {
+    const tagTreesBySubject: Record<number, TopicNode[]> = {
+      1: [{ id: 10, slug: 'limites', name: 'Limites', subtopics: [] }],
+      2: [{ id: 30, slug: 'cinematica', name: 'Cinemática', subtopics: [] }],
+    };
+    const questions = [
+      makeQuestion({ id: 1, tagIds: [10] }),
+      makeQuestion({ id: 2, tagIds: [30] }),
+    ];
+    const config = makeConfig([makeModule({ subjectId: 2, tagIds: [] })]);
+
+    const result = select(questions, config, tagTreesBySubject);
+
+    expect(result.questions.map((q) => q.id)).toEqual([2]);
   });
 });

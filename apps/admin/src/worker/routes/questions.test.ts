@@ -44,6 +44,24 @@ function pt(translation: {
   };
 }
 
+// D1 storage in this test file is cumulative across `it` blocks (not reset
+// per test), and the admin's `GET /api/tags` route defaults to the
+// lowest-`order` subject -- so every test in this file must share the SAME
+// subject rather than each creating its own, or a later test's tags would
+// silently attach to an earlier test's subject instead of the one it just
+// created.
+let cachedSubjectId: number | undefined;
+async function createSubject(): Promise<number> {
+  if (cachedSubjectId !== undefined) return cachedSubjectId;
+  const response = await SELF.fetch(
+    'https://admin.test/api/lessons/subjects',
+    authed({ slug: 'matematica', order: 1, translations: { 'pt-BR': { name: 'Matemática' } } }),
+  );
+  const { id } = await response.json<{ id: number }>();
+  cachedSubjectId = id;
+  return id;
+}
+
 describe('question-bank CRUD', () => {
   it('rejects a multiple_choice question without exactly one correct option', async () => {
     const response = await SELF.fetch(
@@ -119,9 +137,11 @@ describe('question-bank CRUD', () => {
   });
 
   it('creates a tag and a subtopic under it', async () => {
+    const subjectId = await createSubject();
+
     const topicResponse = await SELF.fetch(
       'https://admin.test/api/tags',
-      authed({ slug: 'limites', translations: { 'pt-BR': { name: 'Limites' } } }),
+      authed({ slug: 'limites', subjectId, translations: { 'pt-BR': { name: 'Limites' } } }),
     );
     const topic = await topicResponse.json<{ id: number }>();
 
@@ -129,6 +149,7 @@ describe('question-bank CRUD', () => {
       'https://admin.test/api/tags',
       authed({
         slug: 'limites-laterais',
+        subjectId,
         parentTagId: topic.id,
         translations: { 'pt-BR': { name: 'Limites Laterais' } },
       }),
@@ -403,17 +424,19 @@ describe('question-bank CRUD', () => {
   });
 
   it('POST /api/tags creates translation rows', async () => {
+    const subjectId = await createSubject();
     const response = await SELF.fetch(
       'https://admin.test/api/tags',
-      authed({ slug: 'derivadas', translations: { 'pt-BR': { name: 'Derivadas' } } }),
+      authed({ slug: 'derivadas', subjectId, translations: { 'pt-BR': { name: 'Derivadas' } } }),
     );
     expect(response.status).toBe(201);
   });
 
   it('PATCH /api/tags/:id upserts a translation for a new locale', async () => {
+    const subjectId = await createSubject();
     const created = await SELF.fetch(
       'https://admin.test/api/tags',
-      authed({ slug: 'integrais', translations: { 'pt-BR': { name: 'Integrais' } } }),
+      authed({ slug: 'integrais', subjectId, translations: { 'pt-BR': { name: 'Integrais' } } }),
     );
     const { id } = await created.json<{ id: number }>();
 
@@ -871,9 +894,10 @@ describe('question and tag locale-key validation', () => {
   });
 
   it('PATCH /api/tags/:id rejects an unrecognised locale key without writing anything', async () => {
+    const subjectId = await createSubject();
     const created = await SELF.fetch(
       'https://admin.test/api/tags',
-      authed({ slug: 'bad-locale-tag', translations: { 'pt-BR': { name: 'Original' } } }),
+      authed({ slug: 'bad-locale-tag', subjectId, translations: { 'pt-BR': { name: 'Original' } } }),
     );
     const { id } = await created.json<{ id: number }>();
 

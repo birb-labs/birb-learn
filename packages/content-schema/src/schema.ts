@@ -210,6 +210,14 @@ export const tags = sqliteTable('tags', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   slug: text('slug').notNull().unique(),
   parentTagId: integer('parent_tag_id').references((): AnySQLiteColumn => tags.id),
+  // `.notNull()` here is enforced at the app layer (see the tag write
+  // routes in apps/admin/src/worker/routes/questions.ts), not by SQLite:
+  // the migration backfilling this column onto pre-existing rows can't
+  // add a NOT NULL constraint without a full table rebuild, the same
+  // tradeoff already made for `isValidLocale` above.
+  subjectId: integer('subject_id')
+    .notNull()
+    .references(() => subjects.id),
 });
 
 export const tagTranslations = sqliteTable(

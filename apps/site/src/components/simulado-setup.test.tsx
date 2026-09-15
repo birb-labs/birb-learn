@@ -4,26 +4,41 @@ import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import ptBR from '@/messages/pt-BR.json';
 import { SimuladoSetup } from './simulado-setup';
-import type { TopicNode } from '@birb-math/content-schema';
+import type { SubjectSummary, TopicNode } from '@birb-math/content-schema';
 
-const fixtureTagTree: TopicNode[] = [
-  {
-    id: 1,
-    slug: 'limites',
-    name: 'Limites',
-    subtopics: [{ id: 2, slug: 'limites-laterais', name: 'Limites Laterais' }],
-  },
+const fixtureSubjects: SubjectSummary[] = [{ id: 1, slug: 'matematica', name: 'Matemática' }];
+
+const fixtureTagTreesBySubject: Record<number, TopicNode[]> = {
+  1: [
+    {
+      id: 1,
+      slug: 'limites',
+      name: 'Limites',
+      subtopics: [{ id: 2, slug: 'limites-laterais', name: 'Limites Laterais' }],
+    },
+  ],
+};
+
+const multiSubjects: SubjectSummary[] = [
+  { id: 1, slug: 'matematica', name: 'Matemática' },
+  { id: 2, slug: 'fisica', name: 'Física' },
 ];
 
+const multiTagTreesBySubject: Record<number, TopicNode[]> = {
+  1: [{ id: 1, slug: 'limites', name: 'Limites', subtopics: [] }],
+  2: [{ id: 3, slug: 'cinematica', name: 'Cinemática', subtopics: [] }],
+};
+
 describe('SimuladoSetup', () => {
-  it('renders one module by default with topic/subtopic checkboxes, a difficulty select, a question-count input, and no remove button', () => {
+  it('renders one module by default with a subject select, topic/subtopic checkboxes, a difficulty select, a question-count input, and no remove button', () => {
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoSetup tagTree={fixtureTagTree} onStart={() => {}} />
+        <SimuladoSetup subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} onStart={() => {}} />
       </NextIntlClientProvider>,
     );
 
     expect(screen.getByRole('checkbox', { name: 'Embaralhar módulos' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Matéria')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Limites' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Limites Laterais' })).toBeInTheDocument();
     expect(screen.getByLabelText('Número de questões')).toBeInTheDocument();
@@ -39,7 +54,7 @@ describe('SimuladoSetup', () => {
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoSetup tagTree={fixtureTagTree} onStart={onStart} />
+        <SimuladoSetup subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} onStart={onStart} />
       </NextIntlClientProvider>,
     );
 
@@ -53,7 +68,7 @@ describe('SimuladoSetup', () => {
     const config = onStart.mock.calls[0][0];
     expect(config.shuffleModules).toBe(false);
     expect(config.modules).toHaveLength(1);
-    expect(config.modules[0]).toMatchObject({ questionCount: 5, difficulty: 'easy', tagIds: [1, 2] });
+    expect(config.modules[0]).toMatchObject({ subjectId: 1, questionCount: 5, difficulty: 'easy', tagIds: [1, 2] });
   });
 
   it('toggling "Embaralhar módulos" is reflected in the submitted configuration', async () => {
@@ -62,7 +77,7 @@ describe('SimuladoSetup', () => {
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoSetup tagTree={fixtureTagTree} onStart={onStart} />
+        <SimuladoSetup subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} onStart={onStart} />
       </NextIntlClientProvider>,
     );
 
@@ -77,12 +92,13 @@ describe('SimuladoSetup', () => {
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoSetup tagTree={fixtureTagTree} onStart={() => {}} />
+        <SimuladoSetup subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} onStart={() => {}} />
       </NextIntlClientProvider>,
     );
 
     await user.click(screen.getByRole('button', { name: 'Adicionar módulo' }));
 
+    expect(screen.getAllByLabelText('Matéria')).toHaveLength(2);
     expect(screen.getAllByLabelText('Número de questões')).toHaveLength(2);
     expect(screen.getAllByLabelText('Dificuldade')).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: 'Remover módulo' })).toHaveLength(2);
@@ -94,7 +110,7 @@ describe('SimuladoSetup', () => {
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoSetup tagTree={fixtureTagTree} onStart={onStart} />
+        <SimuladoSetup subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} onStart={onStart} />
       </NextIntlClientProvider>,
     );
 
@@ -114,7 +130,7 @@ describe('SimuladoSetup', () => {
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoSetup tagTree={fixtureTagTree} onStart={onStart} />
+        <SimuladoSetup subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} onStart={onStart} />
       </NextIntlClientProvider>,
     );
 
@@ -127,12 +143,34 @@ describe('SimuladoSetup', () => {
     expect(config.modules[1].tagIds).toEqual([]);
   });
 
+  it('changing a module\'s subject swaps the rendered topics to that subject\'s tree and clears previously selected topics', async () => {
+    const user = userEvent.setup();
+    const onStart = vi.fn();
+
+    render(
+      <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
+        <SimuladoSetup subjects={multiSubjects} tagTreesBySubject={multiTagTreesBySubject} onStart={onStart} />
+      </NextIntlClientProvider>,
+    );
+
+    await user.click(screen.getByRole('checkbox', { name: 'Limites' }));
+    await user.selectOptions(screen.getByLabelText('Matéria'), 'Física');
+
+    expect(screen.queryByRole('checkbox', { name: 'Limites' })).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Cinemática' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Gerar simulado' }));
+
+    const config = onStart.mock.calls[0][0];
+    expect(config.modules[0]).toMatchObject({ subjectId: 2, tagIds: [] });
+  });
+
   it('selecting a topic also selects all of its subtopics', async () => {
     const user = userEvent.setup();
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoSetup tagTree={fixtureTagTree} onStart={() => {}} />
+        <SimuladoSetup subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} onStart={() => {}} />
       </NextIntlClientProvider>,
     );
 
@@ -147,7 +185,7 @@ describe('SimuladoSetup', () => {
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoSetup tagTree={fixtureTagTree} onStart={() => {}} />
+        <SimuladoSetup subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} onStart={() => {}} />
       </NextIntlClientProvider>,
     );
 
@@ -163,7 +201,7 @@ describe('SimuladoSetup', () => {
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoSetup tagTree={fixtureTagTree} onStart={() => {}} />
+        <SimuladoSetup subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} onStart={() => {}} />
       </NextIntlClientProvider>,
     );
 
@@ -179,7 +217,7 @@ describe('SimuladoSetup', () => {
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <SimuladoSetup tagTree={fixtureTagTree} onStart={() => {}} />
+        <SimuladoSetup subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} onStart={() => {}} />
       </NextIntlClientProvider>,
     );
 

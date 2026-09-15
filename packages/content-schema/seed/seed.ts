@@ -98,14 +98,14 @@ Um exemplo de fórmula matemática: $\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1$.
   })
   .run();
 
-db.insert(tags).values({ slug: 'limites' }).run();
+db.insert(tags).values({ slug: 'limites', subjectId: subject.id }).run();
 const topicTag = db.select().from(tags).all()[0];
 db.insert(tagTranslations)
   .values({ tagId: topicTag.id, locale: 'pt-BR', name: 'Limites' })
   .run();
 
 db.insert(tags)
-  .values({ slug: 'limites-laterais', parentTagId: topicTag.id })
+  .values({ slug: 'limites-laterais', subjectId: subject.id, parentTagId: topicTag.id })
   .run();
 const subtopicTag = db.select().from(tags).where(eq(tags.slug, 'limites-laterais')).get()!;
 db.insert(tagTranslations)

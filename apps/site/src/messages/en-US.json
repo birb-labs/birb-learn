@@ -50,6 +50,7 @@
       "moduleTitle": "Module {number}",
       "addModule": "Add module",
       "removeModule": "Remove module",
+      "subject": "Subject",
       "questionCount": "Number of questions",
       "topics": "Topics",
       "difficulty": "Difficulty",

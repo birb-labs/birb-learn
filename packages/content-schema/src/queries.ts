@@ -216,6 +216,23 @@ export async function getLessonBySlug(db: Db, slug: string, locale: Locale): Pro
   };
 }
 
+export interface SubjectSummary {
+  id: number;
+  slug: string;
+  name: string;
+}
+
+export async function getSubjects(db: Db, locale: Locale): Promise<SubjectSummary[]> {
+  const typedDb = db as BetterSQLite3Database<Record<string, unknown>>;
+  const allSubjects = await typedDb.select().from(subjects).orderBy(subjects.order).all();
+  const allSubjectTranslations = await typedDb.select().from(subjectTranslations).all();
+
+  return allSubjects.map((subject) => {
+    const { row: subjectName } = resolveTranslation(allSubjectTranslations, subject.id, 'subjectId', locale);
+    return { id: subject.id, slug: subject.slug, name: subjectName.name };
+  });
+}
+
 export interface TagNode {
   id: number;
   slug: string;
@@ -226,9 +243,9 @@ export interface TopicNode extends TagNode {
   subtopics: TagNode[];
 }
 
-export async function getTagTree(db: Db, locale: Locale): Promise<TopicNode[]> {
+export async function getTagTree(db: Db, locale: Locale, subjectId: number): Promise<TopicNode[]> {
   const typedDb = db as BetterSQLite3Database<Record<string, unknown>>;
-  const allTags = await typedDb.select().from(tags).all();
+  const allTags = await typedDb.select().from(tags).where(eq(tags.subjectId, subjectId)).all();
   const allTagTranslations = await typedDb.select().from(tagTranslations).all();
   const topicTags = allTags.filter((tag) => tag.parentTagId === null);
 

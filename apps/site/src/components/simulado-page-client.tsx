@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import type { TopicNode } from '@birb-math/content-schema';
+import type { SubjectSummary, TopicNode } from '@birb-math/content-schema';
 import { SimuladoSetup, type SimuladoConfig } from './simulado-setup';
 import { SimuladoTaking } from './simulado-taking';
 import { SimuladoResults } from './simulado-results';
@@ -17,7 +17,15 @@ type ViewState =
   | { view: 'taking'; questions: ExportedQuestion[] }
   | { view: 'results'; result: GradedResult };
 
-export function SimuladoPageClient({ tagTree, locale }: { tagTree: TopicNode[]; locale: string }) {
+export function SimuladoPageClient({
+  subjects,
+  tagTreesBySubject,
+  locale,
+}: {
+  subjects: SubjectSummary[];
+  tagTreesBySubject: Record<number, TopicNode[]>;
+  locale: string;
+}) {
   const t = useTranslations('simulado.setup');
   const tTaking = useTranslations('simulado.taking');
   const [state, setState] = useState<ViewState>({ view: 'setup' });
@@ -42,7 +50,7 @@ export function SimuladoPageClient({ tagTree, locale }: { tagTree: TopicNode[]; 
       return;
     }
 
-    const { questions: selected, shortfalls } = selectQuestions(allQuestions, config);
+    const { questions: selected, shortfalls } = selectQuestions(allQuestions, config, tagTreesBySubject);
 
     if (shortfalls.length > 0) {
       setNotice(
@@ -112,7 +120,7 @@ export function SimuladoPageClient({ tagTree, locale }: { tagTree: TopicNode[]; 
       <SimuladoHistory history={history} onViewAttempt={handleViewAttempt} />
       {loadError && <p className={styles.notice}>{loadError}</p>}
       {notice && <p className={styles.notice}>{notice}</p>}
-      <SimuladoSetup tagTree={tagTree} onStart={handleStart} />
+      <SimuladoSetup subjects={subjects} tagTreesBySubject={tagTreesBySubject} onStart={handleStart} />
     </>
   );
 }

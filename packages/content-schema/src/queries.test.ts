@@ -13,6 +13,7 @@ import {
   getLessonForAdminEdit,
   getQuestionForAdminEdit,
   getQuestionsForExport,
+  getSubjects,
   getTagTree,
 } from './queries';
 
@@ -83,14 +84,14 @@ function seedFixture(db: TestDb) {
     ])
     .run();
 
-  db.insert(schema.tags).values({ slug: 'limites' }).run();
+  db.insert(schema.tags).values({ slug: 'limites', subjectId: subject.id }).run();
   const topicTag = db.select().from(schema.tags).all()[0];
   db.insert(schema.tagTranslations)
     .values({ tagId: topicTag.id, locale: 'pt-BR', name: 'Limites' })
     .run();
 
   db.insert(schema.tags)
-    .values({ slug: 'limites-laterais', parentTagId: topicTag.id })
+    .values({ slug: 'limites-laterais', subjectId: subject.id, parentTagId: topicTag.id })
     .run();
   const subtopicTag = db.select().from(schema.tags).where(eq(schema.tags.slug, 'limites-laterais')).get()!;
   db.insert(schema.tagTranslations)
@@ -466,7 +467,8 @@ describe('content-schema queries', () => {
   });
 
   it('getTagTree returns topics with their subtopics nested in the requested locale', async () => {
-    const tree = await getTagTree(db, 'pt-BR');
+    const subject = db.select().from(schema.subjects).all()[0];
+    const tree = await getTagTree(db, 'pt-BR', subject.id);
 
     expect(tree).toHaveLength(1);
     expect(tree[0].slug).toBe('limites');
@@ -474,6 +476,25 @@ describe('content-schema queries', () => {
     expect(tree[0].subtopics).toHaveLength(1);
     expect(tree[0].subtopics[0].slug).toBe('limites-laterais');
     expect(tree[0].subtopics[0].name).toBe('Limites Laterais');
+  });
+
+  it('getTagTree scopes tags to the given subject, excluding tags from other subjects', async () => {
+    const subject = db.select().from(schema.subjects).all()[0];
+    db.insert(schema.subjects).values({ slug: 'fisica', order: 2 }).run();
+    const otherSubject = db.select().from(schema.subjects).where(eq(schema.subjects.slug, 'fisica')).get()!;
+    db.insert(schema.tags).values({ slug: 'cinematica', subjectId: otherSubject.id }).run();
+
+    const tree = await getTagTree(db, 'pt-BR', subject.id);
+
+    expect(tree.map((t) => t.slug)).toEqual(['limites']);
+  });
+
+  it('getSubjects returns every subject with its translated name in the requested locale', async () => {
+    const subjects = await getSubjects(db, 'pt-BR');
+
+    expect(subjects).toHaveLength(1);
+    expect(subjects[0].slug).toBe('calculo');
+    expect(subjects[0].name).toBe('Cálculo');
   });
 
   it('getQuestionsForExport returns every question with its options and tags in the requested locale', async () => {

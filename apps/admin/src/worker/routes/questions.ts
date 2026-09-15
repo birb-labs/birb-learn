@@ -14,6 +14,7 @@ import {
   questions,
   questionTags,
   questionTranslations,
+  subjects,
   tags,
   tagTranslations,
   type Locale,
@@ -385,21 +386,32 @@ export const tagsRoutes = new Hono<{ Bindings: Env }>();
 
 tagsRoutes.get('/', async (c) => {
   const db = getD1Db(c.env.DB);
-  return c.json(await getTagTree(db, 'pt-BR'));
+  // Tags are scoped per subject (see the `subjectId` column added in
+  // migration 0006), but there is no subject-picker UI here yet -- only
+  // one subject exists in practice, so default to it until this route
+  // grows a subject filter.
+  const [firstSubject] = await db.select().from(subjects).orderBy(subjects.order).limit(1);
+  if (!firstSubject) return c.json([]);
+  return c.json(await getTagTree(db, 'pt-BR', firstSubject.id));
 });
 
 tagsRoutes.post('/', async (c) => {
   const db = getD1Db(c.env.DB);
   const body = await c.req.json<{
     slug: string;
+    subjectId: number;
     parentTagId?: number;
     translations: Partial<Record<Locale, { name: string }>>;
   }>();
   const localeError = validateTranslationLocales(body.translations, { requirePtBr: true });
   if (localeError) return c.json({ error: localeError }, 400);
+  if (!body.subjectId) return c.json({ error: 'subjectId is required' }, 400);
   const locales = Object.keys(body.translations) as Locale[];
 
-  const [row] = await db.insert(tags).values({ slug: body.slug, parentTagId: body.parentTagId }).returning();
+  const [row] = await db
+    .insert(tags)
+    .values({ slug: body.slug, subjectId: body.subjectId, parentTagId: body.parentTagId })
+    .returning();
   await db
     .insert(tagTranslations)
     .values(locales.map((locale) => ({ tagId: row.id, locale, name: body.translations[locale]!.name })))
@@ -411,7 +423,12 @@ tagsRoutes.patch('/:id', async (c) => {
   const db = getD1Db(c.env.DB);
   const id = Number(c.req.param('id'));
   const body = await c.req.json<
-    Partial<{ slug: string; parentTagId: number; translations: Partial<Record<Locale, { name: string }>> }>
+    Partial<{
+      slug: string;
+      subjectId: number;
+      parentTagId: number;
+      translations: Partial<Record<Locale, { name: string }>>;
+    }>
   >();
   const { translations, ...structuralFields } = body;
   if (translations) {
