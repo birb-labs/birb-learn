@@ -6,7 +6,7 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 const nextConfig: NextConfig = {
   output: 'export',
   trailingSlash: true,
-  transpilePackages: ['@birb-math/theme', '@birb-math/content-schema', '@birb-math/math-input'],
+  transpilePackages: ['@birb-learn/theme', '@birb-learn/content-schema', '@birb-learn/math-input'],
 };
 
 export default withNextIntl(nextConfig);

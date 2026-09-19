@@ -6,7 +6,7 @@ import {
   assertValidShortTextAnswer,
   assertValidMatchingPairs,
 } from './export-question';
-import type { QuestionExport } from '@birb-math/content-schema';
+import type { QuestionExport } from '@birb-learn/content-schema';
 
 const mcQuestion: QuestionExport = {
   id: 1,

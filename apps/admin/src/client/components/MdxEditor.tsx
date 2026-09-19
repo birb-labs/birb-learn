@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { MathField } from '@birb-math/math-input';
+import { MathField } from '@birb-learn/math-input';
 import { apiFetch } from '../api';
 import { insertAtCursor } from '../insert-at-cursor';
 import styles from './MdxEditor.module.css';

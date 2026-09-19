@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { selectQuestions } from './simulado-selection';
 import type { ExportedQuestion } from './simulado-selection';
 import type { SimuladoConfig, SimuladoModule } from '@/components/simulado-setup';
-import type { TopicNode } from '@birb-math/content-schema';
+import type { TopicNode } from '@birb-learn/content-schema';
 
 function makeQuestion(overrides: Partial<ExportedQuestion>): ExportedQuestion {
   return {

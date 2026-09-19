@@ -1,6 +1,6 @@
 export type { ExportedAcceptedAnswer, ExportedOption, ExportedMatchingPair, ExportedQuestion } from './export-question';
 
-import type { TopicNode } from '@birb-math/content-schema';
+import type { TopicNode } from '@birb-learn/content-schema';
 import type { SimuladoConfig, SimuladoModule } from '@/components/simulado-setup';
 import type { ExportedQuestion } from './export-question';
 import { shuffle } from './shuffle';

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Fraunces, Inter } from 'next/font/google';
-import { noFlashScript } from '@birb-math/theme';
-import '@birb-math/theme/tokens.css';
+import { noFlashScript } from '@birb-learn/theme';
+import '@birb-learn/theme/tokens.css';
 import './globals.css';
 
 // `variable` names the exact CSS custom property next/font will set on the

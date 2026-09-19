@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import { Icon } from '@birb-math/theme';
+import { Icon } from '@birb-learn/theme';
 import { Link } from '@/i18n/navigation';
 import styles from './lesson-breadcrumb.module.css';
 

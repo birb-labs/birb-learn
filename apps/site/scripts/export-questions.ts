@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getQuestionsForExport, LOCALES } from '@birb-math/content-schema';
-import { getDb } from '@birb-math/content-schema/src/client';
+import { getQuestionsForExport, LOCALES } from '@birb-learn/content-schema';
+import { getDb } from '@birb-learn/content-schema/src/client';
 import {
   compileQuestionForExport,
   assertValidNumericCorrectAnswer,

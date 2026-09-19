@@ -49,8 +49,8 @@ cada build a partir de migrations versionadas e um script de seed —
 não há banco persistente até o painel administrativo (sub-projeto 4).
 
 ```bash
-pnpm --filter @birb-math/content-schema run db:generate  # gera uma nova migration a partir do schema
-pnpm --filter @birb-math/content-schema run db:reset     # aplica migrations + popula com dados de exemplo
+pnpm --filter @birb-learn/content-schema run db:generate  # gera uma nova migration a partir do schema
+pnpm --filter @birb-learn/content-schema run db:reset     # aplica migrations + popula com dados de exemplo
 ```
 
 O banco de questões (usado para gerar simulados) vive nas mesmas migrations e no mesmo banco SQLite do conteúdo de lições. Um passo adicional de build (`export-questions`) compila cada questão para HTML estático e gera um arquivo por idioma em `apps/site/public/data/` (`questions.pt-BR.json`, `questions.en-US.json`, `questions.es.json`), consumidos pelo simulado inteiramente no navegador — não há backend de simulado.

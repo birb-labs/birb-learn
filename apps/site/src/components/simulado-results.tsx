@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Icon } from '@birb-math/theme';
+import { Icon } from '@birb-learn/theme';
 import type { GradedQuestionResult, GradedResult } from '@/lib/grade-simulado';
 import { formatNumericAnswerForDisplay } from '@/lib/numeric-answer';
 import { parseSelectedOptionIds } from '@/lib/multi-response-answer';

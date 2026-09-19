@@ -3,7 +3,7 @@ import { render, screen, cleanup } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import ptBR from '@/messages/pt-BR.json';
 import { ContentTree } from './content-tree';
-import type { ContentTree as ContentTreeData } from '@birb-math/content-schema';
+import type { ContentTree as ContentTreeData } from '@birb-learn/content-schema';
 
 const fixtureTree: ContentTreeData[] = [
   {

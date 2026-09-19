@@ -1,4 +1,4 @@
-import { isValidLocale } from '@birb-math/content-schema';
+import { isValidLocale } from '@birb-learn/content-schema';
 
 /**
  * Validates the locale keys of an incoming locale-keyed map (a translation map,

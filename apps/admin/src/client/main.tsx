@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import { ThemeProvider } from '@birb-math/theme';
+import { ThemeProvider } from '@birb-learn/theme';
 import { App } from './App';
 import './global.css';
 

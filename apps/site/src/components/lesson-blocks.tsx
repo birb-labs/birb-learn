@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import type { LessonBlockContent } from '@birb-math/content-schema';
+import type { LessonBlockContent } from '@birb-learn/content-schema';
 import { compileLessonMdx } from '@/lib/compile-lesson-mdx';
 import { ContentCallout } from './content-callout';
 import { SimulatorBlock } from './simulators/simulator-block';

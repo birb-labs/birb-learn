@@ -50,8 +50,8 @@ script de seed — no hay base de datos persistente hasta el panel de
 administración (sub-proyecto 4).
 
 ```bash
-pnpm --filter @birb-math/content-schema run db:generate  # genera una nueva migración del esquema
-pnpm --filter @birb-math/content-schema run db:reset     # aplica migraciones + completa con datos de ejemplo
+pnpm --filter @birb-learn/content-schema run db:generate  # genera una nueva migración del esquema
+pnpm --filter @birb-learn/content-schema run db:reset     # aplica migraciones + completa con datos de ejemplo
 ```
 
 El banco de preguntas (utilizado para generar simulacros) vive en las mismas

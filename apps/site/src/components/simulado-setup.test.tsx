@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import ptBR from '@/messages/pt-BR.json';
 import { SimuladoSetup } from './simulado-setup';
-import type { SubjectSummary, TopicNode } from '@birb-math/content-schema';
+import type { SubjectSummary, TopicNode } from '@birb-learn/content-schema';
 
 const fixtureSubjects: SubjectSummary[] = [{ id: 1, slug: 'matematica', name: 'Matemática' }];
 

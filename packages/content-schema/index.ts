@@ -12,4 +12,4 @@ export * from './src/numeric-answer-validation';
 // this fix (the client's top-level `fileURLToPath(import.meta.url)` throws
 // once bundled into a Worker). Node/Next.js consumers (apps/site) that
 // genuinely need the better-sqlite3 client import it directly:
-//   import { getDb } from '@birb-math/content-schema/src/client';
+//   import { getDb } from '@birb-learn/content-schema/src/client';

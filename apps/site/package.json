@@ -4,17 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @birb-math/content-schema run db:reset && tsx scripts/export-questions.ts && next dev",
-    "build": "pnpm --filter @birb-math/content-schema run db:reset && tsx scripts/export-questions.ts && next build",
+    "dev": "pnpm --filter @birb-learn/content-schema run db:reset && tsx scripts/export-questions.ts && next dev",
+    "build": "pnpm --filter @birb-learn/content-schema run db:reset && tsx scripts/export-questions.ts && next build",
     "typecheck": "tsc --noEmit",
-    "build:from-admin": "pnpm --filter @birb-math/content-schema run db:migrate && tsx scripts/hydrate-from-admin.ts && tsx scripts/export-questions.ts && next build",
+    "build:from-admin": "pnpm --filter @birb-learn/content-schema run db:migrate && tsx scripts/hydrate-from-admin.ts && tsx scripts/export-questions.ts && next build",
     "test": "vitest run",
     "export-questions": "tsx scripts/export-questions.ts"
   },
   "dependencies": {
-    "@birb-math/content-schema": "workspace:*",
-    "@birb-math/math-input": "workspace:*",
-    "@birb-math/theme": "workspace:*",
+    "@birb-learn/content-schema": "workspace:*",
+    "@birb-learn/math-input": "workspace:*",
+    "@birb-learn/theme": "workspace:*",
     "@cortex-js/compute-engine": "0.121.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",

@@ -49,8 +49,8 @@ on each build from versioned migrations and a seed script — there is no
 persistent database until the admin panel (sub-project 4).
 
 ```bash
-pnpm --filter @birb-math/content-schema run db:generate  # generates a new migration from the schema
-pnpm --filter @birb-math/content-schema run db:reset     # applies migrations + populates with sample data
+pnpm --filter @birb-learn/content-schema run db:generate  # generates a new migration from the schema
+pnpm --filter @birb-learn/content-schema run db:reset     # applies migrations + populates with sample data
 ```
 
 The question bank (used to generate practice tests) lives in the same migrations

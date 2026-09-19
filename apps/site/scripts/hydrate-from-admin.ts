@@ -19,8 +19,8 @@ import {
   tagTranslations,
   topics,
   topicTranslations,
-} from '@birb-math/content-schema';
-import { getDb } from '@birb-math/content-schema/src/client';
+} from '@birb-learn/content-schema';
+import { getDb } from '@birb-learn/content-schema/src/client';
 
 interface AdminExport {
   subjects: (typeof subjects.$inferSelect)[];

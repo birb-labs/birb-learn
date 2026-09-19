@@ -1,5 +1,5 @@
 {
-  "name": "@birb-math/math-input",
+  "name": "@birb-learn/math-input",
   "version": "0.0.0",
   "private": true,
   "main": "./index.ts",

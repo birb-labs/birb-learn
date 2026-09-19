@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ThemeSwitcher } from '@birb-math/theme';
+import { ThemeSwitcher } from '@birb-learn/theme';
 import { LoginPage } from './pages/LoginPage';
 import { ContentTreePage } from './pages/ContentTreePage';
 import { LessonEditorPage } from './pages/LessonEditorPage';

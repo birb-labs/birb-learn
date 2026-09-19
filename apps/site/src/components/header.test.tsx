@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
-import { ThemeProvider } from '@birb-math/theme';
+import { ThemeProvider } from '@birb-learn/theme';
 import ptBR from '@/messages/pt-BR.json';
 import { Header } from './header';
 

@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { QuestionExport } from '@birb-math/content-schema';
+import type { QuestionExport } from '@birb-learn/content-schema';
 import { compileLessonMdx } from './compile-lesson-mdx';
 
 export interface ExportedOption {
@@ -46,7 +46,7 @@ async function compileToHtml(source: string): Promise<string> {
   return renderToStaticMarkup(element);
 }
 
-export { isValidNumericCorrectAnswer, assertValidNumericCorrectAnswer } from '@birb-math/content-schema';
+export { isValidNumericCorrectAnswer, assertValidNumericCorrectAnswer } from '@birb-learn/content-schema';
 
 /**
  * Throws a descriptive error if a short_text question has no accepted

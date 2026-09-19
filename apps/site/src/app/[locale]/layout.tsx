@@ -4,7 +4,7 @@ import { hasLocale, NextIntlClientProvider } from 'next-intl';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { routing } from '@/i18n/routing';
-import { ThemeProvider } from '@birb-math/theme';
+import { ThemeProvider } from '@birb-learn/theme';
 import { HtmlLangSync } from '@/components/html-lang-sync';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';

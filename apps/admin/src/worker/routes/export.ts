@@ -21,7 +21,7 @@ import {
   tagTranslations,
   topics,
   topicTranslations,
-} from '@birb-math/content-schema';
+} from '@birb-learn/content-schema';
 import type { Env } from '../env';
 
 export const exportRoutes = new Hono<{ Bindings: Env }>();

@@ -1,4 +1,4 @@
-import { MathField } from '@birb-math/math-input';
+import { MathField } from '@birb-learn/math-input';
 import styles from './AcceptedAnswersEditor.module.css';
 
 export function AcceptedAnswersEditor({

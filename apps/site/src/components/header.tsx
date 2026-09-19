@@ -1,5 +1,5 @@
 import { useTranslations } from 'next-intl';
-import { Icon, ThemeSwitcher } from '@birb-math/theme';
+import { Icon, ThemeSwitcher } from '@birb-learn/theme';
 import { Link } from '@/i18n/navigation';
 import { LocaleSwitcher } from './locale-switcher';
 import styles from './header.module.css';

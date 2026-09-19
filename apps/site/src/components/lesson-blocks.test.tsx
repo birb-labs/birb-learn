@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import ptBR from '@/messages/pt-BR.json';
 import { LessonBlocks } from './lesson-blocks';
-import type { LessonBlockContent } from '@birb-math/content-schema';
+import type { LessonBlockContent } from '@birb-learn/content-schema';
 
 const fixtureBlocks: LessonBlockContent[] = [
   { id: 1, order: 1, type: 'text', title: null, bodyMdx: 'Texto normal.', promptMdx: null, resolutionMdx: null, caption: null, simulatorKey: null, simulatorParams: null },

@@ -1,4 +1,4 @@
-import type { TagNode, TopicNode } from '@birb-math/content-schema';
+import type { TagNode, TopicNode } from '@birb-learn/content-schema';
 import styles from './TagPicker.module.css';
 
 export type { TagNode, TopicNode };

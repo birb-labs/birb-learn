@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { Icon, type IconName } from '@birb-math/theme';
+import { Icon, type IconName } from '@birb-learn/theme';
 import styles from './content-callout.module.css';
 
 export type ContentCalloutColor = 'accent' | 'info';

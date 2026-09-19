@@ -17,7 +17,7 @@ import {
   type LessonBlockType,
   LESSON_BLOCK_TYPES,
   type Locale,
-} from '@birb-math/content-schema';
+} from '@birb-learn/content-schema';
 import type { Env } from '../env';
 import { validateTranslationLocales } from './translationInput';
 

@@ -17,13 +17,13 @@ importers:
 
   apps/admin:
     dependencies:
-      '@birb-math/content-schema':
+      '@birb-learn/content-schema':
         specifier: workspace:*
         version: link:../../packages/content-schema
-      '@birb-math/math-input':
+      '@birb-learn/math-input':
         specifier: workspace:*
         version: link:../../packages/math-input
-      '@birb-math/theme':
+      '@birb-learn/theme':
         specifier: workspace:*
         version: link:../../packages/theme
       '@mdx-js/mdx':
@@ -114,13 +114,13 @@ importers:
 
   apps/site:
     dependencies:
-      '@birb-math/content-schema':
+      '@birb-learn/content-schema':
         specifier: workspace:*
         version: link:../../packages/content-schema
-      '@birb-math/math-input':
+      '@birb-learn/math-input':
         specifier: workspace:*
         version: link:../../packages/math-input
-      '@birb-math/theme':
+      '@birb-learn/theme':
         specifier: workspace:*
         version: link:../../packages/theme
       '@cortex-js/compute-engine':

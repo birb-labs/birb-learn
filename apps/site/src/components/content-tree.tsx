@@ -1,8 +1,8 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import type { ContentTree as ContentTreeData } from '@birb-math/content-schema';
-import { Icon } from '@birb-math/theme';
+import type { ContentTree as ContentTreeData } from '@birb-learn/content-schema';
+import { Icon } from '@birb-learn/theme';
 import { Link } from '@/i18n/navigation';
 import { useReadingProgress } from '@/hooks/use-reading-progress';
 import styles from './content-tree.module.css';

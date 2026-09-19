@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { MathField } from '@birb-math/math-input';
+import { MathField } from '@birb-learn/math-input';
 import styles from './short-text-answer-input.module.css';
 
 export function ShortTextAnswerInput({

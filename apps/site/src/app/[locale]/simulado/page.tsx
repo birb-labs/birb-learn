@@ -1,6 +1,6 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import { getSubjects, getTagTree, type Locale, type TopicNode } from '@birb-math/content-schema';
-import { getDb } from '@birb-math/content-schema/src/client';
+import { getSubjects, getTagTree, type Locale, type TopicNode } from '@birb-learn/content-schema';
+import { getDb } from '@birb-learn/content-schema/src/client';
 import { SimuladoPageClient } from '@/components/simulado-page-client';
 import styles from '@/styles/page.module.css';
 

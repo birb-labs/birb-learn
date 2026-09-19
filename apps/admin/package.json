@@ -1,5 +1,5 @@
 {
-  "name": "@birb-math/admin",
+  "name": "@birb-learn/admin",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,9 +12,9 @@
     "hash-password": "tsx scripts/hash-password.ts"
   },
   "dependencies": {
-    "@birb-math/content-schema": "workspace:*",
-    "@birb-math/math-input": "workspace:*",
-    "@birb-math/theme": "workspace:*",
+    "@birb-learn/content-schema": "workspace:*",
+    "@birb-learn/math-input": "workspace:*",
+    "@birb-learn/theme": "workspace:*",
     "@mdx-js/mdx": "3.1.1",
     "drizzle-orm": "0.45.2",
     "hono": "^4.6.0",

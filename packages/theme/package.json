@@ -1,5 +1,5 @@
 {
-  "name": "@birb-math/theme",
+  "name": "@birb-learn/theme",
   "version": "0.0.0",
   "private": true,
   "main": "./index.ts",

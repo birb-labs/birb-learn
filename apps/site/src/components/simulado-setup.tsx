@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import type { SubjectSummary, TopicNode } from '@birb-math/content-schema';
+import type { SubjectSummary, TopicNode } from '@birb-learn/content-schema';
 import styles from './simulado-setup.module.css';
 
 export type Difficulty = 'easy' | 'medium' | 'hard';

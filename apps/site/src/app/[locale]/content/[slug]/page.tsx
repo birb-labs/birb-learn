@@ -1,7 +1,7 @@
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
-import { getAllLessonSlugs, getLessonBySlug, type Locale } from '@birb-math/content-schema';
-import { getDb } from '@birb-math/content-schema/src/client';
+import { getAllLessonSlugs, getLessonBySlug, type Locale } from '@birb-learn/content-schema';
+import { getDb } from '@birb-learn/content-schema/src/client';
 import { LessonBlocks } from '@/components/lesson-blocks';
 import { LessonBreadcrumb } from '@/components/lesson-breadcrumb';
 import { ReadingProgressTracker } from '@/components/reading-progress-tracker';
