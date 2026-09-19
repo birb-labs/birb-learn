@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 import {
   DEFAULT_MODE,
   DEFAULT_THEME,
+  LEGACY_MODE_STORAGE_KEY,
+  LEGACY_THEME_STORAGE_KEY,
   MODE_STORAGE_KEY,
   THEME_MODES,
   THEME_NAMES,
@@ -14,6 +16,7 @@ import {
   type ThemeName,
 } from './theme-types';
 import { resolveMode } from './resolve-mode';
+import { migrateLegacyStorageKey } from './storage-migration';
 
 interface ThemeContextValue {
   theme: ThemeName;
@@ -39,12 +42,14 @@ function subscribe(listener: Listener) {
 
 function readStoredTheme(): ThemeName {
   if (typeof window === 'undefined') return DEFAULT_THEME;
+  migrateLegacyStorageKey(LEGACY_THEME_STORAGE_KEY, THEME_STORAGE_KEY);
   const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
   return (THEME_NAMES as string[]).includes(stored ?? '') ? (stored as ThemeName) : DEFAULT_THEME;
 }
 
 function readStoredMode(): ThemeMode {
   if (typeof window === 'undefined') return DEFAULT_MODE;
+  migrateLegacyStorageKey(LEGACY_MODE_STORAGE_KEY, MODE_STORAGE_KEY);
   const stored = window.localStorage.getItem(MODE_STORAGE_KEY);
   return (THEME_MODES as string[]).includes(stored ?? '') ? (stored as ThemeMode) : DEFAULT_MODE;
 }

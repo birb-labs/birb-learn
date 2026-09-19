@@ -2,7 +2,12 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider, useTheme } from './theme-provider';
-import { MODE_STORAGE_KEY, THEME_STORAGE_KEY } from './theme-types';
+import {
+  LEGACY_MODE_STORAGE_KEY,
+  LEGACY_THEME_STORAGE_KEY,
+  MODE_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+} from './theme-types';
 
 function Consumer() {
   const { theme, mode, setTheme, setMode } = useTheme();
@@ -59,5 +64,23 @@ describe('ThemeProvider', () => {
       expect(screen.getByTestId('theme').textContent).toBe('monokai');
       expect(screen.getByTestId('mode').textContent).toBe('dark');
     });
+  });
+
+  it('adopts a pre-rebrand theme and mode saved under the legacy keys', async () => {
+    window.localStorage.setItem(LEGACY_THEME_STORAGE_KEY, 'monokai');
+    window.localStorage.setItem(LEGACY_MODE_STORAGE_KEY, 'dark');
+
+    render(
+      <ThemeProvider>
+        <Consumer />
+      </ThemeProvider>,
+    );
+
+    await waitFor(() => {
+      expect(document.documentElement.getAttribute('data-theme')).toBe('monokai');
+      expect(document.documentElement.getAttribute('data-mode')).toBe('dark');
+    });
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('monokai');
+    expect(window.localStorage.getItem(LEGACY_THEME_STORAGE_KEY)).toBeNull();
   });
 });
