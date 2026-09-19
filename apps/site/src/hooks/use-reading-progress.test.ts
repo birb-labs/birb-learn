@@ -1,6 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useReadingProgress, READING_PROGRESS_STORAGE_KEY } from './use-reading-progress';
+import {
+  LEGACY_READING_PROGRESS_STORAGE_KEY,
+  READING_PROGRESS_STORAGE_KEY,
+  useReadingProgress,
+} from './use-reading-progress';
 
 // `vi.spyOn(reactModule, 'useState')` cannot be used here: Vitest/Node ESM
 // module namespace objects are not configurable, so spying on 'react''s
@@ -96,5 +100,25 @@ describe('useReadingProgress', () => {
 
     const stored = JSON.parse(window.localStorage.getItem(READING_PROGRESS_STORAGE_KEY) ?? '[]');
     expect(stored).toEqual(['a']);
+  });
+
+  it('adopts progress saved under the pre-rebrand key', () => {
+    window.localStorage.setItem(LEGACY_READING_PROGRESS_STORAGE_KEY, JSON.stringify(['licao-1']));
+
+    const { result } = renderHook(() => useReadingProgress());
+
+    expect(result.current.isComplete('licao-1')).toBe(true);
+    expect(window.localStorage.getItem(READING_PROGRESS_STORAGE_KEY)).toBe(JSON.stringify(['licao-1']));
+    expect(window.localStorage.getItem(LEGACY_READING_PROGRESS_STORAGE_KEY)).toBeNull();
+  });
+
+  it('keeps already-migrated progress when both keys exist', () => {
+    window.localStorage.setItem(LEGACY_READING_PROGRESS_STORAGE_KEY, JSON.stringify(['licao-1']));
+    window.localStorage.setItem(READING_PROGRESS_STORAGE_KEY, JSON.stringify(['licao-2']));
+
+    const { result } = renderHook(() => useReadingProgress());
+
+    expect(result.current.isComplete('licao-2')).toBe(true);
+    expect(result.current.isComplete('licao-1')).toBe(false);
   });
 });

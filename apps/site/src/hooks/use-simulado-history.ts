@@ -1,9 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { migrateLegacyStorageKey } from '@birb-learn/theme';
 import type { GradedResult } from '@/lib/grade-simulado';
 
-export const SIMULADO_HISTORY_STORAGE_KEY = 'birb-math-simulado-history';
+export const SIMULADO_HISTORY_STORAGE_KEY = 'birb-learn-simulado-history';
+/** Pre-rebrand key, read once by `migrateLegacyStorageKey`. */
+export const LEGACY_SIMULADO_HISTORY_STORAGE_KEY = 'birb-math-simulado-history';
 
 export interface SimuladoAttempt {
   completedAt: string;
@@ -12,6 +15,7 @@ export interface SimuladoAttempt {
 
 function readStoredHistory(): SimuladoAttempt[] {
   if (typeof window === 'undefined') return [];
+  migrateLegacyStorageKey(LEGACY_SIMULADO_HISTORY_STORAGE_KEY, SIMULADO_HISTORY_STORAGE_KEY);
   try {
     const raw = window.localStorage.getItem(SIMULADO_HISTORY_STORAGE_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : [];

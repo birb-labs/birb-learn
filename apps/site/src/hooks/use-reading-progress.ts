@@ -1,11 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { migrateLegacyStorageKey } from '@birb-learn/theme';
 
-export const READING_PROGRESS_STORAGE_KEY = 'birb-math-reading-progress';
+export const READING_PROGRESS_STORAGE_KEY = 'birb-learn-reading-progress';
+/** Pre-rebrand key, read once by `migrateLegacyStorageKey`. */
+export const LEGACY_READING_PROGRESS_STORAGE_KEY = 'birb-math-reading-progress';
 
 function readStoredSlugs(): Set<string> {
   if (typeof window === 'undefined') return new Set();
+  migrateLegacyStorageKey(LEGACY_READING_PROGRESS_STORAGE_KEY, READING_PROGRESS_STORAGE_KEY);
   try {
     const raw = window.localStorage.getItem(READING_PROGRESS_STORAGE_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : [];

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, render } from '@testing-library/react';
 import { ReadingProgressTracker } from './reading-progress-tracker';
+import { READING_PROGRESS_STORAGE_KEY } from '@/hooks/use-reading-progress';
 
 describe('ReadingProgressTracker', () => {
   let observedCallback: IntersectionObserverCallback;
@@ -37,7 +38,7 @@ describe('ReadingProgressTracker', () => {
       );
     });
 
-    const stored = JSON.parse(window.localStorage.getItem('birb-math-reading-progress') ?? '[]');
+    const stored = JSON.parse(window.localStorage.getItem(READING_PROGRESS_STORAGE_KEY) ?? '[]');
     expect(stored).toEqual(['licao-de-exemplo']);
   });
 
@@ -51,6 +52,6 @@ describe('ReadingProgressTracker', () => {
       );
     });
 
-    expect(window.localStorage.getItem('birb-math-reading-progress')).toBeNull();
+    expect(window.localStorage.getItem(READING_PROGRESS_STORAGE_KEY)).toBeNull();
   });
 });

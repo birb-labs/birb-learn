@@ -3,6 +3,7 @@ import { render, screen, cleanup } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import ptBR from '@/messages/pt-BR.json';
 import { ContentTree } from './content-tree';
+import { READING_PROGRESS_STORAGE_KEY } from '@/hooks/use-reading-progress';
 import type { ContentTree as ContentTreeData } from '@birb-learn/content-schema';
 
 const fixtureTree: ContentTreeData[] = [
@@ -80,7 +81,7 @@ describe('ContentTree', () => {
   });
 
   it('reflects a previously completed lesson in the progress count at every nesting level', () => {
-    window.localStorage.setItem('birb-math-reading-progress', JSON.stringify(['licao-1']));
+    window.localStorage.setItem(READING_PROGRESS_STORAGE_KEY, JSON.stringify(['licao-1']));
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
@@ -127,7 +128,7 @@ describe('ContentTree', () => {
       },
     ];
 
-    window.localStorage.setItem('birb-math-reading-progress', JSON.stringify(['licao-1', 'licao-3']));
+    window.localStorage.setItem(READING_PROGRESS_STORAGE_KEY, JSON.stringify(['licao-1', 'licao-3']));
 
     render(
       <NextIntlClientProvider locale="pt-BR" messages={ptBR}>

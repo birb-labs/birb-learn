@@ -1,6 +1,10 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useSimuladoHistory, SIMULADO_HISTORY_STORAGE_KEY } from './use-simulado-history';
+import {
+  LEGACY_SIMULADO_HISTORY_STORAGE_KEY,
+  SIMULADO_HISTORY_STORAGE_KEY,
+  useSimuladoHistory,
+} from './use-simulado-history';
 import type { GradedResult } from '@/lib/grade-simulado';
 
 const fixtureResult: GradedResult = { correctCount: 1, total: 2, perQuestion: [] };
@@ -39,5 +43,18 @@ describe('useSimuladoHistory', () => {
     const { result } = renderHook(() => useSimuladoHistory());
 
     expect(result.current.history).toHaveLength(1);
+  });
+
+  it('adopts history saved under the pre-rebrand key', () => {
+    window.localStorage.setItem(
+      LEGACY_SIMULADO_HISTORY_STORAGE_KEY,
+      JSON.stringify([{ completedAt: '2026-09-01T12:00:00.000Z', result: fixtureResult }]),
+    );
+
+    const { result } = renderHook(() => useSimuladoHistory());
+
+    expect(result.current.history).toHaveLength(1);
+    expect(result.current.history[0].completedAt).toBe('2026-09-01T12:00:00.000Z');
+    expect(window.localStorage.getItem(LEGACY_SIMULADO_HISTORY_STORAGE_KEY)).toBeNull();
   });
 });
