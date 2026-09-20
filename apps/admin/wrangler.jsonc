@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "birb-math-admin",
+  "name": "birb-learn-admin",
   // Pinned slightly behind "today" because the installed workerd binary
   // (pulled in by @cloudflare/vitest-pool-workers) only supports
   // compatibility dates up to 2026-08-22 as of this task; a later date makes
@@ -20,8 +20,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "birb-math-admin",
-      "database_id": "152c6e74-1496-4db1-b88d-70442aaa9d75",
+      "database_name": "birb-learn-admin",
+      "database_id": "0ae5d5ed-20e0-4ef1-83d1-47a0cb6c0d38",
       "migrations_dir": "../../packages/content-schema/drizzle"
     }
   ]
