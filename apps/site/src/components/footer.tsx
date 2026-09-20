@@ -2,7 +2,7 @@ import { useTranslations } from 'next-intl';
 import styles from './footer.module.css';
 
 const CONTACT_EMAIL = 'contato@birblabs.com';
-const GITHUB_URL = 'https://github.com/birb-labs/birb-math';
+const GITHUB_URL = 'https://github.com/birb-labs/birb-learn';
 const KOFI_URL = 'https://ko-fi.com/p4tit0z';
 
 export function Footer() {

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../env';
 
-const GITHUB_REPO = 'birb-labs/birb-math';
+const GITHUB_REPO = 'birb-labs/birb-learn';
 const WORKFLOW_FILE = 'deploy.yml';
 
 export const publishRoutes = new Hono<{ Bindings: Env }>();
@@ -15,7 +15,7 @@ publishRoutes.post('/', async (c) => {
         Authorization: `Bearer ${c.env.GITHUB_PAT}`,
         Accept: 'application/vnd.github+json',
         'Content-Type': 'application/json',
-        'User-Agent': 'birb-math-admin',
+        'User-Agent': 'birb-learn-admin',
       },
       body: JSON.stringify({ ref: 'main' }),
     },

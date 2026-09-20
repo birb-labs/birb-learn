@@ -1,15 +1,15 @@
-# Birb Math
+# Birb Learn
 
-Uma plataforma gratuita e open-source para aprender matemática, mantida
-pela [Birb Labs](https://github.com/birb-labs).
+Uma plataforma gratuita e open-source para aprender diversas matérias
+escolares, mantida pela [Birb Labs](https://github.com/birb-labs).
 
-🌐 [math.birblabs.com](https://math.birblabs.com) · 🇧🇷 pt-BR ·
+🌐 [learn.birblabs.com](https://learn.birblabs.com) · 🇧🇷 pt-BR ·
 [🇺🇸 English](./README.en-US.md) · [🇪🇸 Español](./README.es.md)
 
 ## O que é
 
-Lições, exercícios resolvidos e simulados de matemática, começando por
-Cálculo (Limites), com mais conteúdo a caminho.
+Lições, exercícios resolvidos e simulados, começando por matemática
+(Cálculo — Limites), com mais matérias a caminho.
 
 ## Stack técnica
 
@@ -74,7 +74,7 @@ ser escrita em pt-BR, en-US ou es.
 
 ## Apoie o projeto
 
-Se o Birb Math te ajudou, considere [apoiar no Ko-fi](https://ko-fi.com/p4tit0z) — qualquer valor ajuda a manter o projeto no ar.
+Se o Birb Learn te ajudou, considere [apoiar no Ko-fi](https://ko-fi.com/p4tit0z) — qualquer valor ajuda a manter o projeto no ar.
 
 ## Licença
 

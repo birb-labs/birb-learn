@@ -36,7 +36,7 @@ describe('POST /api/publish', () => {
 
     expect(response.status).toBe(200);
     expect(fetchSpy).toHaveBeenCalledExactlyOnceWith(
-      'https://api.github.com/repos/birb-labs/birb-math/actions/workflows/deploy.yml/dispatches',
+      'https://api.github.com/repos/birb-labs/birb-learn/actions/workflows/deploy.yml/dispatches',
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({ Authorization: 'Bearer test-github-pat' }),

@@ -23,7 +23,7 @@ describe('Footer', () => {
     );
     expect(screen.getByRole('link', { name: ptBR.footer.sourceCode })).toHaveAttribute(
       'href',
-      'https://github.com/birb-labs/birb-math',
+      'https://github.com/birb-labs/birb-learn',
     );
   });
 });
