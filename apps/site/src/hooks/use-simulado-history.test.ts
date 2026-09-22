@@ -57,4 +57,20 @@ describe('useSimuladoHistory', () => {
     expect(result.current.history[0].completedAt).toBe('2026-09-01T12:00:00.000Z');
     expect(window.localStorage.getItem(LEGACY_SIMULADO_HISTORY_STORAGE_KEY)).toBeNull();
   });
+
+  it('keeps already-migrated history when both keys exist', () => {
+    window.localStorage.setItem(
+      LEGACY_SIMULADO_HISTORY_STORAGE_KEY,
+      JSON.stringify([{ completedAt: '2026-01-01T00:00:00.000Z', result: fixtureResult }]),
+    );
+    window.localStorage.setItem(
+      SIMULADO_HISTORY_STORAGE_KEY,
+      JSON.stringify([{ completedAt: '2026-09-01T12:00:00.000Z', result: fixtureResult }]),
+    );
+
+    const { result } = renderHook(() => useSimuladoHistory());
+
+    expect(result.current.history).toHaveLength(1);
+    expect(result.current.history[0].completedAt).toBe('2026-09-01T12:00:00.000Z');
+  });
 });

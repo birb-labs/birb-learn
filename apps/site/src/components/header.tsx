@@ -5,6 +5,7 @@ import { LocaleSwitcher } from './locale-switcher';
 import styles from './header.module.css';
 
 export function Header() {
+  const tHome = useTranslations('home');
   const t = useTranslations('nav');
   const tTheme = useTranslations('theme');
   const tLanguage = useTranslations('language');
@@ -12,7 +13,7 @@ export function Header() {
   return (
     <header className={styles.header}>
       <Link href="/" className={styles.logo}>
-        Birb Learn
+        {tHome('title')}
       </Link>
       <nav className={styles.nav}>
         <Link href="/" className={styles.navLink}>

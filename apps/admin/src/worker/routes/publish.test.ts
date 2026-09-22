@@ -59,4 +59,23 @@ describe('POST /api/publish', () => {
     const response = await SELF.fetch('https://admin.test/api/publish', { method: 'POST' });
     expect(response.status).toBe(401);
   });
+
+  it('returns a self-diagnosing 503 when GITHUB_PAT is not configured', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const originalPat = env.GITHUB_PAT;
+    env.GITHUB_PAT = '';
+
+    try {
+      const response = await SELF.fetch('https://admin.test/api/publish', {
+        method: 'POST',
+        headers: { Cookie: cookie },
+      });
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: 'GITHUB_PAT is not configured on this Worker' });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      env.GITHUB_PAT = originalPat;
+    }
+  });
 });

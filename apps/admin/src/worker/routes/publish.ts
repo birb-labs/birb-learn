@@ -7,6 +7,10 @@ const WORKFLOW_FILE = 'deploy.yml';
 export const publishRoutes = new Hono<{ Bindings: Env }>();
 
 publishRoutes.post('/', async (c) => {
+  if (!c.env.GITHUB_PAT) {
+    return c.json({ error: 'GITHUB_PAT is not configured on this Worker' }, 503);
+  }
+
   const response = await fetch(
     `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`,
     {

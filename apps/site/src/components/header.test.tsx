@@ -30,6 +30,7 @@ describe('Header', () => {
       </NextIntlClientProvider>,
     );
 
+    expect(screen.getByRole('link', { name: 'Birb Learn' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: ptBR.nav.content })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: ptBR.nav.simulado })).toBeInTheDocument();
   });

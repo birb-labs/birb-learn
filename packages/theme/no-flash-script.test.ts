@@ -45,6 +45,16 @@ describe('noFlashScript', () => {
     expect(window.localStorage.getItem(LEGACY_THEME_STORAGE_KEY)).toBeNull();
   });
 
+  it('keeps the current theme when both the current and legacy keys are present', () => {
+    window.localStorage.setItem(LEGACY_THEME_STORAGE_KEY, 'monokai');
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'mocha');
+
+    runScript();
+
+    expect(document.documentElement.getAttribute('data-theme')).toBe('mocha');
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('mocha');
+  });
+
   it('falls back to the defaults when nothing is stored', () => {
     runScript();
 
