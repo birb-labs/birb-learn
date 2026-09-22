@@ -193,9 +193,13 @@ for the full run):
    t, COUNT(*) AS n FROM <table>;` per table) before treating the
    restore as complete.
 
-**Safety-net dump:** the pre-cutover export taken during the rebrand
-lives at `/tmp/birb-math-admin-2026-09-19.sql`. `/tmp` does not survive
-a reboot — copy it somewhere durable before relying on it.
+**Safety-net dump:** the pre-cutover export of the old `birb-math-admin`
+database, taken before the Birb Learn rebrand deleted it, is kept at
+`birb-math-internal-docs/backups/birb-math-admin-pre-rebrand.sql` (the
+private sibling directory, outside this repository — it carries no
+secrets, only content, but it does not belong in a public repo either).
+The first copy of it was written to `/tmp` and was gone within days;
+never leave a recovery artifact there.
 
 ## Known limitations
 
