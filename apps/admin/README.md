@@ -37,6 +37,18 @@ One-time setup (already done for the `birb-labs` account):
 3. `wrangler secret put ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH` (from
    `pnpm run hash-password`) / `SESSION_SECRET` / `EXPORT_SECRET` /
    `GITHUB_PAT`.
+
+   **`GITHUB_PAT` is NOT actually set on `birb-learn-admin`.** Secrets
+   cannot be read back from a Worker, so the rebrand from the old
+   `birb-math-admin` Worker could not recover its value. Until the
+   project owner runs `wrangler secret put GITHUB_PAT` on
+   `birb-learn-admin` with a fine-grained PAT scoped to `actions: write`
+   on `birb-labs/birb-learn`, clicking "Publicar" in the admin UI will
+   return a 502 (see `publish.ts`, which now returns a self-diagnosing
+   503 instead when the secret is entirely absent — a 502 means the PAT
+   is set but GitHub rejected it). Push-triggered deploys to `main` via
+   `.github/workflows/deploy.yml` are unaffected; only the manual
+   Publicar button depends on this secret.
 4. `pnpm run deploy` (see the exact command above).
 5. Custom domain `learn-admin.birblabs.com` bound to this Worker.
 6. A Cloudflare Access application gating `learn-admin.birblabs.com`
@@ -123,6 +135,67 @@ statements) rather than as one opaque `--file` blob. Keep this in mind
 for any future migration or disaster-recovery restore — it is not
 optional caution, it is the difference between a restore that works and
 one that fails partway through with tables in an inconsistent state.
+
+**Concrete procedure** (this is what actually worked restoring
+`birb-learn-admin` during the rebrand — see
+`.superpowers/sdd/2026-09-19-birb-learn-rebrand-implementation/task-5-report.md`
+for the full run):
+
+1. Replace the dump's leading `PRAGMA defer_foreign_keys=TRUE;` with
+   `PRAGMA foreign_keys=OFF;` — D1 validates FK-referenced tables at
+   `CREATE TABLE` parse time even with `defer_foreign_keys` set, so only
+   `foreign_keys=OFF` actually suppresses the check.
+2. Split the dump into statement-boundary-safe chunks (quote-aware, so
+   semicolons inside string literals aren't treated as terminators) of
+   around 15 statements each — the working restore used 33 chunks of 15
+   statements for a ~500 KB / ~500-statement dump. A rough Python
+   splitter:
+
+   ```python
+   import re, pathlib
+
+   sql = pathlib.Path("/tmp/dump.sql").read_text()
+   statements = []
+   buf, quote = "", None
+   for ch in sql:
+       if quote:
+           buf += ch
+           if ch == quote:
+               quote = None
+       elif ch in ("'", '"', "`"):
+           quote = ch
+           buf += ch
+       elif ch == ";":
+           statements.append(buf + ";")
+           buf = ""
+       else:
+           buf += ch
+   if buf.strip():
+       statements.append(buf)
+
+   CHUNK_SIZE = 15
+   for i in range(0, len(statements), CHUNK_SIZE):
+       chunk = statements[i : i + CHUNK_SIZE]
+       out = pathlib.Path(f"/tmp/import_chunk_{i // CHUNK_SIZE:03d}.sql")
+       out.write_text("PRAGMA foreign_keys=OFF;\n" + "\n".join(chunk))
+   ```
+3. Execute each chunk sequentially, in order, stopping on the first
+   failure (`set -e`), so a mid-restore error never leaves later chunks
+   applied out of order:
+
+   ```bash
+   set -e
+   for f in /tmp/import_chunk_*.sql; do
+     wrangler d1 execute birb-learn-admin --remote --file="$f"
+   done
+   ```
+4. Verify row counts against a pre-restore export (`SELECT '<table>' AS
+   t, COUNT(*) AS n FROM <table>;` per table) before treating the
+   restore as complete.
+
+**Safety-net dump:** the pre-cutover export taken during the rebrand
+lives at `/tmp/birb-math-admin-2026-09-19.sql`. `/tmp` does not survive
+a reboot — copy it somewhere durable before relying on it.
 
 ## Known limitations
 
