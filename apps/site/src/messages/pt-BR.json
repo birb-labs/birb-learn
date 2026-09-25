@@ -5,6 +5,11 @@
       "pt-BR": "Português",
       "en-US": "English",
       "es": "Español"
+    },
+    "short": {
+      "pt-BR": "PT",
+      "en-US": "EN",
+      "es": "ES"
     }
   },
   "nav": {
@@ -30,8 +35,23 @@
   "home": {
     "title": "Birb Learn",
     "description": "Uma plataforma gratuita e open-source para estudar matérias escolares, começando pela matemática.",
-    "ctaContent": "Ver conteúdos",
-    "ctaSimulado": "Fazer um simulado"
+    "ctaContent": "Abrir o caderno",
+    "ctaSimulado": "Fazer um simulado",
+    "kicker": "Gratuito · Open-source · Sem cadastro",
+    "heroTitle": "Um caderno de estudos que <em>explica</em> de verdade.",
+    "heroLead": "Lições escritas com calma, gráficos que você pode mexer e simulados com a resolução completa. Começamos pelo Cálculo; outras matérias vêm aí.",
+    "figureCaption": "Aproximando-se de a pelos dois lados",
+    "shelfTitle": "Na estante",
+    "shelfLessons": "{count, plural, one {# lição} other {# lições}}",
+    "shelfMinutes": "~{minutes} min",
+    "pillars": {
+      "explainTitle": "Explicações sem pressa",
+      "explainBody": "Cada conceito começa pela intuição e só depois chega à fórmula.",
+      "handsOnTitle": "Mão na massa",
+      "handsOnBody": "Simuladores e exercícios aparecem no meio do texto, na hora certa.",
+      "testTitle": "Prova sob medida",
+      "testBody": "Monte simulados por tópico e dificuldade, e revise cada resolução."
+    }
   },
   "content": {
     "title": "Conteúdos",
@@ -40,7 +60,26 @@
     "breadcrumbSeparator": "›",
     "breadcrumbLabel": "Trilha de navegação",
     "notTranslatedYet": "Este conteúdo ainda não foi traduzido para o seu idioma. Mostrando em português.",
-    "showResolution": "Ver resolução"
+    "showResolution": "Ver resolução",
+    "subjectsNav": "Matérias",
+    "chapter": "Capítulo {number}",
+    "topicMeta": "{subject} · {lessons, plural, one {# lição} other {# lições}} · ~{minutes} min de leitura",
+    "readCount": "{read} de {total} lidas",
+    "statusDone": "Concluída",
+    "statusStarted": "Em andamento",
+    "statusNotStarted": "Não iniciada",
+    "lessonKicker": "{section} · Lição {index} de {total}",
+    "readingMinutes": "~{minutes} min de leitura",
+    "simulatorCount": "{count, plural, one {# simulador} other {# simuladores}}",
+    "solvedCount": "{count, plural, one {# exercício resolvido} other {# exercícios resolvidos}}",
+    "previous": "Anterior",
+    "next": "Próxima",
+    "lessonNavLabel": "Navegação entre lições",
+    "railLabel": "Lições deste tópico",
+    "railProgress": "Você leu {percent}% desta lição",
+    "readingProgress": "Progresso da leitura",
+    "solvedExercise": "Exercício resolvido",
+    "marginNote": "Nota"
   },
   "simulado": {
     "title": "Simulado",
@@ -61,7 +100,18 @@
       "start": "Gerar simulado",
       "loading": "Gerando simulado...",
       "notEnoughQuestionsModule": "Módulo {module}: só há {available} questão(ões) disponível(eis) para os filtros escolhidos (você pediu {requested}).",
-      "loadError": "Não foi possível carregar o banco de questões. Tente novamente."
+      "loadError": "Não foi possível carregar o banco de questões. Tente novamente.",
+      "lead": "Cada módulo é um bloco de questões. Combine quantos quiser.",
+      "sentence": "Quero <count></count> de <subject></subject> com dificuldade <difficulty></difficulty> sobre <topics></topics>",
+      "questionsUnit": "{count, plural, one {questão} other {questões}}",
+      "addTopic": "tópico",
+      "chooseTopics": "Escolher tópicos",
+      "anyTopic": "qualquer tópico",
+      "removeTopic": "Remover {topic}",
+      "summaryTitle": "Seu simulado",
+      "summaryModule": "Módulo {number}",
+      "summaryRow": "{count} · {difficulty}",
+      "estimate": "cerca de {minutes} min"
     },
     "taking": {
       "selectAllThatApply": "Selecione todas as alternativas corretas",
@@ -89,7 +139,8 @@
     "rights": "Birb Labs. Código aberto, feito com carinho.",
     "contact": "Contato",
     "sourceCode": "Código-fonte",
-    "donate": "Apoie o projeto"
+    "donate": "Apoie no Ko-fi",
+    "tagline": "Birb Learn · um projeto da Birb Labs"
   },
   "simulators": {
     "unknownSimulator": "Simulador desconhecido: \"{key}\".",
@@ -97,5 +148,19 @@
     "invalidDomain": "O domínio configurado para este simulador é inválido.",
     "graphAriaLabel": "Gráfico de função interativo",
     "undefinedValue": "indefinido"
+  },
+  "search": {
+    "label": "Buscar lições",
+    "placeholder": "Buscar lições e tópicos",
+    "open": "Abrir busca",
+    "results": "Resultados da busca",
+    "noResults": "Nenhuma lição encontrada para “{query}”",
+    "loadError": "Não foi possível carregar a busca."
+  },
+  "appearance": {
+    "button": "Aparência",
+    "theme": "Tema",
+    "mode": "Modo",
+    "language": "Idioma"
   }
 }

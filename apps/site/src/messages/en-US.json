@@ -5,6 +5,11 @@
       "pt-BR": "Português",
       "en-US": "English",
       "es": "Español"
+    },
+    "short": {
+      "pt-BR": "PT",
+      "en-US": "EN",
+      "es": "ES"
     }
   },
   "nav": {
@@ -30,8 +35,23 @@
   "home": {
     "title": "Birb Learn",
     "description": "A free, open-source platform for studying school subjects, starting with mathematics.",
-    "ctaContent": "Browse content",
-    "ctaSimulado": "Take a practice test"
+    "ctaContent": "Open the notebook",
+    "ctaSimulado": "Take a practice test",
+    "kicker": "Free · Open-source · No sign-up",
+    "heroTitle": "A study notebook that actually <em>explains</em>.",
+    "heroLead": "Lessons written without rushing, graphs you can play with and practice tests with full worked solutions. We're starting with Calculus; more subjects are on the way.",
+    "figureCaption": "Approaching a from both sides",
+    "shelfTitle": "On the shelf",
+    "shelfLessons": "{count, plural, one {# lesson} other {# lessons}}",
+    "shelfMinutes": "~{minutes} min",
+    "pillars": {
+      "explainTitle": "Unhurried explanations",
+      "explainBody": "Every concept starts from intuition and only then reaches the formula.",
+      "handsOnTitle": "Hands on",
+      "handsOnBody": "Simulators and exercises show up inside the text, right when you need them.",
+      "testTitle": "A test made to measure",
+      "testBody": "Build practice tests by topic and difficulty, then review every solution."
+    }
   },
   "content": {
     "title": "Content",
@@ -40,7 +60,26 @@
     "breadcrumbSeparator": "›",
     "breadcrumbLabel": "Breadcrumb",
     "notTranslatedYet": "This content hasn't been translated into your language yet. Showing it in Portuguese.",
-    "showResolution": "Show resolution"
+    "showResolution": "Show resolution",
+    "subjectsNav": "Subjects",
+    "chapter": "Chapter {number}",
+    "topicMeta": "{subject} · {lessons, plural, one {# lesson} other {# lessons}} · ~{minutes} min read",
+    "readCount": "{read} of {total} read",
+    "statusDone": "Finished",
+    "statusStarted": "In progress",
+    "statusNotStarted": "Not started",
+    "lessonKicker": "{section} · Lesson {index} of {total}",
+    "readingMinutes": "~{minutes} min read",
+    "simulatorCount": "{count, plural, one {# simulator} other {# simulators}}",
+    "solvedCount": "{count, plural, one {# solved exercise} other {# solved exercises}}",
+    "previous": "Previous",
+    "next": "Next",
+    "lessonNavLabel": "Lesson navigation",
+    "railLabel": "Lessons in this topic",
+    "railProgress": "You've read {percent}% of this lesson",
+    "readingProgress": "Reading progress",
+    "solvedExercise": "Solved exercise",
+    "marginNote": "Note"
   },
   "simulado": {
     "title": "Practice test",
@@ -61,7 +100,18 @@
       "start": "Generate practice test",
       "loading": "Generating practice test...",
       "notEnoughQuestionsModule": "Module {module}: only {available} question(s) are available for the chosen filters (you requested {requested}).",
-      "loadError": "Could not load the question bank. Please try again."
+      "loadError": "Could not load the question bank. Please try again.",
+      "lead": "Each module is a block of questions. Combine as many as you like.",
+      "sentence": "I want <count></count> of <subject></subject> at <difficulty></difficulty> difficulty on <topics></topics>",
+      "questionsUnit": "{count, plural, one {question} other {questions}}",
+      "addTopic": "topic",
+      "chooseTopics": "Choose topics",
+      "anyTopic": "any topic",
+      "removeTopic": "Remove {topic}",
+      "summaryTitle": "Your practice test",
+      "summaryModule": "Module {number}",
+      "summaryRow": "{count} · {difficulty}",
+      "estimate": "about {minutes} min"
     },
     "taking": {
       "selectAllThatApply": "Select all that apply",
@@ -89,7 +139,8 @@
     "rights": "Birb Labs. Open source, made with care.",
     "contact": "Contact",
     "sourceCode": "Source code",
-    "donate": "Support the project"
+    "donate": "Support on Ko-fi",
+    "tagline": "Birb Learn · a Birb Labs project"
   },
   "simulators": {
     "unknownSimulator": "Unknown simulator: \"{key}\".",
@@ -97,5 +148,19 @@
     "invalidDomain": "This simulator's configured domain is invalid.",
     "graphAriaLabel": "Interactive function graph",
     "undefinedValue": "undefined"
+  },
+  "search": {
+    "label": "Search lessons",
+    "placeholder": "Search lessons and topics",
+    "open": "Open search",
+    "results": "Search results",
+    "noResults": "No lessons found for “{query}”",
+    "loadError": "Couldn't load search."
+  },
+  "appearance": {
+    "button": "Appearance",
+    "theme": "Theme",
+    "mode": "Mode",
+    "language": "Language"
   }
 }
