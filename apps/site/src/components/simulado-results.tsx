@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Icon } from '@birb-learn/theme';
 import type { GradedQuestionResult, GradedResult } from '@/lib/grade-simulado';
@@ -116,22 +117,60 @@ export function SimuladoResults({
 }) {
   const t = useTranslations('simulado.results');
   const tTaking = useTranslations('simulado.taking');
+  const [onlyWrong, setOnlyWrong] = useState(false);
+
+  const percent = result.total > 0 ? Math.round((result.correctCount / result.total) * 100) : 0;
+  const level = percent >= 80 ? 'high' : percent >= 50 ? 'mid' : 'low';
+  const message = level === 'high' ? t('excellent') : level === 'mid' ? t('good') : t('keepGoing');
+  const visible = result.perQuestion
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => !onlyWrong || !entry.isCorrect);
 
   return (
-    <div>
-      <p className={styles.score}>{t('score', { correct: result.correctCount, total: result.total })}</p>
+    <div className={styles.wrapper}>
+      <section className={styles.hero} data-level={level}>
+        <div
+          className={styles.ring}
+          style={{ '--percent': `${percent}%` } as React.CSSProperties}
+          role="img"
+          aria-label={t('percentCorrect', { percent })}
+        >
+          <span className={styles.ringValue}>{percent}%</span>
+        </div>
+        <div className={styles.heroText}>
+          <p className={styles.message}>{message}</p>
+          <p className={styles.score}>{t('score', { correct: result.correctCount, total: result.total })}</p>
+        </div>
+        <button type="button" className={styles.retryButton} onClick={onBackToSetup}>
+          <Icon name="rotate-ccw" size={16} aria-hidden />
+          {t('backToSetup')}
+        </button>
+      </section>
+
+      <div className={styles.reviewHeader}>
+        <h2 className={styles.reviewTitle}>{t('reviewTitle')}</h2>
+        <div className={styles.filter} role="group" aria-label={t('reviewTitle')}>
+          <button type="button" className={styles.filterButton} aria-pressed={!onlyWrong} onClick={() => setOnlyWrong(false)}>
+            {t('filterAll')}
+          </button>
+          <button type="button" className={styles.filterButton} aria-pressed={onlyWrong} onClick={() => setOnlyWrong(true)}>
+            {t('filterWrong')}
+          </button>
+        </div>
+      </div>
 
       <div className={styles.list}>
-        {result.perQuestion.map((entry) => {
+        {visible.map(({ entry, index }) => {
           const { question, isCorrect } = entry;
           const { yourAnswer, correctAnswer } = describeAnswers(entry, locale, tTaking);
           const renderAsHtml = isHtmlAnswer(question);
 
           return (
-            <div key={question.id} className={styles.question}>
+            <div key={question.id} className={styles.question} data-correct={isCorrect}>
               <p className={isCorrect ? `${styles.status} ${styles.statusCorrect}` : `${styles.status} ${styles.statusIncorrect}`}>
                 <Icon name={isCorrect ? 'check-circle' : 'x-circle'} size={16} aria-hidden />
                 {isCorrect ? t('correct') : t('incorrect')}
+                <span className={styles.questionLabel}>{tTaking('question', { number: index + 1 })}</span>
               </p>
               {question.isFallback && <FallbackNotice />}
               {/* eslint-disable-next-line react/no-danger -- pre-rendered at build time from our own MDX */}
@@ -158,19 +197,21 @@ export function SimuladoResults({
                 </p>
               )}
 
-              <div
-                className={styles.resolution}
-                // eslint-disable-next-line react/no-danger -- pre-rendered at build time from our own MDX
-                dangerouslySetInnerHTML={{ __html: question.resolutionHtml }}
-              />
+              <div className={styles.resolutionBox}>
+                <p className={styles.resolutionLabel}>
+                  <Icon name="lightbulb" size={14} aria-hidden />
+                  {t('resolution')}
+                </p>
+                <div
+                  className={styles.resolution}
+                  // eslint-disable-next-line react/no-danger -- pre-rendered at build time from our own MDX
+                  dangerouslySetInnerHTML={{ __html: question.resolutionHtml }}
+                />
+              </div>
             </div>
           );
         })}
       </div>
-
-      <button type="button" className={styles.backButton} onClick={onBackToSetup}>
-        {t('backToSetup')}
-      </button>
     </div>
   );
 }

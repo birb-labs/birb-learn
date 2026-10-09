@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { ThemeSwitcher } from '@birb-learn/theme';
+import { BirbLogo, ThemeSwitcher } from '@birb-learn/theme';
 import { LoginPage } from './pages/LoginPage';
 import { ContentTreePage } from './pages/ContentTreePage';
 import { LessonEditorPage } from './pages/LessonEditorPage';
 import { QuestionListPage } from './pages/QuestionListPage';
 import { QuestionEditorPage } from './pages/QuestionEditorPage';
 import { PublishButton } from './components/PublishButton';
+import styles from './App.module.css';
 
 type View =
   | { name: 'tree' }
@@ -23,13 +24,18 @@ export function App() {
 
   return (
     <div>
-      <nav>
-        <button type="button" onClick={() => setView({ name: 'tree' })}>
+      <nav className={styles.nav}>
+        <span className={styles.brand}>
+          <BirbLogo size={30} />
+          Birb Learn <small>Admin</small>
+        </span>
+        <button type="button" className={styles.navButton} onClick={() => setView({ name: 'tree' })}>
           Conteúdo
         </button>
-        <button type="button" onClick={() => setView({ name: 'questions' })}>
+        <button type="button" className={styles.navButton} onClick={() => setView({ name: 'questions' })}>
           Questões
         </button>
+        <span className={styles.spacer} />
         <ThemeSwitcher
           labels={{
             themeLabel: 'Tema',
@@ -40,6 +46,7 @@ export function App() {
         />
         <PublishButton />
       </nav>
+      <main className={styles.main}>
       {view.name === 'tree' && (
         <ContentTreePage onEditLesson={(lessonId) => setView({ name: 'lesson', lessonId })} />
       )}
@@ -55,6 +62,7 @@ export function App() {
       {view.name === 'question' && (
         <QuestionEditorPage questionId={view.questionId} onDone={() => setView({ name: 'questions' })} />
       )}
+      </main>
     </div>
   );
 }

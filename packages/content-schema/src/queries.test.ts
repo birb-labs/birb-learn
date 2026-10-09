@@ -29,7 +29,13 @@ function createTestDb() {
 type TestDb = ReturnType<typeof createTestDb>;
 
 function seedFixture(db: TestDb) {
-  db.insert(schema.subjects).values({ slug: 'calculo', order: 1 }).run();
+  db.insert(schema.disciplines).values({ slug: 'matematica', order: 1 }).run();
+  const discipline = db.select().from(schema.disciplines).all()[0];
+  db.insert(schema.disciplineTranslations)
+    .values({ disciplineId: discipline.id, locale: 'pt-BR', name: 'Matemática' })
+    .run();
+
+  db.insert(schema.subjects).values({ disciplineId: discipline.id, slug: 'calculo', order: 1 }).run();
   const subject = db.select().from(schema.subjects).all()[0];
   db.insert(schema.subjectTranslations)
     .values({ subjectId: subject.id, locale: 'pt-BR', name: 'Cálculo' })
@@ -354,30 +360,54 @@ describe('content-schema queries', () => {
     const tree = await getContentTree(db, 'pt-BR');
 
     expect(tree).toHaveLength(1);
-    expect(tree[0].slug).toBe('calculo');
-    expect(tree[0].name).toBe('Cálculo');
+    expect(tree[0].slug).toBe('matematica');
+    expect(tree[0].name).toBe('Matemática');
     expect(typeof tree[0].id).toBe('number');
-    expect(tree[0].topics).toHaveLength(1);
-    expect(tree[0].topics[0].slug).toBe('limites');
-    expect(tree[0].topics[0].name).toBe('Limites');
-    expect(tree[0].topics[0].sections).toHaveLength(1);
-    expect(tree[0].topics[0].sections[0].slug).toBe('limites-laterais');
-    expect(tree[0].topics[0].sections[0].name).toBe('Limites Laterais');
-    expect(tree[0].topics[0].sections[0].lessons).toHaveLength(2);
-    expect(tree[0].topics[0].sections[0].lessons.map((l) => l.slug)).toEqual([
+    expect(tree[0].subjects).toHaveLength(1);
+    const [subject] = tree[0].subjects;
+    expect(subject.slug).toBe('calculo');
+    expect(subject.name).toBe('Cálculo');
+    expect(subject.topics).toHaveLength(1);
+    expect(subject.topics[0].slug).toBe('limites');
+    expect(subject.topics[0].name).toBe('Limites');
+    expect(subject.topics[0].sections).toHaveLength(1);
+    expect(subject.topics[0].sections[0].slug).toBe('limites-laterais');
+    expect(subject.topics[0].sections[0].name).toBe('Limites Laterais');
+    expect(subject.topics[0].sections[0].lessons).toHaveLength(2);
+    expect(subject.topics[0].sections[0].lessons.map((l) => l.slug)).toEqual([
       'definicao-de-limite',
       'limites-laterais-exemplo',
     ]);
-    expect(tree[0].topics[0].sections[0].lessons[0].title).toBe('Definição de Limite');
+    expect(subject.topics[0].sections[0].lessons[0].title).toBe('Definição de Limite');
     // The tree payload must not carry full lesson bodies.
-    expect(tree[0].topics[0].sections[0].lessons[0]).not.toHaveProperty('bodyMdx');
+    expect(subject.topics[0].sections[0].lessons[0]).not.toHaveProperty('bodyMdx');
+  });
+
+  it('getContentTree only nests each subject under its own discipline', async () => {
+    db.insert(schema.disciplines).values({ slug: 'fisica', order: 2 }).run();
+    const physics = db.select().from(schema.disciplines).where(eq(schema.disciplines.slug, 'fisica')).get()!;
+    db.insert(schema.disciplineTranslations)
+      .values({ disciplineId: physics.id, locale: 'pt-BR', name: 'Física' })
+      .run();
+    db.insert(schema.subjects).values({ disciplineId: physics.id, slug: 'mecanica', order: 1 }).run();
+    const mechanics = db.select().from(schema.subjects).where(eq(schema.subjects.slug, 'mecanica')).get()!;
+    db.insert(schema.subjectTranslations)
+      .values({ subjectId: mechanics.id, locale: 'pt-BR', name: 'Mecânica' })
+      .run();
+
+    const tree = await getContentTree(db, 'pt-BR');
+
+    expect(tree.map((d) => d.slug)).toEqual(['matematica', 'fisica']);
+    expect(tree[0].subjects.map((s) => s.slug)).toEqual(['calculo']);
+    expect(tree[1].subjects.map((s) => s.slug)).toEqual(['mecanica']);
   });
 
   it('getContentTree falls back to pt-BR names when a locale has no translation', async () => {
     const tree = await getContentTree(db, 'en-US');
 
-    expect(tree[0].name).toBe('Cálculo');
-    expect(tree[0].topics[0].name).toBe('Limites');
+    expect(tree[0].name).toBe('Matemática');
+    expect(tree[0].subjects[0].name).toBe('Cálculo');
+    expect(tree[0].subjects[0].topics[0].name).toBe('Limites');
   });
 
   it('getAllLessonSlugs returns every lesson slug regardless of locale', async () => {
@@ -398,6 +428,7 @@ describe('content-schema queries', () => {
     expect(lesson!.section).toEqual({ slug: 'limites-laterais', name: 'Limites Laterais' });
     expect(lesson!.topic).toEqual({ slug: 'limites', name: 'Limites' });
     expect(lesson!.subject).toEqual({ slug: 'calculo', name: 'Cálculo' });
+    expect(lesson!.discipline).toEqual({ slug: 'matematica', name: 'Matemática' });
     expect(lesson!.isFallback).toBe(false);
   });
 
@@ -480,7 +511,7 @@ describe('content-schema queries', () => {
 
   it('getTagTree scopes tags to the given subject, excluding tags from other subjects', async () => {
     const subject = db.select().from(schema.subjects).all()[0];
-    db.insert(schema.subjects).values({ slug: 'fisica', order: 2 }).run();
+    db.insert(schema.subjects).values({ disciplineId: subject.disciplineId, slug: 'fisica', order: 2 }).run();
     const otherSubject = db.select().from(schema.subjects).where(eq(schema.subjects.slug, 'fisica')).get()!;
     db.insert(schema.tags).values({ slug: 'cinematica', subjectId: otherSubject.id }).run();
 

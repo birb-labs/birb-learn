@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import {
   getD1Db,
+  disciplines,
+  disciplineTranslations,
   lessons,
   lessonBlocks,
   lessonBlockTranslations,
@@ -34,6 +36,8 @@ exportRoutes.get('/', async (c) => {
 
   const db = getD1Db(c.env.DB);
   return c.json({
+    disciplines: await db.select().from(disciplines).all(),
+    disciplineTranslations: await db.select().from(disciplineTranslations).all(),
     subjects: await db.select().from(subjects).all(),
     subjectTranslations: await db.select().from(subjectTranslations).all(),
     topics: await db.select().from(topics).all(),

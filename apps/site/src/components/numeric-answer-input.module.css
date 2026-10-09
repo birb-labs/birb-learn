@@ -1,15 +1,30 @@
 .wrapper {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-xs);
+  margin-top: var(--space-md);
 }
 
 .input {
-  border: 1px solid var(--color-border);
-  background: transparent;
-  color: inherit;
-  border-radius: 0.25rem;
-  padding: 0.5rem;
-  font-size: 1rem;
+  width: 100%;
   max-width: 16rem;
+  padding: 0.65rem 0.85rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: inherit;
+  font: inherit;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.input:hover {
+  border-color: var(--color-accent);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent);
 }

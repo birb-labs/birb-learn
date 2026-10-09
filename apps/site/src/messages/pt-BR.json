@@ -10,7 +10,12 @@
   "nav": {
     "home": "Início",
     "content": "Conteúdo",
-    "simulado": "Simulado"
+    "simulado": "Simulado",
+    "primaryLabel": "Navegação principal",
+    "openMenu": "Abrir menu",
+    "closeMenu": "Fechar menu",
+    "skipToContent": "Pular para o conteúdo",
+    "settings": "Aparência e idioma"
   },
   "theme": {
     "themeLabel": "Tema",
@@ -31,7 +36,70 @@
     "title": "Birb Learn",
     "description": "Uma plataforma gratuita e open-source para estudar matérias escolares, começando pela matemática.",
     "ctaContent": "Ver conteúdos",
-    "ctaSimulado": "Fazer um simulado"
+    "ctaSimulado": "Fazer um simulado",
+    "eyebrow": "Gratuito e de código aberto",
+    "heroTitle": "Estude com clareza, pratique com confiança.",
+    "heroHighlight": "com confiança",
+    "heroSubtitle": "Lições passo a passo, simuladores interativos, exercícios resolvidos e simulados com correção comentada. Tudo grátis, em português, inglês e espanhol.",
+    "stats": {
+      "lessons": "{count, plural, one {# lição} other {# lições}}",
+      "subjects": "{count, plural, one {# assunto} other {# assuntos}}",
+      "languages": "3 idiomas",
+      "free": "100% gratuito"
+    },
+    "features": {
+      "title": "Tudo o que você precisa para aprender de verdade",
+      "subtitle": "Cada lição combina teoria, intuição e prática, para você entender o porquê e não só decorar a fórmula.",
+      "lessons": {
+        "title": "Lições guiadas",
+        "text": "Conteúdo organizado em trilhas curtas, do básico ao avançado, com acompanhamento do seu progresso."
+      },
+      "simulators": {
+        "title": "Simuladores interativos",
+        "text": "Explore conceitos na prática: mexa nos parâmetros, veja o gráfico reagir e construa intuição."
+      },
+      "solved": {
+        "title": "Exercícios resolvidos",
+        "text": "Problemas com resolução passo a passo para você conferir o raciocínio depois de tentar sozinho."
+      },
+      "simulado": {
+        "title": "Simulados personalizados",
+        "text": "Monte provas por assunto e dificuldade e receba a correção comentada de cada questão."
+      },
+      "themes": {
+        "title": "Do seu jeito",
+        "text": "Quatro temas, modo claro e escuro e três idiomas, para estudar com conforto a qualquer hora."
+      },
+      "openSource": {
+        "title": "Aberto e gratuito",
+        "text": "Sem anúncios nem cadastro. O código-fonte é público e qualquer pessoa pode contribuir."
+      }
+    },
+    "disciplines": {
+      "title": "Escolha por onde começar",
+      "subtitle": "Selecione uma matéria e siga a trilha de estudos.",
+      "viewAll": "Ver todas as matérias"
+    },
+    "steps": {
+      "title": "Como funciona",
+      "choose": {
+        "title": "Escolha o que estudar",
+        "text": "Selecione a matéria e o assunto que você quer dominar."
+      },
+      "learn": {
+        "title": "Aprenda no seu ritmo",
+        "text": "Leia as lições, explore os simuladores e acompanhe seu progresso."
+      },
+      "practice": {
+        "title": "Teste o que aprendeu",
+        "text": "Faça um simulado e veja a resolução comentada de cada questão."
+      }
+    },
+    "cta": {
+      "title": "Pronto para começar?",
+      "text": "Escolha uma matéria e dê o primeiro passo. É grátis, sem cadastro.",
+      "button": "Começar a estudar"
+    }
   },
   "content": {
     "title": "Conteúdos",
@@ -40,7 +108,83 @@
     "breadcrumbSeparator": "›",
     "breadcrumbLabel": "Trilha de navegação",
     "notTranslatedYet": "Este conteúdo ainda não foi traduzido para o seu idioma. Mostrando em português.",
-    "showResolution": "Ver resolução"
+    "showResolution": "Ver resolução",
+    "disciplines": {
+      "eyebrow": "Passo 1 de 3",
+      "title": "Escolha a matéria",
+      "subtitle": "Comece selecionando a matéria que você quer estudar."
+    },
+    "subjects": {
+      "eyebrow": "Passo 2 de 3",
+      "title": "Escolha o assunto",
+      "subtitle": "Selecione o assunto de {discipline} que você quer estudar.",
+      "empty": "Esta matéria ainda não tem assuntos publicados."
+    },
+    "tree": {
+      "eyebrow": "Passo 3 de 3",
+      "subtitle": "Escolha uma lição para começar ou continue de onde parou.",
+      "empty": "Este assunto ainda não tem lições publicadas.",
+      "expandAll": "Expandir tudo",
+      "collapseAll": "Recolher tudo"
+    },
+    "counts": {
+      "subjects": "{count, plural, one {# assunto} other {# assuntos}}",
+      "topics": "{count, plural, one {# tópico} other {# tópicos}}",
+      "sections": "{count, plural, one {# grupo} other {# grupos}}",
+      "lessons": "{count, plural, one {# lição} other {# lições}}"
+    },
+    "progress": {
+      "percent": "{percent}% concluído",
+      "label": "Progresso: {completed} de {total} lições concluídas",
+      "start": "Começar",
+      "continue": "Continuar de onde parou",
+      "review": "Revisar conteúdo",
+      "done": "Concluída",
+      "allDone": "Você concluiu todas as lições deste assunto!"
+    },
+    "lesson": {
+      "lessonOf": "Lição {current} de {total}",
+      "readingProgress": "Progresso de leitura da lição",
+      "inThisLesson": "Nesta lição",
+      "blockOf": "Etapa {current} de {total}",
+      "previousBlock": "Etapa anterior",
+      "nextBlock": "Próxima etapa",
+      "previousLesson": "Lição anterior",
+      "nextLesson": "Próxima lição",
+      "backToIndex": "Voltar ao índice",
+      "stepper": "Etapas da lição",
+      "goToBlock": "Ir para: {title}",
+      "completeTitle": "Lição concluída!",
+      "completeText": "Muito bem! Continue avançando na trilha ou pratique com um simulado.",
+      "takeSimulado": "Fazer um simulado",
+      "courseOutline": "Todas as lições",
+      "outlineToggle": "Mostrar todas as lições",
+      "keyboardHint": "Dica: use as setas ← e → para navegar entre as etapas.",
+      "firstLesson": "Esta é a primeira lição do assunto.",
+      "lastLesson": "Esta é a última lição do assunto."
+    },
+    "blocks": {
+      "text": "Conteúdo",
+      "curiosity": "Curiosidade",
+      "real_world_application": "No mundo real",
+      "solved_exercise": "Exercício resolvido",
+      "simulator": "Simulador",
+      "untitled": "Etapa {number}"
+    },
+    "hideResolution": "Ocultar resolução",
+    "exerciseTry": "Tente resolver antes de ver a resolução.",
+    "resolution": "Resolução",
+    "steps": {
+      "label": "Etapas da seleção",
+      "discipline": "Matéria",
+      "subject": "Assunto",
+      "lessons": "Lições"
+    },
+    "open": "Abrir",
+    "nextUp": "Próxima",
+    "lessonNumber": "Lição {number}",
+    "topicLabel": "Tópico",
+    "viewLessons": "Ver lições"
   },
   "simulado": {
     "title": "Simulado",
@@ -50,7 +194,7 @@
       "moduleTitle": "Módulo {number}",
       "addModule": "Adicionar módulo",
       "removeModule": "Remover módulo",
-      "subject": "Matéria",
+      "subject": "Assunto",
       "questionCount": "Número de questões",
       "topics": "Tópicos",
       "difficulty": "Dificuldade",
@@ -61,7 +205,11 @@
       "start": "Gerar simulado",
       "loading": "Gerando simulado...",
       "notEnoughQuestionsModule": "Módulo {module}: só há {available} questão(ões) disponível(eis) para os filtros escolhidos (você pediu {requested}).",
-      "loadError": "Não foi possível carregar o banco de questões. Tente novamente."
+      "loadError": "Não foi possível carregar o banco de questões. Tente novamente.",
+      "settingsTitle": "Configurações",
+      "moduleSummary": "{count, plural, one {# questão} other {# questões}}",
+      "allTopics": "Todos os tópicos",
+      "shuffleHint": "Mistura a ordem em que os módulos aparecem na prova."
     },
     "taking": {
       "selectAllThatApply": "Selecione todas as alternativas corretas",
@@ -69,7 +217,11 @@
       "grading": "Corrigindo...",
       "true": "Verdadeiro",
       "false": "Falso",
-      "gradingError": "Não foi possível corrigir o simulado. Tente novamente."
+      "gradingError": "Não foi possível corrigir o simulado. Tente novamente.",
+      "progress": "{answered} de {total} respondidas",
+      "question": "Questão {number}",
+      "answered": "Respondida",
+      "unanswered": "Em branco"
     },
     "results": {
       "score": "Você acertou {correct} de {total} questões",
@@ -77,19 +229,35 @@
       "incorrect": "Errado",
       "yourAnswer": "Sua resposta",
       "correctAnswer": "Resposta correta",
-      "backToSetup": "Fazer outro simulado"
+      "backToSetup": "Fazer outro simulado",
+      "excellent": "Excelente trabalho!",
+      "good": "Muito bom, continue assim!",
+      "keepGoing": "Bom começo — revise as resoluções e tente de novo.",
+      "percentCorrect": "{percent}% de acertos",
+      "reviewTitle": "Revisão das questões",
+      "resolution": "Resolução comentada",
+      "filterAll": "Todas",
+      "filterWrong": "Só as erradas"
     },
     "history": {
       "title": "Simulados anteriores",
       "empty": "Você ainda não fez nenhum simulado.",
-      "viewAttempt": "Ver resultado"
-    }
+      "viewAttempt": "Ver resultado",
+      "attemptNumber": "Tentativa {number}"
+    },
+    "eyebrow": "Pratique",
+    "subtitle": "Monte uma prova sob medida, responda no seu ritmo e veja a resolução comentada de cada questão no final."
   },
   "footer": {
     "rights": "Birb Labs. Código aberto, feito com carinho.",
     "contact": "Contato",
     "sourceCode": "Código-fonte",
-    "donate": "Apoie o projeto"
+    "donate": "Apoie o projeto",
+    "tagline": "Plataforma gratuita e de código aberto para aprender matérias escolares.",
+    "explore": "Explorar",
+    "project": "Projeto",
+    "madeBy": "Feito com carinho pela Birb Labs",
+    "backToTop": "Voltar ao topo"
   },
   "simulators": {
     "unknownSimulator": "Simulador desconhecido: \"{key}\".",
@@ -97,5 +265,10 @@
     "invalidDomain": "O domínio configurado para este simulador é inválido.",
     "graphAriaLabel": "Gráfico de função interativo",
     "undefinedValue": "indefinido"
+  },
+  "notFound": {
+    "title": "Página não encontrada",
+    "text": "A página que você procura não existe ou mudou de lugar.",
+    "back": "Voltar ao início"
   }
 }

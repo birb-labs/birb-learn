@@ -13,6 +13,21 @@ declare module 'cloudflare:test' {
 
 let sessionCookie = '';
 
+// D1 storage is cumulative across tests in this file, so every subject
+// created below hangs off one shared discipline.
+let cachedDisciplineId: number | undefined;
+async function getDisciplineId(): Promise<number> {
+  if (cachedDisciplineId !== undefined) return cachedDisciplineId;
+  const response = await SELF.fetch('https://admin.test/api/lessons/disciplines', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+    body: JSON.stringify({ slug: 'test-discipline', order: 1, translations: { 'pt-BR': { name: 'Matemática' } } }),
+  });
+  const { id } = await response.json<{ id: number }>();
+  cachedDisciplineId = id;
+  return id;
+}
+
 beforeAll(async () => {
   await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
   env.ADMIN_USERNAME = 'admin';
@@ -36,7 +51,7 @@ describe('lesson hierarchy CRUD', () => {
     const subjectResponse = await SELF.fetch('https://admin.test/api/lessons/subjects', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ slug: 'calculo', order: 1, translations: { 'pt-BR': { name: 'Cálculo' } } }),
+      body: JSON.stringify({ disciplineId: await getDisciplineId(), slug: 'calculo', order: 1, translations: { 'pt-BR': { name: 'Cálculo' } } }),
     });
     expect(subjectResponse.status).toBe(201);
     const subject = await subjectResponse.json<{ id: number }>();
@@ -80,8 +95,54 @@ describe('lesson hierarchy CRUD', () => {
     expect(lessonResponse.status).toBe(201);
 
     const treeResponse = await SELF.fetch('https://admin.test/api/lessons/tree', { headers: { Cookie: sessionCookie } });
-    const tree = await treeResponse.json<Array<{ slug: string; topics: Array<{ slug: string }> }>>();
-    expect(tree.find((s) => s.slug === 'calculo')?.topics.find((t) => t.slug === 'limites')).toBeDefined();
+    const tree = await treeResponse.json<
+      Array<{ slug: string; subjects: Array<{ slug: string; topics: Array<{ slug: string }> }> }>
+    >();
+    const discipline = tree.find((d) => d.slug === 'test-discipline');
+    expect(
+      discipline?.subjects.find((s) => s.slug === 'calculo')?.topics.find((t) => t.slug === 'limites'),
+    ).toBeDefined();
+  });
+
+  it('rejects a subject created without a discipline', async () => {
+    const response = await SELF.fetch('https://admin.test/api/lessons/subjects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
+      body: JSON.stringify({ slug: 'orphan', order: 1, translations: { 'pt-BR': { name: 'Órfão' } } }),
+    });
+    expect(response.status).toBe(400);
+  });
+
+  it('creates, patches and deletes a discipline with its translations', async () => {
+    const headers = { 'Content-Type': 'application/json', Cookie: sessionCookie };
+    const created = await SELF.fetch('https://admin.test/api/lessons/disciplines', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ slug: 'fisica-disc', order: 2, translations: { 'pt-BR': { name: 'Física' } } }),
+    });
+    expect(created.status).toBe(201);
+    const { id } = await created.json<{ id: number }>();
+
+    const patched = await SELF.fetch(`https://admin.test/api/lessons/disciplines/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ translations: { 'en-US': { name: 'Physics' } } }),
+    });
+    expect(patched.status).toBe(200);
+    const rows = await env.DB.prepare('SELECT locale FROM discipline_translations WHERE discipline_id = ?')
+      .bind(id)
+      .all<{ locale: string }>();
+    expect(rows.results.map((r) => r.locale).sort()).toEqual(['en-US', 'pt-BR']);
+
+    const deleted = await SELF.fetch(`https://admin.test/api/lessons/disciplines/${id}`, {
+      method: 'DELETE',
+      headers,
+    });
+    expect(deleted.status).toBe(200);
+    const remaining = await env.DB.prepare('SELECT COUNT(*) AS n FROM disciplines WHERE id = ?')
+      .bind(id)
+      .first<{ n: number }>();
+    expect(remaining?.n).toBe(0);
   });
 
   it('updates a lesson body and rejects unauthenticated requests', async () => {
@@ -98,6 +159,7 @@ describe('lesson translations', () => {
       method: 'POST',
       headers,
       body: JSON.stringify({
+        disciplineId: await getDisciplineId(),
         slug: `calculo-${Date.now()}-${Math.random()}`,
         order: 1,
         translations: { 'pt-BR': { name: 'Cálculo' } },
@@ -182,7 +244,7 @@ describe('subject translations', () => {
     const response = await SELF.fetch('https://admin.test/api/lessons/subjects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
-      body: JSON.stringify({ slug: 'no-name', order: 99, translations: {} }),
+      body: JSON.stringify({ disciplineId: await getDisciplineId(), slug: 'no-name', order: 99, translations: {} }),
     });
     expect(response.status).toBe(400);
   });
@@ -191,7 +253,7 @@ describe('subject translations', () => {
     const response = await SELF.fetch('https://admin.test/api/lessons/subjects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
-      body: JSON.stringify({ slug: 'fisica', order: 2, translations: { 'pt-BR': { name: 'Física' } } }),
+      body: JSON.stringify({ disciplineId: await getDisciplineId(), slug: 'fisica', order: 2, translations: { 'pt-BR': { name: 'Física' } } }),
     });
     expect(response.status).toBe(201);
   });
@@ -200,7 +262,7 @@ describe('subject translations', () => {
     const created = await SELF.fetch('https://admin.test/api/lessons/subjects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
-      body: JSON.stringify({ slug: 'quimica', order: 3, translations: { 'pt-BR': { name: 'Química' } } }),
+      body: JSON.stringify({ disciplineId: await getDisciplineId(), slug: 'quimica', order: 3, translations: { 'pt-BR': { name: 'Química' } } }),
     });
     const { id } = await created.json<{ id: number }>();
 
@@ -215,7 +277,8 @@ describe('subject translations', () => {
 
 describe('required pt-BR translation and locale-key validation', () => {
   const creationRoutes = [
-    { name: 'subjects', url: 'https://admin.test/api/lessons/subjects', body: { slug: 'x-no-pt', order: 90 } },
+    { name: 'disciplines', url: 'https://admin.test/api/lessons/disciplines', body: { slug: 'x-no-pt', order: 90 } },
+    { name: 'subjects', url: 'https://admin.test/api/lessons/subjects', body: { disciplineId: 1, slug: 'x-no-pt', order: 90 } },
     {
       name: 'topics',
       url: 'https://admin.test/api/lessons/topics',
@@ -275,7 +338,7 @@ describe('required pt-BR translation and locale-key validation', () => {
     const created = await SELF.fetch('https://admin.test/api/lessons/subjects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: sessionCookie },
-      body: JSON.stringify({ slug: 'bad-locale-patch', order: 91, translations: { 'pt-BR': { name: 'Original' } } }),
+      body: JSON.stringify({ disciplineId: await getDisciplineId(), slug: 'bad-locale-patch', order: 91, translations: { 'pt-BR': { name: 'Original' } } }),
     });
     const { id } = await created.json<{ id: number }>();
 
@@ -306,7 +369,7 @@ describe('deleting a translated entity', () => {
     const created = await SELF.fetch('https://admin.test/api/lessons/subjects', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ slug: 'to-delete-subject', order: 80, translations: { 'pt-BR': { name: 'Apagar' } } }),
+      body: JSON.stringify({ disciplineId: await getDisciplineId(), slug: 'to-delete-subject', order: 80, translations: { 'pt-BR': { name: 'Apagar' } } }),
     });
     const { id } = await created.json<{ id: number }>();
     expect(await countRows('subject_translations', 'subject_id', id)).toBe(1);
@@ -326,7 +389,7 @@ describe('deleting a translated entity', () => {
     const subjectResponse = await SELF.fetch('https://admin.test/api/lessons/subjects', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ slug: 'parent-of-topic', order: 81, translations: { 'pt-BR': { name: 'Pai' } } }),
+      body: JSON.stringify({ disciplineId: await getDisciplineId(), slug: 'parent-of-topic', order: 81, translations: { 'pt-BR': { name: 'Pai' } } }),
     });
     const subject = await subjectResponse.json<{ id: number }>();
 
@@ -357,7 +420,7 @@ describe('deleting a translated entity', () => {
     const subjectResponse = await SELF.fetch('https://admin.test/api/lessons/subjects', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ slug: 'parent-of-section', order: 82, translations: { 'pt-BR': { name: 'Pai' } } }),
+      body: JSON.stringify({ disciplineId: await getDisciplineId(), slug: 'parent-of-section', order: 82, translations: { 'pt-BR': { name: 'Pai' } } }),
     });
     const subject = await subjectResponse.json<{ id: number }>();
 
@@ -400,7 +463,7 @@ describe('deleting a translated entity', () => {
     const subjectResponse = await SELF.fetch('https://admin.test/api/lessons/subjects', {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ slug: 'parent-of-lesson', order: 83, translations: { 'pt-BR': { name: 'Pai' } } }),
+      body: JSON.stringify({ disciplineId: await getDisciplineId(), slug: 'parent-of-lesson', order: 83, translations: { 'pt-BR': { name: 'Pai' } } }),
     });
     const subject = await subjectResponse.json<{ id: number }>();
 
@@ -484,6 +547,7 @@ describe('lesson content blocks', () => {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({
+        disciplineId: await getDisciplineId(),
         slug: `blocks-subject-${suffix}`,
         order: 70,
         translations: { 'pt-BR': { name: 'Cálculo' } },

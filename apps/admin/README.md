@@ -92,17 +92,25 @@ publish if violated:
 
 - **The database must always contain at least one lesson.** The
   site's static export (`output: 'export'`) requires
-  `generateStaticParams()` for `/[locale]/content/[slug]` to return at
+  `generateStaticParams()` for `/[locale]/content/[discipline]/[subject]/[slug]` to return at
   least one entry — an empty lesson table makes `next build` fail
-  outright. Do not delete the last remaining lesson (a placeholder
-  "Disciplina de Exemplo" ships by default) without replacing it in
-  the same session, until sub-project 5's real content lands.
+  outright. Do not delete the last remaining lesson without replacing it
+  in the same session.
 - **New Drizzle migrations must be applied to the remote D1 before the
   next publish.** `build:from-admin` only migrates CI's own throwaway
   local SQLite; nothing applies new migrations to this Worker's D1
   automatically. Run `wrangler d1 migrations apply birb-learn-admin --remote`
   after adding a migration to `packages/content-schema/drizzle`,
   before clicking Publicar.
+
+**Migration `0007_discipline_hierarchy` (adds the discipline level above
+subjects) is the most recent one that must go through this order.** It
+backfills every existing subject under a new "Matemática" discipline, so
+the live content keeps rendering at `/content/matematica/<subject>/...`.
+Lesson URLs changed from `/content/<lesson>` to
+`/content/<discipline>/<subject>/<lesson>`; old links are not redirected.
+Create further disciplines through `POST /api/lessons/disciplines` and
+point subjects at them with `disciplineId`.
 
 **Apply the migration and redeploy the Worker before pushing
 schema-affecting changes to `main`.** This project has already paid for

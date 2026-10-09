@@ -1,0 +1,150 @@
+.visual {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 28rem;
+  aspect-ratio: 1;
+  margin: 0 auto;
+}
+
+.halo {
+  position: absolute;
+  inset: 8%;
+  border-radius: var(--radius-full);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--color-highlight) 34%, transparent),
+    color-mix(in srgb, var(--color-accent) 14%, transparent) 60%,
+    transparent
+  );
+  filter: blur(20px);
+  animation: pulse 6s var(--ease-in-out) infinite;
+}
+
+.ring,
+.ringOuter {
+  position: absolute;
+  border: 1.5px dashed color-mix(in srgb, var(--color-accent) 35%, transparent);
+  border-radius: var(--radius-full);
+}
+
+.ring {
+  inset: 14%;
+  animation: spin 40s linear infinite;
+}
+
+.ringOuter {
+  inset: 2%;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--color-foreground) 8%, transparent);
+  animation: spin 70s linear infinite reverse;
+}
+
+.logoWrap {
+  position: relative;
+  animation: bob 6s var(--ease-in-out) infinite;
+}
+
+.logo {
+  display: block;
+  border-radius: 28%;
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 6px color-mix(in srgb, var(--color-background) 60%, transparent);
+}
+
+.symbol {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.25rem;
+  height: 3.25rem;
+  padding: 0 0.8rem;
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  box-shadow: var(--shadow-md);
+  color: var(--color-accent);
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  animation: float 7s var(--ease-in-out) infinite;
+}
+
+.integral {
+  top: 6%;
+  left: 12%;
+}
+
+.pi {
+  top: 12%;
+  right: 8%;
+  color: var(--color-highlight);
+}
+
+.infinity {
+  top: 46%;
+  left: -2%;
+  color: var(--color-info);
+}
+
+.sigma {
+  top: 52%;
+  right: -2%;
+  color: var(--color-success);
+}
+
+.root {
+  bottom: 6%;
+  left: 18%;
+  color: var(--color-warning);
+}
+
+.limit {
+  right: 14%;
+  bottom: 2%;
+  font-size: 1.1rem;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(3deg);
+  }
+}
+
+@keyframes bob {
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes pulse {
+  50% {
+    transform: scale(1.08);
+    opacity: 0.8;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 52rem) {
+  .visual {
+    max-width: 20rem;
+  }
+
+  .logo {
+    width: 8rem;
+    height: 8rem;
+  }
+}

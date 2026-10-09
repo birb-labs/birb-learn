@@ -116,11 +116,11 @@ export function SimuladoPageClient({
   }
 
   return (
-    <>
-      <SimuladoHistory history={history} onViewAttempt={handleViewAttempt} />
+    <div className={styles.stack}>
       {loadError && <p className={styles.notice}>{loadError}</p>}
       {notice && <p className={styles.notice}>{notice}</p>}
       <SimuladoSetup subjects={subjects} tagTreesBySubject={tagTreesBySubject} onStart={handleStart} />
-    </>
+      <SimuladoHistory history={history} onViewAttempt={handleViewAttempt} />
+    </div>
   );
 }

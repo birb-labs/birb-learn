@@ -4,6 +4,8 @@ import type { DrizzleD1Database } from 'drizzle-orm/d1';
 import {
   type Locale,
   type LessonBlockType,
+  disciplines,
+  disciplineTranslations,
   lessonBlocks,
   lessonBlockTranslations,
   lessons,
@@ -48,25 +50,44 @@ function resolveTranslation<T extends { locale: string }>(
   return { row: fallback, isFallback: true };
 }
 
+export interface ContentLesson {
+  slug: string;
+  title: string;
+}
+
+export interface ContentSection {
+  id: number;
+  slug: string;
+  name: string;
+  lessons: ContentLesson[];
+}
+
+export interface ContentTopic {
+  id: number;
+  slug: string;
+  name: string;
+  sections: ContentSection[];
+}
+
+export interface ContentSubject {
+  id: number;
+  slug: string;
+  name: string;
+  topics: ContentTopic[];
+}
+
+/** A discipline (matéria) and everything beneath it: the root of the content hierarchy. */
 export interface ContentTree {
   id: number;
   slug: string;
   name: string;
-  topics: {
-    id: number;
-    slug: string;
-    name: string;
-    sections: {
-      id: number;
-      slug: string;
-      name: string;
-      lessons: { slug: string; title: string }[];
-    }[];
-  }[];
+  subjects: ContentSubject[];
 }
 
 export async function getContentTree(db: Db, locale: Locale): Promise<ContentTree[]> {
   const typedDb = db as BetterSQLite3Database<Record<string, unknown>>;
+  const allDisciplines = await typedDb.select().from(disciplines).orderBy(disciplines.order).all();
+  const allDisciplineTranslations = await typedDb.select().from(disciplineTranslations).all();
   const allSubjects = await typedDb.select().from(subjects).orderBy(subjects.order).all();
   const allSubjectTranslations = await typedDb.select().from(subjectTranslations).all();
   const allTopics = await typedDb.select().from(topics).orderBy(topics.order).all();
@@ -83,33 +104,43 @@ export async function getContentTree(db: Db, locale: Locale): Promise<ContentTre
     .from(lessonTranslations)
     .all();
 
-  return allSubjects.map((subject) => {
-    const { row: subjectName } = resolveTranslation(allSubjectTranslations, subject.id, 'subjectId', locale);
+  return allDisciplines.map((discipline) => {
+    const { row: disciplineName } = resolveTranslation(allDisciplineTranslations, discipline.id, 'disciplineId', locale);
     return {
-      id: subject.id,
-      slug: subject.slug,
-      name: subjectName.name,
-      topics: allTopics
-        .filter((topic) => topic.subjectId === subject.id)
-        .map((topic) => {
-          const { row: topicName } = resolveTranslation(allTopicTranslations, topic.id, 'topicId', locale);
+      id: discipline.id,
+      slug: discipline.slug,
+      name: disciplineName.name,
+      subjects: allSubjects
+        .filter((subject) => subject.disciplineId === discipline.id)
+        .map((subject) => {
+          const { row: subjectName } = resolveTranslation(allSubjectTranslations, subject.id, 'subjectId', locale);
           return {
-            id: topic.id,
-            slug: topic.slug,
-            name: topicName.name,
-            sections: allSections
-              .filter((section) => section.topicId === topic.id)
-              .map((section) => {
-                const { row: sectionName } = resolveTranslation(allSectionTranslations, section.id, 'sectionId', locale);
+            id: subject.id,
+            slug: subject.slug,
+            name: subjectName.name,
+            topics: allTopics
+              .filter((topic) => topic.subjectId === subject.id)
+              .map((topic) => {
+                const { row: topicName } = resolveTranslation(allTopicTranslations, topic.id, 'topicId', locale);
                 return {
-                  id: section.id,
-                  slug: section.slug,
-                  name: sectionName.name,
-                  lessons: allLessons
-                    .filter((lesson) => lesson.sectionId === section.id)
-                    .map((lesson) => {
-                      const { row: lessonTitle } = resolveTranslation(allLessonTranslations, lesson.id, 'lessonId', locale);
-                      return { slug: lesson.slug, title: lessonTitle.title };
+                  id: topic.id,
+                  slug: topic.slug,
+                  name: topicName.name,
+                  sections: allSections
+                    .filter((section) => section.topicId === topic.id)
+                    .map((section) => {
+                      const { row: sectionName } = resolveTranslation(allSectionTranslations, section.id, 'sectionId', locale);
+                      return {
+                        id: section.id,
+                        slug: section.slug,
+                        name: sectionName.name,
+                        lessons: allLessons
+                          .filter((lesson) => lesson.sectionId === section.id)
+                          .map((lesson) => {
+                            const { row: lessonTitle } = resolveTranslation(allLessonTranslations, lesson.id, 'lessonId', locale);
+                            return { slug: lesson.slug, title: lessonTitle.title };
+                          }),
+                      };
                     }),
                 };
               }),
@@ -146,6 +177,7 @@ export interface LessonWithAncestors {
   section: { slug: string; name: string };
   topic: { slug: string; name: string };
   subject: { slug: string; name: string };
+  discipline: { slug: string; name: string };
 }
 
 export async function getLessonBySlug(db: Db, slug: string, locale: Locale): Promise<LessonWithAncestors | undefined> {
@@ -160,11 +192,14 @@ export async function getLessonBySlug(db: Db, slug: string, locale: Locale): Pro
       topicSlug: topics.slug,
       subjectId: subjects.id,
       subjectSlug: subjects.slug,
+      disciplineId: disciplines.id,
+      disciplineSlug: disciplines.slug,
     })
     .from(lessons)
     .innerJoin(sections, eq(lessons.sectionId, sections.id))
     .innerJoin(topics, eq(sections.topicId, topics.id))
     .innerJoin(subjects, eq(topics.subjectId, subjects.id))
+    .innerJoin(disciplines, eq(subjects.disciplineId, disciplines.id))
     .where(eq(lessons.slug, slug))
     .get();
 
@@ -174,6 +209,7 @@ export async function getLessonBySlug(db: Db, slug: string, locale: Locale): Pro
   const allSectionTranslations = await typedDb.select().from(sectionTranslations).all();
   const allTopicTranslations = await typedDb.select().from(topicTranslations).all();
   const allSubjectTranslations = await typedDb.select().from(subjectTranslations).all();
+  const allDisciplineTranslations = await typedDb.select().from(disciplineTranslations).all();
   const allBlocks = await typedDb
     .select()
     .from(lessonBlocks)
@@ -186,6 +222,7 @@ export async function getLessonBySlug(db: Db, slug: string, locale: Locale): Pro
   const { row: sectionT } = resolveTranslation(allSectionTranslations, row.sectionId, 'sectionId', locale);
   const { row: topicT } = resolveTranslation(allTopicTranslations, row.topicId, 'topicId', locale);
   const { row: subjectT } = resolveTranslation(allSubjectTranslations, row.subjectId, 'subjectId', locale);
+  const { row: disciplineT } = resolveTranslation(allDisciplineTranslations, row.disciplineId, 'disciplineId', locale);
 
   let anyBlockFallback = false;
   const blockContents: LessonBlockContent[] = allBlocks.map((block) => {
@@ -213,6 +250,7 @@ export async function getLessonBySlug(db: Db, slug: string, locale: Locale): Pro
     section: { slug: row.sectionSlug, name: sectionT.name },
     topic: { slug: row.topicSlug, name: topicT.name },
     subject: { slug: row.subjectSlug, name: subjectT.name },
+    discipline: { slug: row.disciplineSlug, name: disciplineT.name },
   };
 }
 

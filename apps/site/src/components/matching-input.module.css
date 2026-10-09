@@ -1,50 +1,56 @@
 .columns {
   display: flex;
-  gap: 2rem;
-  max-width: 32rem;
+  flex-wrap: wrap;
+  gap: var(--space-xl);
+  max-width: 36rem;
+  margin-top: var(--space-md);
 }
 
 .leftColumn,
-.rightColumn {
+.rightColumn,
+.rightColumnOver {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
   flex: 1;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 12rem;
 }
 
 .rightColumnOver {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  flex: 1;
-  background: var(--color-muted);
-  border-radius: 0.25rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
 }
 
-.slot {
-  border: 1px dashed var(--color-border);
-  border-radius: 0.25rem;
-  padding: 0.5rem;
-  min-height: 3rem;
+.slot,
+.slotOver {
+  min-height: 3.25rem;
+  padding: var(--space-sm);
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out);
 }
 
 .slotOver {
-  border: 1px dashed var(--color-accent);
-  border-radius: 0.25rem;
-  padding: 0.5rem;
-  min-height: 3rem;
-  background: var(--color-muted);
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
 
 .dropZone {
-  margin-top: 0.5rem;
-  min-height: 1.5rem;
+  min-height: 1.75rem;
+  margin-top: var(--space-sm);
 }
 
 .draggable {
-  border: 1px solid var(--color-border);
-  border-radius: 0.25rem;
-  padding: 0.5rem;
+  padding: var(--space-sm) var(--space-md);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
   background: var(--color-background);
+  box-shadow: var(--shadow-sm);
   cursor: grab;
+}
+
+.draggable:hover {
+  border-color: var(--color-accent);
 }

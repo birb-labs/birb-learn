@@ -1,0 +1,147 @@
+.card {
+  --tone: var(--color-accent);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-height: 15rem;
+  padding: var(--space-lg);
+  overflow: hidden;
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out),
+    border-color var(--duration-base) var(--ease-out);
+}
+
+.card[data-tone='info'] {
+  --tone: var(--color-info);
+}
+
+.card[data-tone='success'] {
+  --tone: var(--color-success);
+}
+
+.card[data-tone='warning'] {
+  --tone: var(--color-warning);
+}
+
+/* A soft tone-colored wash that grows from the corner on hover. */
+.card::before {
+  content: '';
+  position: absolute;
+  top: -5rem;
+  right: -5rem;
+  width: 12rem;
+  height: 12rem;
+  border-radius: var(--radius-full);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--tone) 22%, transparent), transparent);
+  transition: transform var(--duration-slow) var(--ease-out);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.card:hover,
+.card:focus-within {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--tone) 55%, var(--color-surface-border));
+  box-shadow: var(--shadow-lg);
+}
+
+.card:hover::before,
+.card:focus-within::before {
+  transform: scale(1.6);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  margin-bottom: var(--space-xs);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--tone) 16%, transparent);
+  color: var(--tone);
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.card:hover .badge {
+  transform: rotate(-6deg) scale(1.08);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-xl);
+}
+
+.link {
+  text-decoration: none;
+}
+
+/* Stretches the title link over the whole card so the entire card is one click target. */
+.link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.description {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-foreground) 7%, transparent);
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.footer {
+  margin-top: auto;
+  padding-top: var(--space-sm);
+}
+
+.open {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--tone);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.open svg {
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.card:hover .open svg {
+  transform: translateX(5px);
+}
+
+.link:focus-visible {
+  outline: none;
+}
+
+.card:has(.link:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}

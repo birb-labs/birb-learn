@@ -3,6 +3,8 @@ import { eq } from 'drizzle-orm';
 import {
   getD1Db,
   getContentTree,
+  disciplines,
+  disciplineTranslations,
   subjects,
   subjectTranslations,
   topics,
@@ -30,27 +32,78 @@ lessonsRoutes.get('/tree', async (c) => {
   const idBySlug = new Map(allLessons.map((lesson) => [lesson.slug, lesson.id]));
 
   return c.json(
-    tree.map((subject) => ({
-      ...subject,
-      topics: subject.topics.map((topic) => ({
-        ...topic,
-        sections: topic.sections.map((section) => ({
-          ...section,
-          lessons: section.lessons.map((lesson) => ({ ...lesson, id: idBySlug.get(lesson.slug) })),
+    tree.map((discipline) => ({
+      ...discipline,
+      subjects: discipline.subjects.map((subject) => ({
+        ...subject,
+        topics: subject.topics.map((topic) => ({
+          ...topic,
+          sections: topic.sections.map((section) => ({
+            ...section,
+            lessons: section.lessons.map((lesson) => ({ ...lesson, id: idBySlug.get(lesson.slug) })),
+          })),
         })),
       })),
     })),
   );
 });
 
-lessonsRoutes.post('/subjects', async (c) => {
+lessonsRoutes.post('/disciplines', async (c) => {
   const db = getD1Db(c.env.DB);
   const body = await c.req.json<{ slug: string; order: number; translations: Partial<Record<Locale, { name: string }>> }>();
   const localeError = validateTranslationLocales(body.translations, { requirePtBr: true });
   if (localeError) return c.json({ error: localeError }, 400);
   const locales = Object.keys(body.translations) as Locale[];
 
-  const [row] = await db.insert(subjects).values({ slug: body.slug, order: body.order }).returning();
+  const [row] = await db.insert(disciplines).values({ slug: body.slug, order: body.order }).returning();
+  await db
+    .insert(disciplineTranslations)
+    .values(locales.map((locale) => ({ disciplineId: row.id, locale, name: body.translations[locale]!.name })))
+    .run();
+  return c.json(row, 201);
+});
+
+lessonsRoutes.patch('/disciplines/:id', async (c) => {
+  const db = getD1Db(c.env.DB);
+  const id = Number(c.req.param('id'));
+  const body = await c.req.json<Partial<{ slug: string; order: number; translations: Partial<Record<Locale, { name: string }>> }>>();
+  const { translations, ...structuralFields } = body;
+  if (translations) {
+    const localeError = validateTranslationLocales(translations, { requirePtBr: false });
+    if (localeError) return c.json({ error: localeError }, 400);
+  }
+  if (Object.keys(structuralFields).length > 0) {
+    await db.update(disciplines).set(structuralFields).where(eq(disciplines.id, id)).run();
+  }
+  if (translations) {
+    for (const locale of Object.keys(translations) as Locale[]) {
+      await db
+        .insert(disciplineTranslations)
+        .values({ disciplineId: id, locale, name: translations[locale]!.name })
+        .onConflictDoUpdate({
+          target: [disciplineTranslations.disciplineId, disciplineTranslations.locale],
+          set: { name: translations[locale]!.name },
+        })
+        .run();
+    }
+  }
+  return c.json({ ok: true });
+});
+
+lessonsRoutes.post('/subjects', async (c) => {
+  const db = getD1Db(c.env.DB);
+  const body = await c.req.json<{ disciplineId: number; slug: string; order: number; translations: Partial<Record<Locale, { name: string }>> }>();
+  // `subjects.discipline_id` is nullable in SQLite (see migration 0007), so
+  // this route is what keeps every subject attached to a discipline.
+  if (typeof body.disciplineId !== 'number') return c.json({ error: 'disciplineId is required' }, 400);
+  const localeError = validateTranslationLocales(body.translations, { requirePtBr: true });
+  if (localeError) return c.json({ error: localeError }, 400);
+  const locales = Object.keys(body.translations) as Locale[];
+
+  const [row] = await db
+    .insert(subjects)
+    .values({ disciplineId: body.disciplineId, slug: body.slug, order: body.order })
+    .returning();
   await db
     .insert(subjectTranslations)
     .values(locales.map((locale) => ({ subjectId: row.id, locale, name: body.translations[locale]!.name })))
@@ -61,7 +114,7 @@ lessonsRoutes.post('/subjects', async (c) => {
 lessonsRoutes.patch('/subjects/:id', async (c) => {
   const db = getD1Db(c.env.DB);
   const id = Number(c.req.param('id'));
-  const body = await c.req.json<Partial<{ slug: string; order: number; translations: Partial<Record<Locale, { name: string }>> }>>();
+  const body = await c.req.json<Partial<{ disciplineId: number; slug: string; order: number; translations: Partial<Record<Locale, { name: string }>> }>>();
   const { translations, ...structuralFields } = body;
   if (translations) {
     const localeError = validateTranslationLocales(translations, { requirePtBr: false });
@@ -428,11 +481,19 @@ lessonsRoutes.delete('/lessons/:id/blocks/:blockId', async (c) => {
   return c.json({ ok: true });
 });
 
-// Every subject/topic/section/lesson has at least one `*_translations` child row
+// Every discipline/subject/topic/section/lesson has at least one `*_translations` child row
 // pointing at it through a foreign key declared with `ON DELETE no action`, so the
 // child rows must be deleted before the parent or D1 rejects the delete with a
 // foreign-key-constraint error — same delete-children-then-parent shape as
 // `deleteOptionsAndPairs` in `questions.ts`.
+lessonsRoutes.delete('/disciplines/:id', async (c) => {
+  const db = getD1Db(c.env.DB);
+  const id = Number(c.req.param('id'));
+  await db.delete(disciplineTranslations).where(eq(disciplineTranslations.disciplineId, id)).run();
+  await db.delete(disciplines).where(eq(disciplines.id, id)).run();
+  return c.json({ ok: true });
+});
+
 lessonsRoutes.delete('/subjects/:id', async (c) => {
   const db = getD1Db(c.env.DB);
   const id = Number(c.req.param('id'));

@@ -1,4 +1,6 @@
 import {
+  disciplines,
+  disciplineTranslations,
   lessons,
   lessonBlocks,
   lessonBlockTranslations,
@@ -23,6 +25,8 @@ import {
 import { getDb } from '@birb-learn/content-schema/src/client';
 
 interface AdminExport {
+  disciplines: (typeof disciplines.$inferSelect)[];
+  disciplineTranslations: (typeof disciplineTranslations.$inferSelect)[];
   subjects: (typeof subjects.$inferSelect)[];
   subjectTranslations: (typeof subjectTranslations.$inferSelect)[];
   topics: (typeof topics.$inferSelect)[];
@@ -68,6 +72,10 @@ async function main() {
   );
 
   const db = getDb();
+  if (data.disciplines.length > 0) db.insert(disciplines).values(data.disciplines).run();
+  if (data.disciplineTranslations.length > 0) {
+    db.insert(disciplineTranslations).values(data.disciplineTranslations).run();
+  }
   if (data.subjects.length > 0) db.insert(subjects).values(data.subjects).run();
   if (data.subjectTranslations.length > 0) db.insert(subjectTranslations).values(data.subjectTranslations).run();
   if (data.topics.length > 0) db.insert(topics).values(data.topics).run();
@@ -98,7 +106,7 @@ async function main() {
   }
 
   console.log(
-    `Hydrated from admin: ${data.subjects.length} subjects, ${data.lessons.length} lessons, ${data.questions.length} questions.`,
+    `Hydrated from admin: ${data.disciplines.length} disciplines, ${data.subjects.length} subjects, ${data.lessons.length} lessons, ${data.questions.length} questions.`,
   );
 }
 

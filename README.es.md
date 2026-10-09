@@ -43,7 +43,20 @@ packages/content-schema/  # tipos de contenido (lecciones/preguntas)
 
 ## Contenido
 
-El contenido (disciplinas, tópicos, secciones y lecciones) vive en una
+El contenido se organiza en cinco niveles:
+
+```
+Materia → Área → Tema → Grupo de lecciones → Lección
+Matemáticas → Cálculo → Límites → Idea intuitiva de límite → ¿Qué es un límite?
+```
+
+En el sitio, el estudiante elige la materia (`/content/`), luego el área
+(`/content/<materia>/`) y llega a la lista de lecciones del área
+(`/content/<materia>/<área>/`). Cada lección vive en
+`/content/<materia>/<área>/<lección>/`. En la base de datos la materia es
+la tabla `disciplines`, el área es `subjects`, y así sucesivamente.
+
+El contenido (materias, áreas, temas, grupos y lecciones) vive en una
 base de datos SQLite administrada por `packages/content-schema`, recreada
 desde cero en cada compilación a partir de migraciones versionadas y un
 script de seed — no hay base de datos persistente hasta el panel de

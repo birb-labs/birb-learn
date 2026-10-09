@@ -38,7 +38,7 @@ describe('SimuladoSetup', () => {
     );
 
     expect(screen.getByRole('checkbox', { name: 'Embaralhar módulos' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Matéria')).toBeInTheDocument();
+    expect(screen.getByLabelText('Assunto')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Limites' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Limites Laterais' })).toBeInTheDocument();
     expect(screen.getByLabelText('Número de questões')).toBeInTheDocument();
@@ -98,7 +98,7 @@ describe('SimuladoSetup', () => {
 
     await user.click(screen.getByRole('button', { name: 'Adicionar módulo' }));
 
-    expect(screen.getAllByLabelText('Matéria')).toHaveLength(2);
+    expect(screen.getAllByLabelText('Assunto')).toHaveLength(2);
     expect(screen.getAllByLabelText('Número de questões')).toHaveLength(2);
     expect(screen.getAllByLabelText('Dificuldade')).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: 'Remover módulo' })).toHaveLength(2);
@@ -154,7 +154,7 @@ describe('SimuladoSetup', () => {
     );
 
     await user.click(screen.getByRole('checkbox', { name: 'Limites' }));
-    await user.selectOptions(screen.getByLabelText('Matéria'), 'Física');
+    await user.selectOptions(screen.getByLabelText('Assunto'), 'Física');
 
     expect(screen.queryByRole('checkbox', { name: 'Limites' })).not.toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Cinemática' })).toBeInTheDocument();

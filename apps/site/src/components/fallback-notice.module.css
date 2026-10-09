@@ -1,8 +1,18 @@
 .notice {
-  margin: 0 0 1.5rem;
-  padding: 0.5rem 0.75rem;
-  border-left: 3px solid var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: 0 0 var(--space-lg);
+  padding: 0.65rem var(--space-md);
+  border: 1px solid color-mix(in srgb, var(--color-info) 35%, var(--color-border));
+  border-left-width: 4px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-info) 8%, transparent);
   color: var(--color-muted);
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
+}
+
+.notice svg {
+  flex: none;
+  color: var(--color-info);
 }

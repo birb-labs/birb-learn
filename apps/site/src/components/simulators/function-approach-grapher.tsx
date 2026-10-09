@@ -97,28 +97,59 @@ export function FunctionApproachGrapher({ params }: { params: FunctionApproachGr
     ? `M ${samples.map((p) => `${toSvgX(p.x, params.domain)},${toSvgY(p.y, range)}`).join(' L ')}`
     : '';
 
+  const originX = params.domain[0] <= 0 && params.domain[1] >= 0 ? toSvgX(0, params.domain) : null;
+  const originY = range[0] <= 0 && range[1] >= 0 ? toSvgY(0, range) : null;
+  const gridXs = Array.from({ length: 7 }, (_, i) => (SVG_WIDTH / 8) * (i + 1));
+  const gridYs = Array.from({ length: 5 }, (_, i) => (SVG_HEIGHT / 6) * (i + 1));
+  const markerX = toSvgX(approachX, params.domain);
+  const markerY = approachY === null ? null : toSvgY(approachY, range);
+
   return (
     <div className={styles.grapher}>
       <svg viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} className={styles.svg} role="img" aria-label={t('graphAriaLabel')}>
+        {gridXs.map((x) => (
+          <line key={`gx-${x}`} x1={x} x2={x} y1={0} y2={SVG_HEIGHT} className={styles.grid} />
+        ))}
+        {gridYs.map((y) => (
+          <line key={`gy-${y}`} x1={0} x2={SVG_WIDTH} y1={y} y2={y} className={styles.grid} />
+        ))}
+        {originX !== null && <line x1={originX} x2={originX} y1={0} y2={SVG_HEIGHT} className={styles.axis} />}
+        {originY !== null && <line x1={0} x2={SVG_WIDTH} y1={originY} y2={originY} className={styles.axis} />}
         {pathData && <path d={pathData} className={styles.curve} fill="none" />}
-        {approachY !== null && (
-          <circle cx={toSvgX(approachX, params.domain)} cy={toSvgY(approachY, range)} r={5} className={styles.marker} />
+        {markerY !== null && (
+          <>
+            <line x1={markerX} x2={markerX} y1={markerY} y2={SVG_HEIGHT} className={styles.guide} />
+            <line x1={0} x2={markerX} y1={markerY} y2={markerY} className={styles.guide} />
+            <circle cx={markerX} cy={markerY} r={6} className={styles.marker} />
+          </>
         )}
       </svg>
-      <label className={styles.controlRow}>
-        {variable} ={' '}
+      <div className={styles.controls}>
+        <label className={styles.controlRow}>
+          <span className={styles.variable}>{variable} =</span>
+          <input
+            type="number"
+            step={0.01}
+            value={approachX}
+            min={params.domain[0]}
+            max={params.domain[1]}
+            onChange={(event) => setApproachX(Number(event.target.value))}
+          />
+        </label>
         <input
-          type="number"
-          step={0.01}
-          value={approachX}
+          type="range"
+          className={styles.slider}
+          aria-label={variable}
+          step={(params.domain[1] - params.domain[0]) / 400}
           min={params.domain[0]}
           max={params.domain[1]}
+          value={approachX}
           onChange={(event) => setApproachX(Number(event.target.value))}
         />
-      </label>
-      <p className={styles.readout}>
-        f({variable}) = {approachY === null ? t('undefinedValue') : approachY.toFixed(4)}
-      </p>
+        <p className={styles.readout}>
+          f({variable}) = <strong>{approachY === null ? t('undefinedValue') : approachY.toFixed(4)}</strong>
+        </p>
+      </div>
     </div>
   );
 }

@@ -1,45 +1,49 @@
 .main {
+  flex: 1 0 auto;
+  width: 100%;
+}
+
+.container {
+  max-width: var(--layout-width);
   margin: 0 auto;
-  max-width: 42rem;
-  padding: var(--space-3xl) var(--space-lg);
+  padding: var(--space-xl) var(--space-lg) var(--space-2xl);
 }
 
-.mainCentered {
-  composes: main;
-  text-align: center;
+.narrow {
+  max-width: 54rem;
 }
 
-.description {
-  margin-top: var(--space-md);
-  color: var(--color-muted);
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: var(--space-lg);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .emptyState {
-  margin-top: var(--space-md);
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--space-sm);
-  color: var(--color-muted);
-}
-
-.actions {
-  margin-top: var(--space-xl);
-  display: flex;
-  justify-content: center;
   gap: var(--space-md);
+  padding: var(--space-3xl) var(--space-lg);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-muted);
+  text-align: center;
 }
 
-.primaryAction {
-  border-radius: var(--radius-sm);
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-  padding: var(--space-sm) var(--space-md);
-  text-decoration: none;
+.emptyIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
 }
 
-.secondaryAction {
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  padding: var(--space-sm) var(--space-md);
-  text-decoration: none;
+.description {
+  color: var(--color-muted);
 }

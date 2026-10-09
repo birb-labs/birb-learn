@@ -1,0 +1,12 @@
+.progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.caption {
+  flex: none;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}

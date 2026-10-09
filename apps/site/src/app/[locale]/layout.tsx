@@ -38,11 +38,15 @@ export default async function LocaleLayout({
     notFound();
   }
   setRequestLocale(locale);
+  const tNav = await getTranslations({ locale, namespace: 'nav' });
 
   return (
     <NextIntlClientProvider>
       <ThemeProvider>
         <HtmlLangSync locale={locale} />
+        <a href="#main-content" className="skip-link">
+          {tNav('skipToContent')}
+        </a>
         <Header />
         {children}
         <Footer />

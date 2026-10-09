@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { Icon } from '@birb-learn/theme';
 import type { SubjectSummary, TopicNode } from '@birb-learn/content-schema';
 import styles from './simulado-setup.module.css';
 
@@ -97,24 +98,33 @@ export function SimuladoSetup({
 
   return (
     <form className={styles.form} onSubmit={handleSubmit}>
-      <div className={styles.field}>
-        <div className={styles.checkboxRow}>
-          <input
-            id="shuffle-modules"
-            type="checkbox"
-            checked={shuffleModules}
-            onChange={(event) => setShuffleModules(event.target.checked)}
-          />
+      <div className={styles.shuffleCard}>
+        <Icon name="shuffle" size={20} aria-hidden className={styles.shuffleIcon} />
+        <div className={styles.shuffleText}>
           <label htmlFor="shuffle-modules">{t('shuffleModules')}</label>
+          <p>{t('shuffleHint')}</p>
         </div>
+        <input
+          id="shuffle-modules"
+          type="checkbox"
+          className={styles.switch}
+          checked={shuffleModules}
+          onChange={(event) => setShuffleModules(event.target.checked)}
+        />
       </div>
 
       {modules.map((module, index) => {
         const tagTree = tagTreesBySubject[module.subjectId] ?? [];
         return (
           <fieldset key={module.id} className={styles.moduleCard}>
-            <legend>{t('moduleTitle', { number: index + 1 })}</legend>
+            <legend className={styles.legend}>
+              <span className={styles.moduleNumber} aria-hidden>
+                {index + 1}
+              </span>
+              {t('moduleTitle', { number: index + 1 })}
+            </legend>
 
+            <div className={styles.fieldRow}>
             <div className={styles.field}>
               <label htmlFor={`subject-${module.id}`}>{t('subject')}</label>
               <select
@@ -160,11 +170,13 @@ export function SimuladoSetup({
                 ))}
               </select>
             </div>
+            </div>
 
             <div className={styles.field}>
-              <span>{t('topics')}</span>
+              <span className={styles.fieldLabel}>{t('topics')}</span>
+              <div className={styles.topicList}>
               {tagTree.map((topic) => (
-                <div key={topic.id}>
+                <div key={topic.id} className={styles.topicGroup}>
                   <div className={styles.checkboxRow}>
                     <input
                       id={`tag-${module.id}-${topic.id}`}
@@ -191,10 +203,12 @@ export function SimuladoSetup({
                   )}
                 </div>
               ))}
+              </div>
             </div>
 
             {modules.length > 1 && (
               <button type="button" className={styles.removeModuleButton} onClick={() => removeModule(module.id)}>
+                <Icon name="trash" size={16} aria-hidden />
                 {t('removeModule')}
               </button>
             )}
@@ -203,10 +217,12 @@ export function SimuladoSetup({
       })}
 
       <button type="button" className={styles.addModuleButton} onClick={addModule}>
+        <Icon name="plus" size={16} aria-hidden />
         {t('addModule')}
       </button>
 
       <button type="submit" className={styles.startButton} disabled={isSubmitting}>
+        <Icon name={isSubmitting ? 'timer' : 'play'} size={18} aria-hidden />
         {isSubmitting ? t('loading') : t('start')}
       </button>
     </form>

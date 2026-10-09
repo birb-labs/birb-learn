@@ -50,6 +50,13 @@
       "when": 1789484495539,
       "tag": "0006_tag_subject_id",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791579470314,
+      "tag": "0007_discipline_hierarchy",
+      "breakpoints": true
     }
   ]
 }

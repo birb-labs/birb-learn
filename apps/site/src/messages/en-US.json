@@ -10,7 +10,12 @@
   "nav": {
     "home": "Home",
     "content": "Content",
-    "simulado": "Practice test"
+    "simulado": "Practice test",
+    "primaryLabel": "Main navigation",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "skipToContent": "Skip to content",
+    "settings": "Appearance and language"
   },
   "theme": {
     "themeLabel": "Theme",
@@ -31,7 +36,70 @@
     "title": "Birb Learn",
     "description": "A free, open-source platform for studying school subjects, starting with mathematics.",
     "ctaContent": "Browse content",
-    "ctaSimulado": "Take a practice test"
+    "ctaSimulado": "Take a practice test",
+    "eyebrow": "Free and open source",
+    "heroTitle": "Study with clarity, practice with confidence.",
+    "heroHighlight": "with confidence",
+    "heroSubtitle": "Step-by-step lessons, interactive simulators, solved exercises and mock exams with annotated answers. All free, in Portuguese, English and Spanish.",
+    "stats": {
+      "lessons": "{count, plural, one {# lesson} other {# lessons}}",
+      "subjects": "{count, plural, one {# area} other {# areas}}",
+      "languages": "3 languages",
+      "free": "100% free"
+    },
+    "features": {
+      "title": "Everything you need to really learn",
+      "subtitle": "Each lesson combines theory, intuition and practice, so you understand the why and don't just memorize the formula.",
+      "lessons": {
+        "title": "Guided lessons",
+        "text": "Content organized in short learning paths, from the basics to advanced topics, with progress tracking."
+      },
+      "simulators": {
+        "title": "Interactive simulators",
+        "text": "Explore concepts hands-on: tweak parameters, watch the graph react and build intuition."
+      },
+      "solved": {
+        "title": "Solved exercises",
+        "text": "Problems with step-by-step solutions so you can check your reasoning after trying on your own."
+      },
+      "simulado": {
+        "title": "Custom mock exams",
+        "text": "Build exams by topic and difficulty and get every question graded with a full explanation."
+      },
+      "themes": {
+        "title": "Your way",
+        "text": "Four themes, light and dark mode and three languages, so you can study comfortably at any hour."
+      },
+      "openSource": {
+        "title": "Open and free",
+        "text": "No ads, no sign-up. The source code is public and anyone can contribute."
+      }
+    },
+    "disciplines": {
+      "title": "Choose where to start",
+      "subtitle": "Pick a subject and follow the study path.",
+      "viewAll": "See all subjects"
+    },
+    "steps": {
+      "title": "How it works",
+      "choose": {
+        "title": "Pick what to study",
+        "text": "Select the subject and area you want to master."
+      },
+      "learn": {
+        "title": "Learn at your pace",
+        "text": "Read the lessons, explore the simulators and track your progress."
+      },
+      "practice": {
+        "title": "Test what you learned",
+        "text": "Take a mock exam and see the annotated solution for every question."
+      }
+    },
+    "cta": {
+      "title": "Ready to start?",
+      "text": "Pick a subject and take the first step. It's free, no sign-up.",
+      "button": "Start studying"
+    }
   },
   "content": {
     "title": "Content",
@@ -40,7 +108,83 @@
     "breadcrumbSeparator": "›",
     "breadcrumbLabel": "Breadcrumb",
     "notTranslatedYet": "This content hasn't been translated into your language yet. Showing it in Portuguese.",
-    "showResolution": "Show resolution"
+    "showResolution": "Show resolution",
+    "disciplines": {
+      "eyebrow": "Step 1 of 3",
+      "title": "Choose a subject",
+      "subtitle": "Start by selecting the subject you want to study."
+    },
+    "subjects": {
+      "eyebrow": "Step 2 of 3",
+      "title": "Choose an area",
+      "subtitle": "Select the area of {discipline} you want to study.",
+      "empty": "This subject has no published areas yet."
+    },
+    "tree": {
+      "eyebrow": "Step 3 of 3",
+      "subtitle": "Pick a lesson to begin, or continue where you left off.",
+      "empty": "This area has no published lessons yet.",
+      "expandAll": "Expand all",
+      "collapseAll": "Collapse all"
+    },
+    "counts": {
+      "subjects": "{count, plural, one {# area} other {# areas}}",
+      "topics": "{count, plural, one {# topic} other {# topics}}",
+      "sections": "{count, plural, one {# group} other {# groups}}",
+      "lessons": "{count, plural, one {# lesson} other {# lessons}}"
+    },
+    "progress": {
+      "percent": "{percent}% complete",
+      "label": "Progress: {completed} of {total} lessons completed",
+      "start": "Start",
+      "continue": "Continue where you left off",
+      "review": "Review content",
+      "done": "Completed",
+      "allDone": "You've completed every lesson in this area!"
+    },
+    "lesson": {
+      "lessonOf": "Lesson {current} of {total}",
+      "readingProgress": "Lesson reading progress",
+      "inThisLesson": "In this lesson",
+      "blockOf": "Step {current} of {total}",
+      "previousBlock": "Previous step",
+      "nextBlock": "Next step",
+      "previousLesson": "Previous lesson",
+      "nextLesson": "Next lesson",
+      "backToIndex": "Back to index",
+      "stepper": "Lesson steps",
+      "goToBlock": "Go to: {title}",
+      "completeTitle": "Lesson complete!",
+      "completeText": "Well done! Keep moving along the path or practice with a mock exam.",
+      "takeSimulado": "Take a mock exam",
+      "courseOutline": "All lessons",
+      "outlineToggle": "Show all lessons",
+      "keyboardHint": "Tip: use the ← and → arrow keys to move between steps.",
+      "firstLesson": "This is the first lesson in the area.",
+      "lastLesson": "This is the last lesson in the area."
+    },
+    "blocks": {
+      "text": "Content",
+      "curiosity": "Curiosity",
+      "real_world_application": "Real world",
+      "solved_exercise": "Solved exercise",
+      "simulator": "Simulator",
+      "untitled": "Step {number}"
+    },
+    "hideResolution": "Hide solution",
+    "exerciseTry": "Try solving it before checking the solution.",
+    "resolution": "Solution",
+    "steps": {
+      "label": "Selection steps",
+      "discipline": "Subject",
+      "subject": "Area",
+      "lessons": "Lessons"
+    },
+    "open": "Open",
+    "nextUp": "Up next",
+    "lessonNumber": "Lesson {number}",
+    "topicLabel": "Topic",
+    "viewLessons": "View lessons"
   },
   "simulado": {
     "title": "Practice test",
@@ -50,7 +194,7 @@
       "moduleTitle": "Module {number}",
       "addModule": "Add module",
       "removeModule": "Remove module",
-      "subject": "Subject",
+      "subject": "Area",
       "questionCount": "Number of questions",
       "topics": "Topics",
       "difficulty": "Difficulty",
@@ -61,7 +205,11 @@
       "start": "Generate practice test",
       "loading": "Generating practice test...",
       "notEnoughQuestionsModule": "Module {module}: only {available} question(s) are available for the chosen filters (you requested {requested}).",
-      "loadError": "Could not load the question bank. Please try again."
+      "loadError": "Could not load the question bank. Please try again.",
+      "settingsTitle": "Settings",
+      "moduleSummary": "{count, plural, one {# question} other {# questions}}",
+      "allTopics": "All topics",
+      "shuffleHint": "Shuffles the order in which the modules appear in the exam."
     },
     "taking": {
       "selectAllThatApply": "Select all that apply",
@@ -69,7 +217,11 @@
       "grading": "Grading...",
       "true": "True",
       "false": "False",
-      "gradingError": "Could not grade the practice test. Please try again."
+      "gradingError": "Could not grade the practice test. Please try again.",
+      "progress": "{answered} of {total} answered",
+      "question": "Question {number}",
+      "answered": "Answered",
+      "unanswered": "Blank"
     },
     "results": {
       "score": "You got {correct} of {total} questions right",
@@ -77,19 +229,35 @@
       "incorrect": "Incorrect",
       "yourAnswer": "Your answer",
       "correctAnswer": "Correct answer",
-      "backToSetup": "Take another practice test"
+      "backToSetup": "Take another practice test",
+      "excellent": "Excellent work!",
+      "good": "Very good, keep it up!",
+      "keepGoing": "A good start — review the solutions and try again.",
+      "percentCorrect": "{percent}% correct",
+      "reviewTitle": "Question review",
+      "resolution": "Annotated solution",
+      "filterAll": "All",
+      "filterWrong": "Wrong only"
     },
     "history": {
       "title": "Previous practice tests",
       "empty": "You haven't taken any practice tests yet.",
-      "viewAttempt": "View result"
-    }
+      "viewAttempt": "View result",
+      "attemptNumber": "Attempt {number}"
+    },
+    "eyebrow": "Practice",
+    "subtitle": "Build a custom exam, answer at your own pace and see the annotated solution for every question at the end."
   },
   "footer": {
     "rights": "Birb Labs. Open source, made with care.",
     "contact": "Contact",
     "sourceCode": "Source code",
-    "donate": "Support the project"
+    "donate": "Support the project",
+    "tagline": "A free, open-source platform for learning school subjects.",
+    "explore": "Explore",
+    "project": "Project",
+    "madeBy": "Made with care by Birb Labs",
+    "backToTop": "Back to top"
   },
   "simulators": {
     "unknownSimulator": "Unknown simulator: \"{key}\".",
@@ -97,5 +265,10 @@
     "invalidDomain": "This simulator's configured domain is invalid.",
     "graphAriaLabel": "Interactive function graph",
     "undefinedValue": "undefined"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "text": "The page you are looking for does not exist or has moved.",
+    "back": "Back to home"
   }
 }

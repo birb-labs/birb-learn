@@ -2,92 +2,269 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
-  max-width: 32rem;
+}
+
+.shuffleCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.shuffleIcon {
+  flex: none;
+  color: var(--color-accent);
+}
+
+.shuffleText {
+  flex: 1;
+}
+
+.shuffleText label {
+  font-weight: 700;
+}
+
+.shuffleText p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* A checkbox dressed as a toggle switch; stays a real checkbox for assistive tech. */
+.switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 2.75rem;
+  height: 1.5rem;
+  margin: 0;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-foreground) 20%, transparent);
+  cursor: pointer;
+  transition: background var(--duration-base) var(--ease-out);
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: var(--radius-full);
+  background: var(--color-background);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.switch:checked {
+  background: var(--color-accent);
+}
+
+.switch:checked::after {
+  transform: translateX(1.25rem);
+}
+
+.moduleCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-lg);
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  animation: module-in var(--duration-base) var(--ease-out);
+}
+
+.legend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0 var(--space-sm);
+  font-family: var(--font-heading);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+}
+
+.moduleNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-full);
+  background: var(--color-brand);
+  color: var(--color-highlight);
+  font-size: var(--font-size-sm);
+}
+
+.fieldRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-md);
 }
 
 .field {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+  min-width: 0;
 }
 
-.field label {
-  font-weight: 600;
+.field label,
+.fieldLabel {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.countInput,
+.difficultySelect {
+  width: 100%;
+  max-width: none;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: inherit;
+  font: inherit;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.countInput:hover,
+.difficultySelect:hover {
+  border-color: var(--color-accent);
+}
+
+.topicList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.topicGroup {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
 }
 
 .subtopics {
-  margin-left: var(--space-lg);
   display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-left: var(--space-lg);
 }
 
 .checkboxRow {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  border: 1px solid var(--color-surface-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-background);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out);
+}
+
+.checkboxRow label {
+  cursor: pointer;
+}
+
+.checkboxRow input {
+  accent-color: var(--color-accent);
+}
+
+.checkboxRow:hover {
+  border-color: var(--color-accent);
 }
 
 .checkboxRow:has(input:checked) {
   border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
-}
-
-.countInput {
-  border: 1px solid var(--color-border);
-  background: transparent;
-  color: inherit;
-  border-radius: var(--radius-sm);
-  padding: var(--space-sm);
-  max-width: 6rem;
-}
-
-.difficultySelect {
-  border: 1px solid var(--color-border);
-  background: transparent;
-  color: inherit;
-  border-radius: var(--radius-sm);
-  padding: var(--space-sm);
-  max-width: 12rem;
-}
-
-.moduleCard {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  border: 1px solid var(--color-surface-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-md);
-}
-
-.moduleCard legend {
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-background));
   font-weight: 600;
-  padding: 0 var(--space-sm);
+}
+
+.checkboxRow:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 .addModuleButton,
 .removeModuleButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
   align-self: flex-start;
-  border: 1px solid var(--color-border);
+  padding: 0.6rem 1rem;
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-md);
   background: transparent;
-  color: inherit;
-  border-radius: var(--radius-sm);
-  padding: var(--space-sm) var(--space-md);
+  color: var(--color-muted);
+  font: inherit;
+  font-weight: 600;
   cursor: pointer;
-  font-size: var(--font-size-base);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.addModuleButton:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.removeModuleButton {
+  border-style: solid;
+}
+
+.removeModuleButton:hover {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
 }
 
 .startButton {
-  align-self: flex-start;
-  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.95rem 1.75rem;
+  border: none;
+  border-radius: var(--radius-full);
   background: var(--color-accent);
   color: var(--color-on-accent);
-  padding: var(--space-sm) var(--space-lg);
-  border: none;
+  font: inherit;
+  font-size: var(--font-size-lg);
+  font-weight: 800;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--color-accent) 35%, transparent);
   cursor: pointer;
-  font-size: var(--font-size-base);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.startButton:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--color-accent) 45%, transparent);
+}
+
+.startButton:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+@keyframes module-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
 }

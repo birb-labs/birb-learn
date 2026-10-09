@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { Icon } from '@birb-learn/theme';
 import type { ExportedQuestion } from '@/lib/simulado-selection';
 import { parseSelectedOptionIds, toggleOptionId } from '@/lib/multi-response-answer';
 import { FallbackNotice } from './fallback-notice';
+import { ProgressBar } from './progress-bar';
 import { NumericAnswerInput } from './numeric-answer-input';
 import { TrueFalseInput } from './true-false-input';
 import { ShortTextAnswerInput } from './short-text-answer-input';
@@ -35,10 +37,37 @@ export function SimuladoTaking({
     }
   }
 
+  const answeredCount = questions.filter((question) => (answers[question.id] ?? '') !== '').length;
+
   return (
     <div className={styles.list}>
-      {questions.map((question) => (
+      <div className={styles.progressBar}>
+        <div className={styles.progressText}>
+          <Icon name="list-checks" size={16} aria-hidden />
+          <span>{t('progress', { answered: answeredCount, total: questions.length })}</span>
+        </div>
+        <ProgressBar
+          value={answeredCount}
+          max={questions.length}
+          size="sm"
+          label={t('progress', { answered: answeredCount, total: questions.length })}
+        />
+      </div>
+
+      {questions.map((question, index) => (
         <div key={question.id} className={styles.question}>
+          <p className={styles.questionNumber}>
+            <span className={styles.questionBadge} aria-hidden>
+              {index + 1}
+            </span>
+            {t('question', { number: index + 1 })}
+            {(answers[question.id] ?? '') !== '' && (
+              <span className={styles.answered}>
+                <Icon name="check" size={12} aria-hidden />
+                {t('answered')}
+              </span>
+            )}
+          </p>
           {question.isFallback && <FallbackNotice />}
           {/* eslint-disable-next-line react/no-danger -- pre-rendered at build time from our own MDX, not user input */}
           <div dangerouslySetInnerHTML={{ __html: question.promptHtml }} />
@@ -125,6 +154,7 @@ export function SimuladoTaking({
       ))}
 
       <button type="button" className={styles.finishButton} onClick={handleFinishClick} disabled={isFinishing}>
+        <Icon name={isFinishing ? 'timer' : 'check-circle'} size={18} aria-hidden />
         {isFinishing ? t('grading') : t('finish')}
       </button>
     </div>

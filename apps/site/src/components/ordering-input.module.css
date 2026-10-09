@@ -1,17 +1,30 @@
 .list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  max-width: 24rem;
+  gap: var(--space-sm);
+  max-width: 28rem;
+  margin: var(--space-md) 0 0;
+  padding: 0;
+  list-style: none;
 }
 
 .item {
-  border: 1px solid var(--color-border);
-  border-radius: 0.25rem;
-  padding: 0.75rem;
+  padding: 0.75rem var(--space-md);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
   background: var(--color-background);
+  box-shadow: var(--shadow-sm);
   cursor: grab;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.item:hover {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-md);
+}
+
+.item:active {
+  cursor: grabbing;
 }

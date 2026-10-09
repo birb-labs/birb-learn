@@ -43,7 +43,21 @@ packages/content-schema/  # content types (lessons/questions)
 
 ## Content
 
-Content (subjects, topics, sections and lessons) lives in a SQLite
+Content is organized in five levels:
+
+```
+Subject → Area → Topic → Lesson group → Lesson
+Mathematics → Calculus → Limits → Intuitive idea of a limit → What is a limit?
+```
+
+On the site, the student picks the subject (`/content/`), then the area
+(`/content/<subject>/`) and lands on that area's lesson list
+(`/content/<subject>/<area>/`). Each lesson lives at
+`/content/<subject>/<area>/<lesson>/`. In the database the top level
+("subject" here, *matéria* in Portuguese) is the `disciplines` table, the
+area is `subjects`, and so on.
+
+Content (disciplines, subjects, topics, sections and lessons) lives in a SQLite
 database managed by `packages/content-schema`, recreated from scratch
 on each build from versioned migrations and a seed script — there is no
 persistent database until the admin panel (sub-project 4).

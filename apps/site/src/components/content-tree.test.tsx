@@ -1,145 +1,129 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { describe, expect, it, beforeEach } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import ptBR from '@/messages/pt-BR.json';
-import { ContentTree } from './content-tree';
+import { ContentTree, SubjectProgressSummary } from './content-tree';
 import { READING_PROGRESS_STORAGE_KEY } from '@/hooks/use-reading-progress';
-import type { ContentTree as ContentTreeData } from '@birb-learn/content-schema';
+import type { ContentSubject } from '@birb-learn/content-schema';
 
-const fixtureTree: ContentTreeData[] = [
-  {
-    id: 1,
-    slug: 'calculo',
-    name: 'Cálculo',
-    topics: [
-      {
-        id: 1,
-        slug: 'limites',
-        name: 'Limites',
-        sections: [
-          {
-            id: 1,
-            slug: 'limites-laterais',
-            name: 'Limites Laterais',
-            lessons: [
-              { slug: 'licao-1', title: 'Lição Um' },
-              { slug: 'licao-2', title: 'Lição Dois' },
-            ],
-          },
-        ],
-      },
-    ],
-  },
-];
+const subject: ContentSubject = {
+  id: 1,
+  slug: 'calculo',
+  name: 'Cálculo',
+  topics: [
+    {
+      id: 1,
+      slug: 'limites',
+      name: 'Limites',
+      sections: [
+        {
+          id: 1,
+          slug: 'limites-laterais',
+          name: 'Limites Laterais',
+          lessons: [
+            { slug: 'licao-1', title: 'Lição Um' },
+            { slug: 'licao-2', title: 'Lição Dois' },
+          ],
+        },
+        {
+          id: 2,
+          slug: 'limites-infinitos',
+          name: 'Limites Infinitos',
+          lessons: [{ slug: 'licao-3', title: 'Lição Três' }],
+        },
+      ],
+    },
+  ],
+};
+
+function renderWithIntl(ui: React.ReactElement) {
+  return render(
+    <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
+
+function markComplete(slugs: string[]) {
+  window.localStorage.setItem(READING_PROGRESS_STORAGE_KEY, JSON.stringify(slugs));
+}
 
 describe('ContentTree', () => {
   beforeEach(() => {
     window.localStorage.clear();
   });
 
-  // Not in the plan's exact test code: this project's vitest.config.ts does not
-  // set `globals: true`, so React Testing Library's automatic afterEach(cleanup)
-  // registration (which checks for a global `afterEach`) never fires. Without
-  // this, the three renders below accumulate in the same jsdom document and
-  // `getByText` sees duplicates. See task-5-report.md for details.
-  afterEach(() => {
-    cleanup();
-  });
+  it('renders topics, lesson groups and lessons linking to the full hierarchical URL', () => {
+    renderWithIntl(<ContentTree disciplineSlug="matematica" subject={subject} />);
 
-  it('renders every level of the hierarchy', () => {
-    render(
-      <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <ContentTree tree={fixtureTree} />
-      </NextIntlClientProvider>,
-    );
-
-    expect(screen.getByText('Cálculo')).toBeInTheDocument();
-    expect(screen.getByText('Limites')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Limites' })).toBeInTheDocument();
     expect(screen.getByText('Limites Laterais')).toBeInTheDocument();
-    // Not in the plan's exact test code: apps/site/src/i18n/routing.ts sets
-    // localePrefix: 'always' (a prior sub-project's deliberate choice, matched
-    // by this task's own Step 11 build check expecting output under
-    // apps/site/out/pt-BR/...), so next-intl's Link always prepends the
-    // locale segment, even for the default locale. See task-5-report.md.
-    expect(screen.getByRole('link', { name: 'Lição Um' })).toHaveAttribute(
+    expect(screen.getByText('Limites Infinitos')).toBeInTheDocument();
+    // localePrefix is 'always', so next-intl's Link prepends the locale even for pt-BR.
+    expect(screen.getByRole('link', { name: /Lição Um/ })).toHaveAttribute(
       'href',
-      '/pt-BR/content/licao-1',
+      '/pt-BR/content/matematica/calculo/licao-1',
     );
   });
 
-  it('shows 0 of N completed when nothing is read yet', () => {
-    render(
-      <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <ContentTree tree={fixtureTree} />
-      </NextIntlClientProvider>,
-    );
+  it('shows 0 of N completed for the topic when nothing is read yet', () => {
+    renderWithIntl(<ContentTree disciplineSlug="matematica" subject={subject} />);
 
-    // With a single topic and a single section per subject in this fixture,
-    // the "0 de 2" count appears at all three nesting levels (subject, topic,
-    // section) — assert there are exactly three occurrences.
-    expect(screen.getAllByText('0 de 2 lições concluídas')).toHaveLength(3);
+    expect(screen.getByText('0 de 3 lições concluídas')).toBeInTheDocument();
+    expect(screen.queryByText('Concluída')).not.toBeInTheDocument();
   });
 
-  it('reflects a previously completed lesson in the progress count at every nesting level', () => {
-    window.localStorage.setItem(READING_PROGRESS_STORAGE_KEY, JSON.stringify(['licao-1']));
+  it('aggregates completed counts per lesson group and per topic', () => {
+    markComplete(['licao-1', 'licao-3']);
+    renderWithIntl(<ContentTree disciplineSlug="matematica" subject={subject} />);
 
-    render(
-      <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <ContentTree tree={fixtureTree} />
-      </NextIntlClientProvider>,
-    );
-
-    // The section-level count, and — since this fixture has exactly one
-    // topic and one section per subject — the topic- and subject-level
-    // aggregated counts should all read the same "1 de 2" here.
-    expect(screen.getAllByText('1 de 2 lições concluídas')).toHaveLength(3);
+    expect(screen.getByText('2 de 3 lições concluídas')).toBeInTheDocument();
+    expect(screen.getByText('1/2')).toBeInTheDocument();
+    expect(screen.getByText('1/1')).toBeInTheDocument();
+    expect(screen.getAllByText('Concluída')).toHaveLength(2);
   });
 
-  it('aggregates completed/total counts across multiple sections and topics', () => {
-    const multiSectionTree: ContentTreeData[] = [
-      {
-        id: 1,
-        slug: 'calculo',
-        name: 'Cálculo',
-        topics: [
-          {
-            id: 1,
-            slug: 'limites',
-            name: 'Limites',
-            sections: [
-              {
-                id: 1,
-                slug: 'limites-laterais',
-                name: 'Limites Laterais',
-                lessons: [
-                  { slug: 'licao-1', title: 'Lição Um' },
-                  { slug: 'licao-2', title: 'Lição Dois' },
-                ],
-              },
-              {
-                id: 2,
-                slug: 'limites-infinitos',
-                name: 'Limites Infinitos',
-                lessons: [{ slug: 'licao-3', title: 'Lição Três' }],
-              },
-            ],
-          },
-        ],
-      },
-    ];
+  it('highlights the next lesson to read once the student has started', () => {
+    markComplete(['licao-1']);
+    renderWithIntl(<ContentTree disciplineSlug="matematica" subject={subject} />);
 
-    window.localStorage.setItem(READING_PROGRESS_STORAGE_KEY, JSON.stringify(['licao-1', 'licao-3']));
+    const nextLink = screen.getByRole('link', { name: /Lição Dois/ });
+    expect(within(nextLink).getByText('Próxima')).toBeInTheDocument();
+  });
+});
 
-    render(
-      <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
-        <ContentTree tree={multiSectionTree} />
-      </NextIntlClientProvider>,
+describe('SubjectProgressSummary', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('offers to start at the first lesson when nothing is read', () => {
+    renderWithIntl(<SubjectProgressSummary disciplineSlug="matematica" subject={subject} />);
+
+    const action = screen.getByRole('link', { name: /Começar/ });
+    expect(action).toHaveAttribute('href', '/pt-BR/content/matematica/calculo/licao-1');
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+  });
+
+  it('continues at the first unread lesson and reports the percentage', () => {
+    markComplete(['licao-1']);
+    renderWithIntl(<SubjectProgressSummary disciplineSlug="matematica" subject={subject} />);
+
+    expect(screen.getByRole('link', { name: /Continuar de onde parou/ })).toHaveAttribute(
+      'href',
+      '/pt-BR/content/matematica/calculo/licao-2',
     );
+    expect(screen.getByText('33%')).toBeInTheDocument();
+  });
 
-    // Section level: 1 of 2, and 1 of 1.
-    expect(screen.getByText('1 de 2 lições concluídas')).toBeInTheDocument();
-    expect(screen.getByText('1 de 1 lições concluídas')).toBeInTheDocument();
-    // Topic and subject level both aggregate to 2 of 3 across both sections.
-    expect(screen.getAllByText('2 de 3 lições concluídas')).toHaveLength(2);
+  it('switches to review mode once every lesson is complete', () => {
+    markComplete(['licao-1', 'licao-2', 'licao-3']);
+    renderWithIntl(<SubjectProgressSummary disciplineSlug="matematica" subject={subject} />);
+
+    expect(screen.getByRole('link', { name: /Revisar conteúdo/ })).toHaveAttribute(
+      'href',
+      '/pt-BR/content/matematica/calculo/licao-1',
+    );
+    expect(screen.getByText('Você concluiu todas as lições deste assunto!')).toBeInTheDocument();
   });
 });

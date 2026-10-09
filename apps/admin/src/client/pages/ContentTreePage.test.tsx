@@ -5,17 +5,23 @@ import { ContentTreePage } from './ContentTreePage';
 
 const fixtureTree = [
   {
-    slug: 'calculo',
-    name: 'Cálculo',
-    topics: [
+    slug: 'matematica',
+    name: 'Matemática',
+    subjects: [
       {
-        slug: 'limites',
-        name: 'Limites',
-        sections: [
+        slug: 'calculo',
+        name: 'Cálculo',
+        topics: [
           {
-            slug: 'intro',
-            name: 'Introdução',
-            lessons: [{ id: 1, slug: 'o-que-e-um-limite', title: 'O que é um limite?' }],
+            slug: 'limites',
+            name: 'Limites',
+            sections: [
+              {
+                slug: 'intro',
+                name: 'Introdução',
+                lessons: [{ id: 1, slug: 'o-que-e-um-limite', title: 'O que é um limite?' }],
+              },
+            ],
           },
         ],
       },
@@ -35,7 +41,8 @@ describe('ContentTreePage', () => {
 
     render(<ContentTreePage onEditLesson={onEditLesson} />);
 
-    expect(await screen.findByText('Cálculo')).toBeInTheDocument();
+    expect(await screen.findByText('Matemática')).toBeInTheDocument();
+    expect(screen.getByText('Cálculo')).toBeInTheDocument();
     expect(screen.getByText('Limites')).toBeInTheDocument();
     expect(screen.getByText('Introdução')).toBeInTheDocument();
 

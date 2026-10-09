@@ -23,8 +23,41 @@ export function isValidLocale(value: string): value is Locale {
   return (LOCALES as readonly string[]).includes(value);
 }
 
+// Content hierarchy, top to bottom:
+//   discipline (matéria, e.g. Mathematics)
+//     -> subject (assunto geral, e.g. Calculus)
+//       -> topic (assunto específico, e.g. Limits)
+//         -> section (grupo de lições)
+//           -> lesson
+export const disciplines = sqliteTable('disciplines', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  slug: text('slug').notNull().unique(),
+  order: integer('order').notNull(),
+});
+
+export const disciplineTranslations = sqliteTable(
+  'discipline_translations',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    disciplineId: integer('discipline_id')
+      .notNull()
+      .references(() => disciplines.id),
+    locale: text('locale', { enum: LOCALES }).notNull(),
+    name: text('name').notNull(),
+  },
+  (table) => [unique().on(table.disciplineId, table.locale)],
+);
+
 export const subjects = sqliteTable('subjects', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  // `.notNull()` here is enforced at the app layer (see the subject write
+  // routes in apps/admin/src/worker/routes/lessons.ts), not by SQLite: the
+  // migration backfilling this column onto pre-existing rows can't add a
+  // NOT NULL constraint without a full table rebuild -- the same tradeoff
+  // already made for `tags.subjectId`.
+  disciplineId: integer('discipline_id')
+    .notNull()
+    .references(() => disciplines.id),
   slug: text('slug').notNull().unique(),
   order: integer('order').notNull(),
 });

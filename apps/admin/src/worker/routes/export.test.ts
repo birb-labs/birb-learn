@@ -5,7 +5,13 @@ beforeAll(async () => {
   await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
   env.EXPORT_SECRET = 'test-export-secret';
   await env.DB.prepare(
-    'INSERT INTO subjects (id, slug, "order") VALUES (1, \'exemplo\', 1)',
+    'INSERT INTO disciplines (id, slug, "order") VALUES (1, \'materia\', 1)',
+  ).run();
+  await env.DB.prepare(
+    "INSERT INTO discipline_translations (discipline_id, locale, name) VALUES (1, 'pt-BR', 'Matéria')",
+  ).run();
+  await env.DB.prepare(
+    'INSERT INTO subjects (id, discipline_id, slug, "order") VALUES (1, 1, \'exemplo\', 1)',
   ).run();
   await env.DB.prepare(
     "INSERT INTO subject_translations (subject_id, locale, name) VALUES (1, 'pt-BR', 'Exemplo')",
@@ -50,8 +56,14 @@ describe('GET /api/export', () => {
     });
 
     expect(response.status).toBe(200);
-    const data = await response.json<{ subjects: { slug: string }[] }>();
+    const data = await response.json<{
+      subjects: { slug: string }[];
+      disciplines: { slug: string }[];
+      disciplineTranslations: { name: string }[];
+    }>();
     expect(data.subjects.find((s) => s.slug === 'exemplo')).toBeDefined();
+    expect(data.disciplines.find((d) => d.slug === 'materia')).toBeDefined();
+    expect(data.disciplineTranslations.find((t) => t.name === 'Matéria')).toBeDefined();
   });
 
   it('includes questionAcceptedAnswers and questionMatchingPairs, not just questions/questionOptions', async () => {

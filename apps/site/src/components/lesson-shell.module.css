@@ -1,0 +1,439 @@
+.shell {
+  flex: 1 0 auto;
+  width: 100%;
+}
+
+.readingBar {
+  position: fixed;
+  top: var(--header-height);
+  left: 0;
+  right: 0;
+  z-index: 49;
+  height: 3px;
+  background: transparent;
+  pointer-events: none;
+}
+
+.readingFill {
+  width: 100%;
+  height: 100%;
+  background: var(--gradient-brand);
+  transform-origin: left;
+  transition: transform 90ms linear;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 17.5rem minmax(0, 1fr);
+  gap: var(--space-2xl);
+  max-width: var(--layout-width);
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-lg) 7rem;
+}
+
+/* ---- Sidebar ---- */
+
+.rail {
+  position: relative;
+}
+
+.railInner {
+  position: sticky;
+  top: calc(var(--header-height) + var(--space-lg));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  max-height: calc(100vh - var(--header-height) - var(--space-xl));
+  padding-right: var(--space-xs);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.railSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.railHeading {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
+.stepList {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stepLink {
+  --tone: var(--color-muted);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
+  text-decoration: none;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.stepLink[data-tone='warning'] {
+  --tone: var(--color-warning);
+}
+
+.stepLink[data-tone='info'] {
+  --tone: var(--color-info);
+}
+
+.stepLink[data-tone='success'] {
+  --tone: var(--color-success);
+}
+
+.stepLink[data-tone='accent'] {
+  --tone: var(--color-accent);
+}
+
+.stepLink:hover {
+  background: color-mix(in srgb, var(--color-foreground) 6%, transparent);
+  color: var(--color-foreground);
+}
+
+.stepLink[data-state='current'] {
+  background: color-mix(in srgb, var(--tone) 12%, transparent);
+  color: var(--color-foreground);
+  font-weight: 600;
+}
+
+.stepIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-foreground) 8%, transparent);
+  transition:
+    background var(--duration-base) var(--ease-out),
+    color var(--duration-base) var(--ease-out);
+}
+
+.stepLink[data-state='current'] .stepIcon {
+  background: var(--tone);
+  color: var(--color-background);
+}
+
+.stepLink[data-state='done'] .stepIcon {
+  background: color-mix(in srgb, var(--color-success) 20%, transparent);
+  color: var(--color-success);
+}
+
+.stepText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.stepType {
+  color: var(--tone);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stepTitle {
+  overflow: hidden;
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outlineSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  list-style: none;
+}
+
+.outlineSummary::-webkit-details-marker {
+  display: none;
+}
+
+.railSection[open] .outlineSummary svg {
+  transform: rotate(180deg);
+}
+
+.outline {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outlineLink {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.outlineLink svg {
+  flex: none;
+  margin-top: 0.2rem;
+}
+
+.outlineLink:hover {
+  background: color-mix(in srgb, var(--color-foreground) 6%, transparent);
+  color: var(--color-foreground);
+}
+
+.outlineLink[data-done] svg {
+  color: var(--color-success);
+}
+
+.outlineLink[aria-current='page'] {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.hint svg {
+  flex: none;
+  margin-top: 0.25rem;
+}
+
+/* ---- Content column ---- */
+
+.main {
+  min-width: 0;
+  max-width: var(--layout-prose);
+}
+
+/* ---- Floating dock ---- */
+
+.dockWrap {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-md);
+  z-index: 48;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-sm);
+  width: min(34rem, calc(100vw - 1.5rem));
+  transform: translateX(-50%);
+}
+
+.dock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0.4rem;
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-background) 88%, transparent);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+  backdrop-filter: saturate(160%) blur(14px);
+  box-shadow: var(--shadow-lg);
+  animation: dock-in var(--duration-slow) var(--ease-out) both;
+}
+
+.dockButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.5rem;
+  padding: 0 0.9rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-foreground) 7%, transparent);
+  color: var(--color-foreground);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.dockButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-foreground) 13%, transparent);
+}
+
+.dockButton:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.dockButton:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.dockPrimary {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.dockPrimary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 88%, var(--color-foreground));
+}
+
+.dockStatus {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 0.15rem 0.25rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-foreground);
+  cursor: pointer;
+}
+
+.dockStep {
+  color: var(--color-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.dockTitle {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dots {
+  display: flex;
+  gap: 4px;
+  margin-top: 1px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-foreground) 18%, transparent);
+  transition:
+    background var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-out);
+}
+
+.dot[data-state='done'] {
+  background: var(--color-success);
+}
+
+.dot[data-state='current'] {
+  background: var(--color-accent);
+  transform: scale(1.5);
+}
+
+.sheet {
+  max-height: 55vh;
+  padding: var(--space-sm);
+  overflow-y: auto;
+  border: 1px solid var(--color-surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-background);
+  box-shadow: var(--shadow-lg);
+  animation: sheet-in var(--duration-base) var(--ease-out);
+}
+
+@keyframes dock-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+@media (max-width: 64rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: var(--space-lg) var(--space-md) 7rem;
+  }
+
+  /* The sidebar's job is taken over by the dock and its step sheet. */
+  .rail {
+    display: none;
+  }
+
+  .main {
+    max-width: none;
+  }
+}
+
+@media (max-width: 34rem) {
+  .dockButtonText {
+    display: none;
+  }
+
+  .dockButton {
+    padding: 0 0.75rem;
+  }
+}

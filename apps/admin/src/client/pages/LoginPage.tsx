@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BirbLogo } from '@birb-learn/theme';
 import { apiFetch } from '../api';
 import styles from './LoginPage.module.css';
 
@@ -27,6 +28,10 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: () => void }) {
 
   return (
     <form className={styles.form} onSubmit={handleSubmit}>
+      <div className={styles.brand}>
+        <BirbLogo size={64} />
+        <h1>Birb Learn Admin</h1>
+      </div>
       <div className={styles.field}>
         <label htmlFor="username">Usuário</label>
         <input

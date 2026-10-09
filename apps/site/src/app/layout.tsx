@@ -32,7 +32,7 @@ const langSyncScript = `(function() {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html className={`${fraunces.variable} ${inter.variable}`}>
+    <html className={`${fraunces.variable} ${inter.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: noFlashScript }} />
         <script dangerouslySetInnerHTML={{ __html: langSyncScript }} />

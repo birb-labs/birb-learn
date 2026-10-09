@@ -53,9 +53,14 @@ function pt(translation: {
 let cachedSubjectId: number | undefined;
 async function createSubject(): Promise<number> {
   if (cachedSubjectId !== undefined) return cachedSubjectId;
+  const disciplineResponse = await SELF.fetch(
+    'https://admin.test/api/lessons/disciplines',
+    authed({ slug: 'matematica', order: 1, translations: { 'pt-BR': { name: 'Matemática' } } }),
+  );
+  const { id: disciplineId } = await disciplineResponse.json<{ id: number }>();
   const response = await SELF.fetch(
     'https://admin.test/api/lessons/subjects',
-    authed({ slug: 'matematica', order: 1, translations: { 'pt-BR': { name: 'Matemática' } } }),
+    authed({ disciplineId, slug: 'calculo', order: 1, translations: { 'pt-BR': { name: 'Cálculo' } } }),
   );
   const { id } = await response.json<{ id: number }>();
   cachedSubjectId = id;

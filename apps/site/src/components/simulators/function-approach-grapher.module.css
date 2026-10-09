@@ -1,50 +1,93 @@
 .grapher {
-  border: 1px solid var(--color-surface-border);
-  background: var(--color-surface);
-  border-radius: var(--radius-md);
-  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
 }
 
 .svg {
   width: 100%;
   height: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   background: var(--color-background);
-  border-radius: var(--radius-sm);
+}
+
+.grid {
+  stroke: color-mix(in srgb, var(--color-foreground) 8%, transparent);
+  stroke-width: 1;
+}
+
+.axis {
+  stroke: color-mix(in srgb, var(--color-foreground) 40%, transparent);
+  stroke-width: 1.5;
 }
 
 .curve {
   stroke: var(--color-accent);
-  stroke-width: 2;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.guide {
+  stroke: var(--color-highlight);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 5;
 }
 
 .marker {
-  fill: var(--color-danger);
+  fill: var(--color-highlight);
+  stroke: var(--color-background);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.3));
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
 }
 
 .controlRow {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  margin-top: var(--space-md);
+  font-weight: 600;
+}
+
+.variable {
+  font-family: var(--font-heading);
+  font-style: italic;
 }
 
 .controlRow input {
-  border: 1px solid var(--color-border);
-  background: transparent;
-  color: inherit;
-  border-radius: var(--radius-sm);
+  width: 6.5rem;
   padding: var(--space-xs) var(--space-sm);
-  width: 6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-background);
+  color: inherit;
+  font: inherit;
+}
+
+.slider {
+  flex: 1;
+  min-width: 10rem;
+  accent-color: var(--color-accent);
 }
 
 .readout {
-  margin-top: var(--space-sm);
-  font-family: monospace;
+  margin: 0;
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  font-family: var(--font-mono, ui-monospace, monospace);
 }
 
 .error {
-  color: var(--color-danger);
   padding: var(--space-md);
   border: 1px solid var(--color-danger);
   border-radius: var(--radius-md);
+  color: var(--color-danger);
 }

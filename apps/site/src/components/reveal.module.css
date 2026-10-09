@@ -1,0 +1,27 @@
+.hidden {
+  opacity: 0;
+  transform: translateY(18px);
+}
+
+.visible {
+  animation: reveal-in var(--duration-slow) var(--ease-out) both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hidden {
+    opacity: 1;
+    transform: none;
+  }
+}

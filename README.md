@@ -43,7 +43,20 @@ packages/content-schema/  # tipos de conteúdo (lições/questões)
 
 ## Conteúdo
 
-O conteúdo (disciplinas, tópicos, seções e lições) vive em um banco
+O conteúdo é organizado em cinco níveis:
+
+```
+Matéria → Assunto geral → Assunto específico → Grupo de lições → Lição
+Matemática → Cálculo → Limites → Ideia intuitiva de limite → O que é um limite?
+```
+
+No site, o estudante escolhe a matéria (`/content/`), depois o assunto geral
+(`/content/<matéria>/`) e chega à lista de lições do assunto
+(`/content/<matéria>/<assunto>/`). Cada lição fica em
+`/content/<matéria>/<assunto>/<lição>/`. No banco, a matéria é a tabela
+`disciplines`; o assunto geral é `subjects`, e assim por diante.
+
+O conteúdo (matérias, assuntos, tópicos, grupos e lições) vive em um banco
 SQLite gerenciado por `packages/content-schema`, recriado do zero a
 cada build a partir de migrations versionadas e um script de seed —
 não há banco persistente até o painel administrativo (sub-projeto 4).
