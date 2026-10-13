@@ -6,6 +6,7 @@ import type { EngineFactory } from './types';
 // functions below as an argument. They live in a namespace of their own, so
 // the student's globals cannot reach or shadow them.
 const PYTHON_SUPPORT = `
+import io
 import json
 import linecache
 import os
@@ -38,19 +39,53 @@ def flush_streams():
             pass
 
 
+# The standard streams as Pyodide sets them up: text over file descriptors it
+# opens with closefd=False, UTF-8, line buffered.
+STREAM_SETUP = (
+    (0, 'r', 'strict', '<stdin>'),
+    (1, 'w', 'strict', '<stdout>'),
+    (2, 'w', 'backslashreplace', '<stderr>'),
+)
+standard_streams = [sys.__stdin__, sys.__stdout__, sys.__stderr__]
+
+
+def restore_standard_streams():
+    # A program may rebind the streams, even sys.__stdout__, or close them
+    # (\`with sys.stdout as f:\`). Closing leaves the descriptor open, so a closed
+    # stream is created again over it.
+    for index, (fd, mode, errors, name) in enumerate(STREAM_SETUP):
+        if standard_streams[index].closed:
+            buffer = io.open(fd, mode + 'b', closefd=False)
+            buffer.raw.name = name
+            stream = io.TextIOWrapper(buffer, encoding='utf-8', errors=errors, line_buffering=True)
+            stream.mode = mode
+            standard_streams[index] = stream
+    sys.__stdin__, sys.__stdout__, sys.__stderr__ = standard_streams
+    sys.stdin, sys.stdout, sys.stderr = standard_streams
+
+
+def fresh_directory(path):
+    # The program may have created the path already, as a directory or a file.
+    if os.path.isdir(path) and not os.path.islink(path):
+        shutil.rmtree(path, ignore_errors=True)
+    elif os.path.lexists(path):
+        os.remove(path)
+    os.makedirs(path, exist_ok=True)
+
+
 def reset_environment():
     # A case runs in the interpreter of the previous ones: undo what they may
-    # have changed. Rebound streams, a lowered recursion limit and files written
-    # to the working directory must not reach the next case.
+    # have changed. Rebound or closed streams, a lowered recursion limit and
+    # files written to the working directory must not reach the next case.
     global case_count, scratch_dir
-    sys.stdin, sys.stdout, sys.stderr = sys.__stdin__, sys.__stdout__, sys.__stderr__
+    restore_standard_streams()
     sys.setrecursionlimit(DEFAULT_RECURSION_LIMIT)
     os.chdir('/')
     if scratch_dir is not None:
         shutil.rmtree(scratch_dir, ignore_errors=True)
     case_count += 1
     scratch_dir = f'/tmp/case-{case_count}'
-    os.makedirs(scratch_dir)
+    fresh_directory(scratch_dir)
     os.chdir(scratch_dir)
 
 

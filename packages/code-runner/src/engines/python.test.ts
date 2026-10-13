@@ -154,6 +154,62 @@ describe('Python engine (Node worker)', () => {
     expect(next.cases[0].stderr).toContain('ZeroDivisionError');
   });
 
+  it('reopens standard streams the program closed, for the next case and the next run', async () => {
+    const source = [
+      'import sys',
+      "if input() == 'close':",
+      '    with sys.stdout as out:',
+      "        print('bye')",
+      '    sys.stderr.close()',
+      '    sys.stdin.close()',
+      'else:',
+      "    print('ok', input())",
+      "    print('err', file=sys.stderr)",
+    ].join('\n');
+    const first = await runner.runCode({
+      language: 'python',
+      source,
+      cases: [{ stdin: 'close\n' }, { stdin: 'plain\nnext line\n' }],
+    });
+    expect(first.cases.map((c) => [c.status, c.stdout, c.stderr])).toEqual([
+      ['ok', 'bye\n', ''],
+      ['ok', 'ok next line\n', 'err\n'],
+    ]);
+    for (let run = 0; run < 2; run += 1) {
+      const next = await runner.runCode({
+        language: 'python',
+        source: [
+          'import sys',
+          'out = sys.stdout',
+          'print(input(), out.name, out.mode, out.encoding, out.line_buffering, sys.stderr.errors)',
+          "print('é', file=sys.stderr)",
+        ].join('\n'),
+        cases: [{ stdin: 'again' }],
+      });
+      expect(next.cases[0]).toMatchObject({
+        status: 'ok',
+        stdout: 'again <stdout> w utf-8 True backslashreplace\n',
+        stderr: 'é\n',
+      });
+    }
+  });
+
+  it('gives the next case an empty working directory even if the program created it', async () => {
+    const source = [
+      'import os',
+      "n = int(os.getcwd().rsplit('-', 1)[1])",
+      "if input() == 'plant':",
+      "    os.makedirs(f'/tmp/case-{n + 1}')",
+      "    open(f'/tmp/case-{n + 1}/planted.txt', 'w').write('x')",
+      "print(sorted(os.listdir('.')))",
+    ].join('\n');
+    const result = await runner.runCode({ language: 'python', source, cases: [{ stdin: 'plant' }, { stdin: 'look' }] });
+    expect(result.cases.map((c) => [c.status, c.stdout])).toEqual([
+      ['ok', '[]\n'],
+      ['ok', '[]\n'],
+    ]);
+  });
+
   it('restores the recursion limit for the next case', async () => {
     const source = "import sys\nif input() == 'lower':\n    sys.setrecursionlimit(50)\nprint(sys.getrecursionlimit())";
     const result = await runner.runCode({ language: 'python', source, cases: [{ stdin: 'lower' }, { stdin: 'keep' }] });
