@@ -182,6 +182,13 @@ describe('validateCodeTask', () => {
       payload: { starterCode: 'a = ___1___', solution: 'a = 1', blanks: [{ id: 1, accepted: ['1'] }] },
       expected: null,
     },
+    {
+      name: 'fill_blank without solution',
+      kind: 'fill_blank',
+      language: 'python',
+      payload: { starterCode: 'a = ___1___', blanks: [{ id: 1, accepted: ['1'] }] },
+      expected: 'solution',
+    },
     { name: 'find_bug without bugLines', kind: 'find_bug', language: 'python', payload: { solution: 'a = 1' }, expected: 'bugLines' },
     { name: 'find_bug without solution', kind: 'find_bug', language: 'python', payload: { bugLines: '1' }, expected: 'solution' },
     { name: 'bugLines beyond starter code', kind: 'find_bug', language: 'python', payload: { solution: 'a = 1', bugLines: '2-5' }, expected: 'bugLines' },

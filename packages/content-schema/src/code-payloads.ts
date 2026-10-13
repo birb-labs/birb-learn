@@ -160,6 +160,7 @@ export function validateCodeTask(kind: CodeKind, language: Language, payload: Co
       break;
 
     case 'fill_blank': {
+      if (payload.solution === undefined) errors.push('solution: required for a fill_blank task');
       const markerIds = findBlankIds(payload.starterCode);
       const blankIds = new Set<number>();
       payload.blanks.forEach((blank, index) => {
