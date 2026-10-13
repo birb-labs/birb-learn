@@ -2,6 +2,8 @@ export * from './src/schema';
 export * from './src/queries';
 export * from './src/d1-client';
 export * from './src/numeric-answer-validation';
+export * from './src/code-languages';
+export * from './src/code-payloads';
 
 // `./src/client` (better-sqlite3-based) is deliberately NOT re-exported from
 // this barrel. better-sqlite3 is a native Node addon that cannot run in the
