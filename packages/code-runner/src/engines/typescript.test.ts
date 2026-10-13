@@ -110,6 +110,17 @@ describe('TypeScript engine (empty and types-only programs)', () => {
     expect(result.cases[0]).toMatchObject({ status: 'ok', stdout: '', stderr: '', exitCode: 0 });
   });
 
+  it.each([
+    ['a trailing line comment', 'console.log(1);\n// end'],
+    ['a trailing block comment', 'console.log(1);\n/* end */\n'],
+    ['leading and trailing comments around types', '/* a */\n\ntype A = 1;\n\n// b'],
+  ])('runs a program with %s', async (_name, source) => {
+    const result = await runner.runCode({ language: 'typescript', source });
+    expect(result.status).toBe('ok');
+    expect(result.cases[0]).toMatchObject({ status: 'ok', stderr: '', exitCode: 0 });
+    expect(result.cases[0].stdout).toBe(source.includes('console.log') ? '1\n' : '');
+  });
+
   it('rejects export statements with a clear compile_error', async () => {
     for (const source of ['export const x = 1;', 'const y = 2;\nexport { y };', 'export default 3;']) {
       const result = await runner.runCode({ language: 'typescript', source });

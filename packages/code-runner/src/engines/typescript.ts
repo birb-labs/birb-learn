@@ -77,8 +77,9 @@ function formatDiagnostic(ts: typeof TS, diagnostic: TS.Diagnostic): string {
 // With `module: ESNext` TypeScript ends a program without imports or exports
 // with `export {};`, which is a syntax error in the function body the program
 // runs in. Programs with their own exports are rejected before this point.
-// TypeScript puts it first when the program has no statements (types or comments only) and last otherwise.
-const EMPTY_EXPORT = /^export \{\};\n|(^|\n)export \{\};\n?$/;
+// TypeScript puts it first, last or before trailing comments, always on a line
+// of its own, so the first such line is removed.
+const EMPTY_EXPORT = /^export \{\};(\n|$)/m;
 
 // The virtual file system treats an empty file as missing.
 const normalize = (source: string): string => (source === '' ? '\n' : source);
@@ -120,7 +121,7 @@ export const createTypeScriptEngine: EngineFactory = async (env) => {
     vfs.updateFile(MAIN_FILE, normalize(source));
     const output = vfs.languageService.getEmitOutput(MAIN_FILE).outputFiles.find((file) => file.name.endsWith('.js'));
     if (!output) throw new Error('TypeScript produced no output');
-    return output.text.replace(EMPTY_EXPORT, '$1');
+    return output.text.replace(EMPTY_EXPORT, '');
   }
 
   // The JavaScript of the last program that compiled cleanly: `runCase` runs
