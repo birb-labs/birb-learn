@@ -1,6 +1,6 @@
 import type { RubyVM } from '@ruby/wasm-wasi';
 import { streamWriter } from './stream-writer';
-import type { Emit, EngineEnv, EngineFactory } from './types';
+import type { Emit, EngineFactory } from './types';
 
 const PROGRAM_NAME = 'main.rb';
 /** Package that ships the Ruby build; keep it in sync with the Ruby version taught. */
@@ -92,18 +92,6 @@ lambda do |sink|
 end
 `;
 
-/** Where the bytes of the Ruby module are read from: the file in Node, the CDN in browsers. */
-async function fetchModuleBytes(env: EngineEnv): Promise<ArrayBuffer | Uint8Array> {
-  const url = env.assetUrl(RUBY_PACKAGE, 'dist/ruby+stdlib.wasm');
-  if (env.isNode) {
-    const [{ readFile }, { fileURLToPath }] = await Promise.all([import('node:fs/promises'), import('node:url')]);
-    return readFile(fileURLToPath(url));
-  }
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Could not download the Ruby runtime (${response.status})`);
-  return response.arrayBuffer();
-}
-
 type Stream = 'stdout' | 'stderr';
 
 interface Machine {
@@ -149,7 +137,7 @@ export const createRubyEngine: EngineFactory = async (env) => {
   const [{ RubyVM, RbError }, { WASI, WASIProcExit, OpenFile, File: WasiFile, ConsoleStdout }, bytes] = await Promise.all([
     import('@ruby/wasm-wasi'),
     import('@bjorn3/browser_wasi_shim'),
-    fetchModuleBytes(env),
+    env.readAsset(RUBY_PACKAGE, 'dist/ruby+stdlib.wasm'),
   ]);
   // Compiled once; every VM is an instance of this module.
   const module = await WebAssembly.compile(bytes as BufferSource);

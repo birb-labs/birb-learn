@@ -25,10 +25,20 @@ export interface Engine {
   runCase(input: EngineCaseInput, emit: Emit): Promise<EngineCaseOutput>;
 }
 
+/**
+ * What engines need from the platform they run on. Engines are bundled into
+ * browser workers, so they never touch Node APIs themselves: the worker passes
+ * a Node implementation (`worker/node-env.ts`) or a browser one (CDN + `fetch`).
+ */
 export interface EngineEnv {
-  isNode: boolean;
-  /** URL of a file of a runtime package: the CDN in browsers, `file://` in Node. */
-  assetUrl(pkg: RuntimePackage, path: string): string;
+  /**
+   * Where a runtime loader finds a file of a runtime package: a filesystem path
+   * in Node, the CDN URL in browsers. `''` names the package directory itself
+   * (with a trailing separator).
+   */
+  assetLocation(pkg: RuntimePackage, path: string): string;
+  /** The contents of a file of a runtime package; rejects when it cannot be loaded. */
+  readAsset(pkg: RuntimePackage, path: string): Promise<Uint8Array>;
 }
 
 export type EngineFactory = (env: EngineEnv) => Promise<Engine>;

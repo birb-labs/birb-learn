@@ -1,10 +1,5 @@
 import type * as TS from 'typescript';
-import {
-  createDefaultMapFromNodeModules,
-  createSystem,
-  createVirtualTypeScriptEnvironment,
-  type VirtualTypeScriptEnvironment,
-} from '@typescript/vfs';
+import { createSystem, createVirtualTypeScriptEnvironment, type VirtualTypeScriptEnvironment } from '@typescript/vfs';
 import { runJavaScript } from './javascript';
 import { TS_GLOBALS_DTS } from './typescript-globals';
 import type { EngineEnv, EngineFactory } from './types';
@@ -48,18 +43,18 @@ export async function fetchLibFiles(root: string, fetchText: (file: string) => P
   return files;
 }
 
-async function fetchLibText(env: EngineEnv, file: string): Promise<string> {
-  const url = env.assetUrl('typescript', `lib/${file}`);
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Could not load the TypeScript standard library: ${url} answered ${response.status}`);
-  return response.text();
+async function readLibText(env: EngineEnv, file: string): Promise<string> {
+  try {
+    return new TextDecoder().decode(await env.readAsset('typescript', `lib/${file}`));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not load the TypeScript standard library: ${reason}`);
+  }
 }
 
 /** Lib files (`/lib.es5.d.ts`, ...) of the installed TypeScript version. */
-async function loadLibFiles(env: EngineEnv, ts: typeof TS, options: TS.CompilerOptions): Promise<Map<string, string>> {
-  if (!env.isNode) return fetchLibFiles('es2022', (file) => fetchLibText(env, file));
-  const { fileURLToPath } = await import('node:url');
-  return createDefaultMapFromNodeModules(options, ts, fileURLToPath(env.assetUrl('typescript', 'lib')));
+function loadLibFiles(env: EngineEnv): Promise<Map<string, string>> {
+  return fetchLibFiles('es2022', (file) => readLibText(env, file));
 }
 
 function flatten(ts: typeof TS, message: string | TS.DiagnosticMessageChain): string {
@@ -104,7 +99,7 @@ export const createTypeScriptEngine: EngineFactory = async (env) => {
   const ts = loaded.default ?? loaded;
   const options = compilerOptions(ts);
 
-  const files = await loadLibFiles(env, ts, options);
+  const files = await loadLibFiles(env);
   files.set(MAIN_FILE, '\n');
   files.set(GLOBALS_FILE, TS_GLOBALS_DTS);
   const vfs: VirtualTypeScriptEnvironment = createVirtualTypeScriptEnvironment(

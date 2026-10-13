@@ -1,5 +1,5 @@
 import type { LuaEngine, LuaFactory } from 'wasmoon';
-import type { Emit, EngineEnv, EngineFactory } from './types';
+import type { Emit, EngineFactory } from './types';
 
 // The student's source is never part of this code: it is passed to the scripts
 // below as a global, which they read and clear before the program starts. The
@@ -312,12 +312,6 @@ interface RunOutcome {
   error?: string;
 }
 
-/** Absolute path of the installed `glue.wasm`, for Node, where the file is read from disk. */
-async function nodeWasmPath(env: EngineEnv): Promise<string> {
-  const { fileURLToPath } = await import('node:url');
-  return fileURLToPath(env.assetUrl('wasmoon', 'dist/glue.wasm'));
-}
-
 // The chunk name of the scripts above, so a position inside them can never be
 // mistaken for one in the student's `main.lua`.
 const SUPPORT_CHUNK_NAME = '=lua-support';
@@ -342,7 +336,7 @@ async function withEngine<T>(factory: LuaFactory, use: (lua: LuaEngine) => Promi
 
 export const createLuaEngine: EngineFactory = async (env) => {
   const { LuaFactory } = await import('wasmoon');
-  const factory = new LuaFactory(env.isNode ? await nodeWasmPath(env) : env.assetUrl('wasmoon', 'dist/glue.wasm'));
+  const factory = new LuaFactory(env.assetLocation('wasmoon', 'dist/glue.wasm'));
   // Instantiate the WASM module now, within the engine load budget.
   await factory.getLuaModule();
 

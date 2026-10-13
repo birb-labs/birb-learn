@@ -4,7 +4,7 @@
 import type { Language } from '@birb-learn/content-schema';
 import { ENGINE_LOADERS } from '../engines/registry';
 import type { Engine, EngineEnv } from '../engines/types';
-import { cdnAssetUrl } from '../runtime-assets';
+import { cdnAssetUrl, cdnReadAsset } from '../runtime-assets';
 import type { HostMessage, WorkerPort } from './messages';
 
 class EngineLoadError extends Error {}
@@ -69,7 +69,6 @@ interface BrowserScope {
   addEventListener(type: 'message', cb: (event: MessageEvent) => void): void;
 }
 
-const isNode = typeof process !== 'undefined' && !!process.versions?.node;
 const scope = (globalThis as { self?: Partial<BrowserScope> }).self;
 
 if (scope && typeof scope.postMessage === 'function' && typeof scope.addEventListener === 'function') {
@@ -80,10 +79,10 @@ if (scope && typeof scope.postMessage === 'function' && typeof scope.addEventLis
       post: (msg) => browser.postMessage(msg),
       listen: (cb) => browser.addEventListener('message', (event) => cb(event.data as HostMessage)),
     },
-    { isNode, assetUrl: cdnAssetUrl },
+    { assetLocation: cdnAssetUrl, readAsset: cdnReadAsset },
   );
 } else {
   void (
     import(/* webpackIgnore: true */ /* @vite-ignore */ NODE_ENV_MODULE) as Promise<typeof import('./node-env')>
-  ).then(({ nodePort, nodeAssetUrl }) => start(nodePort(), { isNode, assetUrl: nodeAssetUrl }));
+  ).then(({ nodePort, nodeEngineEnv }) => start(nodePort(), nodeEngineEnv));
 }

@@ -1,7 +1,10 @@
 // Node-only half of the engine worker. `engine-worker.ts` loads it through a
 // bundler-ignored dynamic import, so it never reaches a browser bundle.
 import { existsSync, readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { parentPort } from 'node:worker_threads';
+import type { EngineEnv } from '../engines/types';
 import type { RuntimePackage } from '../runtime-assets';
 import type { HostMessage, WorkerPort } from './messages';
 
@@ -36,7 +39,16 @@ export function packageManifestUrl(pkg: string): string {
   }
 }
 
-/** `file://` URL of a file of an installed runtime package. */
+/** `file://` URL of a file of an installed runtime package (`''`: the package directory). */
 export function nodeAssetUrl(pkg: RuntimePackage, path: string): string {
-  return new URL(path, packageManifestUrl(pkg)).href;
+  return new URL(path, new URL('./', packageManifestUrl(pkg))).href;
 }
+
+/** The engine environment of Node workers: runtime files are read from `node_modules`. */
+export const nodeEngineEnv: EngineEnv = {
+  assetLocation: (pkg, path) => fileURLToPath(nodeAssetUrl(pkg, path)),
+  async readAsset(pkg, path) {
+    const bytes = await readFile(fileURLToPath(nodeAssetUrl(pkg, path)));
+    return new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  },
+};

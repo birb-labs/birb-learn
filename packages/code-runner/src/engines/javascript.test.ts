@@ -2,12 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { createJavaScriptEngine } from './javascript';
 import type { Engine, EngineCaseOutput } from './types';
 
-const env = {
-  isNode: true,
-  assetUrl: () => {
-    throw new Error('the JavaScript engine needs no assets');
-  },
+const noAssets = (): never => {
+  throw new Error('the JavaScript engine needs no assets');
 };
+const env = { assetLocation: noAssets, readAsset: noAssets };
 
 async function run(source: string, stdin = '') {
   const engine: Engine = await createJavaScriptEngine(env);

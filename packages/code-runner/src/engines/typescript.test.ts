@@ -2,8 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { createNodeRunner } from '../node';
+import { fetchAsset } from '../runtime-assets';
 import { nodeAssetUrl } from '../worker/node-env';
 import { createTypeScriptEngine, fetchLibFiles } from './typescript';
+import type { EngineEnv } from './types';
 
 const runner = createNodeRunner();
 
@@ -135,7 +137,11 @@ describe('TypeScript engine (browser lib loading)', () => {
     vi.unstubAllGlobals();
   });
 
-  const env = { isNode: false, assetUrl: nodeAssetUrl };
+  // The browser environment, with the installed package standing in for the CDN.
+  const env: EngineEnv = {
+    assetLocation: nodeAssetUrl,
+    readAsset: (pkg, path) => fetchAsset(nodeAssetUrl(pkg, path)),
+  };
 
   /** A `fetch` serving the installed lib files, with optional per-file status overrides. */
   function stubFetch(overrides: Record<string, number> = {}) {
@@ -162,7 +168,7 @@ describe('TypeScript engine (browser lib loading)', () => {
 
   it.each([404, 429, 503])('rejects engine creation when a needed lib answers %i', async (status) => {
     stubFetch({ 'lib.es2022.string.d.ts': status });
-    await expect(createTypeScriptEngine(env)).rejects.toThrow(`lib.es2022.string.d.ts answered ${status}`);
+    await expect(createTypeScriptEngine(env)).rejects.toThrow(`lib.es2022.string.d.ts: the server answered ${status}`);
   });
 
   it('collects the transitive references', async () => {

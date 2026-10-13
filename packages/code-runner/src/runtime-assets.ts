@@ -20,3 +20,15 @@ export function cdnAssetUrl(pkg: RuntimePackage, path: string): string {
   const version: string = RUNTIME_PACKAGES[pkg];
   return `https://cdn.jsdelivr.net/npm/${pkg}@${version}/${path}`;
 }
+
+/** Downloads a file; rejects unless the server answers with a 2xx status. */
+export async function fetchAsset(url: string): Promise<Uint8Array> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Could not download ${url}: the server answered ${response.status}`);
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+/** Reads a file of a runtime package from the CDN. */
+export function cdnReadAsset(pkg: RuntimePackage, path: string): Promise<Uint8Array> {
+  return fetchAsset(cdnAssetUrl(pkg, path));
+}

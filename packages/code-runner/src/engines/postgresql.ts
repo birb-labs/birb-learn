@@ -4,16 +4,8 @@ import { runSqlCase } from './sql-case';
 import type { EngineEnv, EngineFactory } from './types';
 
 /** Reads a file of the PGlite distribution: from disk in Node, from the CDN in browsers. */
-async function readAsset(env: EngineEnv, file: string): Promise<ArrayBuffer> {
-  const url = env.assetUrl('@electric-sql/pglite', `dist/${file}`);
-  if (env.isNode) {
-    const [{ readFile }, { fileURLToPath }] = await Promise.all([import('node:fs/promises'), import('node:url')]);
-    const bytes = await readFile(fileURLToPath(url));
-    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-  }
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Failed to download ${file}: HTTP ${response.status}`);
-  return response.arrayBuffer();
+function readAsset(env: EngineEnv, file: string): Promise<Uint8Array<ArrayBuffer>> {
+  return env.readAsset('@electric-sql/pglite', `dist/${file}`) as Promise<Uint8Array<ArrayBuffer>>;
 }
 
 /** The message of a database error as `psql` shows it: the message, then its detail and hint. */

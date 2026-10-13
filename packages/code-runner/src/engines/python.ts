@@ -1,6 +1,6 @@
 import type { PyodideAPI } from 'pyodide';
 import { streamWriter } from './stream-writer';
-import type { EngineEnv, EngineFactory } from './types';
+import type { EngineFactory } from './types';
 
 // The student's source is never part of this code: it is passed to the
 // functions below as an argument. They live in a namespace of their own, so
@@ -88,12 +88,6 @@ interface PythonSupport {
   runProgram(source: string): { exitCode: number; error: string | null };
 }
 
-/** Directory of the installed `pyodide` package, with a trailing separator. */
-async function nodeIndexUrl(env: EngineEnv): Promise<string> {
-  const { fileURLToPath } = await import('node:url');
-  return fileURLToPath(env.assetUrl('pyodide', './'));
-}
-
 function loadSupport(pyodide: PyodideAPI): PythonSupport {
   const namespace = pyodide.toPy({});
   pyodide.runPython(PYTHON_SUPPORT, { globals: namespace });
@@ -123,7 +117,8 @@ export const createPythonEngine: EngineFactory = async (env) => {
   const { loadPyodide } = await import('pyodide');
   // Startup output is not the student's: keep it out of the way.
   const pyodide = await loadPyodide({
-    indexURL: env.isNode ? await nodeIndexUrl(env) : env.assetUrl('pyodide', ''),
+    // The package directory, with a trailing separator.
+    indexURL: env.assetLocation('pyodide', ''),
     stdout: () => {},
     stderr: () => {},
   });
