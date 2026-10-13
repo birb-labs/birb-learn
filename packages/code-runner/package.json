@@ -12,6 +12,7 @@
   "dependencies": {
     "@birb-learn/content-schema": "workspace:*",
     "@typescript/vfs": "1.6.5",
+    "pyodide": "314.0.7",
     "tsx": "4.23.12",
     "typescript": "6.0.3"
   },

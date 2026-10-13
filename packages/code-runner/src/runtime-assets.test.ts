@@ -14,7 +14,7 @@ describe('runtime packages', () => {
   });
 
   it('lists the packages the engines load assets from', () => {
-    expect(Object.keys(RUNTIME_PACKAGES)).toEqual(expect.arrayContaining(['typescript', '@typescript/vfs']));
+    expect(Object.keys(RUNTIME_PACKAGES)).toEqual(expect.arrayContaining(['typescript', '@typescript/vfs', 'pyodide']));
   });
 
   it('builds CDN URLs at the pinned version', () => {
