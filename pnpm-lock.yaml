@@ -199,16 +199,19 @@ importers:
       '@birb-learn/content-schema':
         specifier: workspace:*
         version: link:../content-schema
+      '@typescript/vfs':
+        specifier: 1.6.5
+        version: 1.6.5(supports-color@10.2.2)(typescript@6.0.3)
       tsx:
         specifier: 4.23.12
         version: 4.23.12
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.3
-      typescript:
-        specifier: ^6.0.2
-        version: 6.0.3
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@24.13.3)(jsdom@30.0.1)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.1)(tsx@4.23.12)(yaml@2.9.0))
@@ -2213,6 +2216,11 @@ packages:
 
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
+
+  '@typescript/vfs@1.6.5':
+    resolution: {integrity: sha512-gobLHQLmvQGJInFk31NvgMd1uYzRXsd8qgnOssyLD055R2QPnw1ubRbBQ4+T+5qC7IQVuYXdvNDE2G7tMDVHgw==}
+    peerDependencies:
+      typescript: '*'
 
   '@ungap/structured-clone@1.3.3':
     resolution: {integrity: sha512-60YRaenCQcVjYEKOcG824+DRGGIQ3VKErcBoAEDJZz5bKIs2ZG+X/H9Nk+Q6EVkwJk5QNApxbrc5QtBSwtrXAg==}
@@ -5147,6 +5155,13 @@ snapshots:
   '@types/unist@2.0.11': {}
 
   '@types/unist@3.0.3': {}
+
+  '@typescript/vfs@1.6.5(supports-color@10.2.2)(typescript@6.0.3)':
+    dependencies:
+      debug: 4.4.3(supports-color@10.2.2)
+      typescript: 6.0.3
+    transitivePeerDependencies:
+      - supports-color
 
   '@ungap/structured-clone@1.3.3': {}
 

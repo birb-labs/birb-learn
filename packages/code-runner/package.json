@@ -11,11 +11,12 @@
   },
   "dependencies": {
     "@birb-learn/content-schema": "workspace:*",
-    "tsx": "4.23.12"
+    "@typescript/vfs": "1.6.5",
+    "tsx": "4.23.12",
+    "typescript": "6.0.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "typescript": "^6.0.2",
     "vitest": "^4.1.11"
   }
 }

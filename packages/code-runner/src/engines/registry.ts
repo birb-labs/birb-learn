@@ -5,4 +5,5 @@ import type { EngineFactory } from './types';
 // A language missing here makes the worker answer `failed/engine_load`.
 export const ENGINE_LOADERS: Partial<Record<Language, () => Promise<EngineFactory>>> = {
   javascript: () => import('./javascript').then((m) => m.createJavaScriptEngine),
+  typescript: () => import('./typescript').then((m) => m.createTypeScriptEngine),
 };

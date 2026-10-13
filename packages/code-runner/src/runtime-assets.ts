@@ -3,7 +3,10 @@
 // version installed here; Node workers read them from `node_modules`.
 // Each engine task adds its packages; a test keeps the versions in sync with
 // the installed `package.json` files.
-export const RUNTIME_PACKAGES = {} as const satisfies Record<string, string>;
+export const RUNTIME_PACKAGES = {
+  typescript: '6.0.3',
+  '@typescript/vfs': '1.6.5',
+} as const satisfies Record<string, string>;
 
 export type RuntimePackage = keyof typeof RUNTIME_PACKAGES;
 
