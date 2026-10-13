@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createNodeRunner } from '../node';
+import { OUTPUT_LIMIT_BYTES } from '../protocol';
 
 // Dates must not depend on the machine's time zone: the whole file runs the
 // worker under a zone that is neither UTC nor the one of a typical CI machine.
@@ -128,6 +129,32 @@ describe('PostgreSQL engine (Node worker)', () => {
     expect(result.stderr).toContain('division by zero');
     expect(result.sql?.resultSets).toEqual([{ columns: ['x'], rows: [['1']] }]);
     expect(result.stdout).toBe('x\n1\n');
+  });
+
+  it('drops the rows of a statement that fails midway', async () => {
+    const result = await run('SELECT 1 AS x; SELECT 1 / (3 - g) AS y FROM generate_series(1, 5) AS g;');
+    expect(result.status).toBe('runtime_error');
+    expect(result.stderr).toContain('division by zero');
+    expect(result.sql?.resultSets).toEqual([{ columns: ['x'], rows: [['1']] }]);
+    expect(result.stdout).toBe('x\n1\n');
+  });
+
+  it('stops a large finite query early with output_limit', async () => {
+    const started = performance.now();
+    const result = await run('SELECT g FROM generate_series(1, 3000000) AS g;');
+    expect(performance.now() - started).toBeLessThan(1500);
+    expect(result.status).toBe('output_limit');
+    expect(new TextEncoder().encode(result.stdout).length).toBeLessThanOrEqual(OUTPUT_LIMIT_BYTES);
+    expect(result.stdout.startsWith('g\n1\n2\n3\n')).toBe(true);
+  });
+
+  it('stops an unbounded query early with output_limit', async () => {
+    const started = performance.now();
+    const result = await run('WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT x FROM c;');
+    expect(performance.now() - started).toBeLessThan(3000);
+    expect(result.status).toBe('output_limit');
+    const next = await run('SELECT 1 AS ok;');
+    expect(next).toMatchObject({ status: 'ok', stdout: 'ok\n1\n' });
   });
 
   it('adds the DETAIL line of the database error', async () => {

@@ -1,4 +1,4 @@
-import type { PGlite } from '@electric-sql/pglite';
+import type { messages, PGlite } from '@electric-sql/pglite';
 import { toCell } from '../output';
 import { runSqlCase } from './sql-case';
 import type { EngineEnv, EngineFactory } from './types';
@@ -17,7 +17,7 @@ function databaseErrorMessage(error: Error & { detail?: string; hint?: string })
 }
 
 export const createPostgresqlEngine: EngineFactory = async (env) => {
-  const { PGlite, parse, protocol, types } = await import('@electric-sql/pglite');
+  const { PGlite, protocol, types } = await import('@electric-sql/pglite');
   // Download and compile the runtime once; every case then starts from these.
   const [pgliteWasmModule, initdbWasmModule, fsBundle] = await Promise.all([
     readAsset(env, 'pglite.wasm').then((bytes) => WebAssembly.compile(bytes)),
@@ -47,19 +47,49 @@ export const createPostgresqlEngine: EngineFactory = async (env) => {
         // parsers of the instance call these entries, so arrays of these types become text as well.
         for (const type of textTypes) database.parsers[type] = (value: string) => value;
         return {
-          async exec(sql, onResultSet) {
-            // The raw protocol keeps the messages of the statements that ran before an error.
-            const { messages } = await database.execProtocol(protocol.serialize.query(sql), { throwOnError: false });
-            const errorAt = messages.findIndex((message) => message.name === 'error');
-            const completed = errorAt < 0 ? messages : messages.slice(0, errorAt);
-            for (const result of parse.parseResults(completed, database.parsers, { rowMode: 'array' })) {
-              if (result.fields.length === 0) continue;
-              onResultSet({
-                columns: result.fields.map((field) => field.name),
-                rows: (result.rows as unknown[][]).map((row) => row.map(toCell)),
-              });
-            }
-            if (errorAt >= 0) throw new Error(databaseErrorMessage(messages[errorAt] as unknown as Error));
+          async exec(sql, output) {
+            // The raw stream hands over the server's messages while the query runs, so rows are
+            // counted (and dropped once the output is over the limit) as they come: PGlite's
+            // `execProtocol` would hold every message of the query until it ends. The query itself
+            // cannot be interrupted from here; the output, emitted as soon as it is over the limit,
+            // makes the host stop the worker. PostgreSQL's own send buffer is the only other copy.
+            const parser = new protocol.Parser();
+            let typeIds: number[] | undefined;
+            let full = false;
+            let failure: (Error & { detail?: string; hint?: string }) | undefined;
+            const onMessage = (message: messages.BackendMessage) => {
+              if (failure || full) return;
+              switch (message.name) {
+                case 'rowDescription': {
+                  const { fields } = message as messages.RowDescriptionMessage;
+                  // A statement without columns (`SELECT;`) has no result set.
+                  typeIds = fields.length > 0 ? fields.map((field) => field.dataTypeID) : undefined;
+                  if (typeIds) output.startSet(fields.map((field) => field.name));
+                  break;
+                }
+                case 'dataRow': {
+                  if (!typeIds) break;
+                  const ids = typeIds;
+                  const row = (message as messages.DataRowMessage).fields.map((value, index) =>
+                    toCell(types.parseType(value, ids[index], database.parsers)),
+                  );
+                  full = !output.addRow(row);
+                  break;
+                }
+                case 'commandComplete':
+                  if (typeIds) output.endSet();
+                  typeIds = undefined;
+                  break;
+                case 'error':
+                  // Like `psql`, the statement that failed shows no rows.
+                  failure = message as unknown as Error;
+                  break;
+              }
+            };
+            await database.execProtocolRawStream(protocol.serialize.query(sql), {
+              onRawData: (bytes) => parser.parse(bytes, onMessage),
+            });
+            if (failure) throw new Error(databaseErrorMessage(failure));
           },
           close: () => database.close(),
         };

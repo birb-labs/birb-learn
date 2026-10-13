@@ -14,16 +14,19 @@ export const createSqliteEngine: EngineFactory = async (env) => {
       runSqlCase(input, emit, async () => {
         const database = new SQL.Database();
         return {
-          async exec(sql, onResultSet) {
+          async exec(sql, output) {
             for (const statement of database.iterateStatements(sql)) {
               const columns = statement.getColumnNames();
               if (columns.length === 0) {
                 statement.step();
                 continue;
               }
-              const rows: (string | null)[][] = [];
-              while (statement.step()) rows.push(statement.get().map(toCell));
-              onResultSet({ columns, rows });
+              output.startSet(columns);
+              // Row by row: stop as soon as the output is over the limit (`close` frees the statement).
+              while (statement.step()) {
+                if (!output.addRow(statement.get().map(toCell))) return;
+              }
+              output.endSet();
             }
           },
           async close() {
