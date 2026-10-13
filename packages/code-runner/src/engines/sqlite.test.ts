@@ -91,20 +91,20 @@ describe('SQLite engine (Node worker)', () => {
   });
 
   it('stops an unbounded query early with output_limit', async () => {
-    const started = performance.now();
     const result = await run('WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT x FROM c;');
-    expect(performance.now() - started).toBeLessThan(3000);
+    // Counted from engine_ready: a respawned worker's engine reload is not part of it.
+    expect(result.durationMs).toBeLessThan(3000);
     expect(result.status).toBe('output_limit');
     expect(new TextEncoder().encode(result.stdout).length).toBeLessThanOrEqual(OUTPUT_LIMIT_BYTES);
     expect(result.stdout.startsWith('x\n1\n2\n3\n')).toBe(true);
   });
 
   it('stops a large finite query as soon as the output is over the limit', async () => {
-    const started = performance.now();
     const result = await run(
       'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 3000000) SELECT x FROM c;',
     );
-    expect(performance.now() - started).toBeLessThan(1500);
+    // Counted from engine_ready: a respawned worker's engine reload is not part of it.
+    expect(result.durationMs).toBeLessThan(1500);
     expect(result.status).toBe('output_limit');
   });
 
