@@ -1,6 +1,7 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Language } from '@birb-learn/content-schema';
 import { BrowserRunner, type WorkerLike } from './browser-runner';
-import { createNodeRunner } from './node';
+import { createNodeRunner, spawnNodeWorker } from './node';
 import { OUTPUT_LIMIT_BYTES } from './protocol';
 import type { HostMessage, WorkerMessage } from './worker/messages';
 
@@ -107,6 +108,44 @@ describe('BrowserRunner with Node workers (JavaScript)', () => {
     expect(next.cases[0]).toMatchObject({ status: 'ok', stdout: 'alive\n' });
   });
 
+  it('drops a worker that crashes while idle, so the next run is ok and fast', async () => {
+    const result = await runner.runCode({
+      language: 'javascript',
+      source: "setTimeout(() => { throw new Error('late') }, 50)",
+    });
+    expect(result.cases[0].status).toBe('ok');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const started = performance.now();
+    const next = await runner.runCode({ language: 'javascript', source: "console.log('fresh')" });
+    expect(performance.now() - started).toBeLessThan(3000);
+    expect(next.status).toBe('ok');
+    expect(next.cases[0]).toMatchObject({ status: 'ok', stdout: 'fresh\n' });
+  });
+
+  it('settles a run promptly on dispose and spawns nothing afterwards', async () => {
+    let spawned = 0;
+    const own = new BrowserRunner((language: Language) => {
+      spawned += 1;
+      return spawnNodeWorker(language);
+    });
+    const run = own.runCode({ language: 'javascript', source: 'while(true){}', cases: [{}, {}], timeoutMs: 1000 });
+    const outcome = run.then(
+      () => 'resolved',
+      (error: unknown) => (error instanceof Error || error instanceof DOMException ? error.name : 'other'),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const disposedAt = performance.now();
+    own.dispose();
+    expect(await outcome).toBe('AbortError');
+    expect(performance.now() - disposedAt).toBeLessThan(100);
+
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(spawned).toBe(1);
+    await expect(own.runCode({ language: 'javascript', source: '1' })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(spawned).toBe(1);
+  });
+
   it('serializes concurrent runs of the same language', async () => {
     const [a, b] = await Promise.all([
       runner.runCode({ language: 'javascript', source: "console.log('a')" }),
@@ -127,28 +166,36 @@ describe('BrowserRunner with Node workers (JavaScript)', () => {
   });
 });
 
-describe('BrowserRunner with a fake worker', () => {
-  // A worker that answers every request with `reply(msg)`.
-  function fakeRunner(reply: (msg: HostMessage) => WorkerMessage) {
-    const stats = { spawned: 0, terminated: 0 };
-    const spawn = (): WorkerLike => {
-      stats.spawned += 1;
-      let listener: (msg: WorkerMessage) => void = () => {};
-      return {
-        postMessage(msg) {
-          queueMicrotask(() => listener(reply(msg)));
-        },
-        onMessage(cb) {
-          listener = cb;
-        },
-        terminate() {
-          stats.terminated += 1;
-        },
-      };
-    };
-    return { runner: new BrowserRunner(spawn), stats };
-  }
+type Send = (msg: WorkerMessage) => void;
 
+// A fake worker driven by `script`; `worker` is the 1-based spawn count.
+function scriptedRunner(script: (msg: HostMessage, send: Send, worker: number) => void) {
+  const stats = { spawned: 0, terminated: 0 };
+  const spawn = (): WorkerLike => {
+    const worker = ++stats.spawned;
+    let listener: Send = () => {};
+    const send: Send = (msg) => queueMicrotask(() => listener(msg));
+    return {
+      postMessage(msg) {
+        script(msg, send, worker);
+      },
+      onMessage(cb) {
+        listener = cb;
+      },
+      terminate() {
+        stats.terminated += 1;
+      },
+    };
+  };
+  return { runner: new BrowserRunner(spawn), stats };
+}
+
+// A fake worker that answers every request with `reply(msg)`.
+function fakeRunner(reply: (msg: HostMessage) => WorkerMessage) {
+  return scriptedRunner((msg, send) => send(reply(msg)));
+}
+
+describe('BrowserRunner with a fake worker', () => {
   it('returns unavailable when the engine fails to load', async () => {
     const { runner: fake, stats } = fakeRunner((msg) => ({
       id: msg.id,
@@ -175,6 +222,96 @@ describe('BrowserRunner with a fake worker', () => {
       ['runtime_error', 'engine broke\n', null],
     ]);
     expect(stats).toEqual({ spawned: 2, terminated: 2 });
+    fake.dispose();
+  });
+});
+
+describe('BrowserRunner engine load budget', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function track<T>(promise: Promise<T>) {
+    const state: { settled: boolean; value?: T } = { settled: false };
+    void promise.then((value) => {
+      state.settled = true;
+      state.value = value;
+    });
+    return state;
+  }
+
+  // The engine is ready `readyAfterMs` after the compile request (never when
+  // null), then compiling takes `compileMs`. Cases answer immediately.
+  function slowEngine(readyAfterMs: number | null, compileMs: number) {
+    return scriptedRunner((msg, send) => {
+      if (msg.type === 'compile') {
+        if (readyAfterMs === null) return;
+        setTimeout(() => send({ id: msg.id, type: 'engine_ready' }), readyAfterMs);
+        setTimeout(() => send({ id: msg.id, type: 'done', result: { compileOutput: null } }), readyAfterMs + compileMs);
+      } else {
+        send({ id: msg.id, type: 'engine_ready' });
+        send({ id: msg.id, type: 'output', stream: 'stdout', chunk: 'hi\n' });
+        send({ id: msg.id, type: 'done', result: { exitCode: 0 } });
+      }
+    });
+  }
+
+  it('does not kill a slow engine load at the compile timeout', async () => {
+    const { runner: fake, stats } = slowEngine(30000, 15000);
+    const result = track(fake.runCode({ language: 'python', source: 'x' }));
+    await vi.advanceTimersByTimeAsync(45000);
+    expect(result.settled).toBe(true);
+    expect(result.value?.status).toBe('ok');
+    expect(result.value?.cases[0].stdout).toBe('hi\n');
+    expect(stats.terminated).toBe(0);
+    fake.dispose();
+  });
+
+  it('counts the compile timeout from engine_ready', async () => {
+    const { runner: fake, stats } = slowEngine(30000, 21000);
+    const result = track(fake.runCode({ language: 'python', source: 'x' }));
+    await vi.advanceTimersByTimeAsync(49999);
+    expect(result.settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(result.value).toEqual({ status: 'unavailable', cases: [] });
+    expect(stats.terminated).toBe(1);
+    fake.dispose();
+  });
+
+  it('returns unavailable when the engine never loads within the load budget', async () => {
+    const { runner: fake, stats } = slowEngine(null, 0);
+    const result = track(fake.runCode({ language: 'python', source: 'x' }));
+    await vi.advanceTimersByTimeAsync(119999);
+    expect(result.settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(result.value).toEqual({ status: 'unavailable', cases: [] });
+    expect(stats.terminated).toBe(1);
+    fake.dispose();
+  });
+
+  it('gives a respawned worker the load budget before the case timeout starts', async () => {
+    // Worker 1: compiles, then hangs on the first case. Worker 2 (respawned
+    // after the timeout) needs 8 s to load the engine, then runs in 100 ms.
+    const { runner: fake, stats } = scriptedRunner((msg, send, worker) => {
+      if (msg.type === 'compile') {
+        send({ id: msg.id, type: 'engine_ready' });
+        send({ id: msg.id, type: 'done', result: { compileOutput: null } });
+      } else if (worker === 1) {
+        send({ id: msg.id, type: 'engine_ready' });
+      } else {
+        setTimeout(() => send({ id: msg.id, type: 'engine_ready' }), 8000);
+        setTimeout(() => send({ id: msg.id, type: 'done', result: { exitCode: 0 } }), 8100);
+      }
+    });
+    const result = track(fake.runCode({ language: 'python', source: 'x', cases: [{}, {}], timeoutMs: 1000 }));
+    await vi.advanceTimersByTimeAsync(9200);
+    expect(result.settled).toBe(true);
+    expect(result.value?.cases.map((c) => c.status)).toEqual(['timeout', 'ok']);
+    expect(result.value?.cases[1].durationMs).toBeLessThan(1000);
+    expect(stats.spawned).toBe(2);
     fake.dispose();
   });
 });

@@ -52,6 +52,9 @@ export interface Runner {
 
 export const DEFAULT_TIMEOUT_MS = 5000;
 export const MAX_TIMEOUT_MS = 10000;
+/** Budget for a worker to load the engine of a language (runtime download included). */
+export const ENGINE_LOAD_TIMEOUT_MS = 120000;
+/** Budget for the compile step, counted once the engine is loaded. */
 export const COMPILE_TIMEOUT_MS = 20000;
 /** Combined stdout + stderr per case, in UTF-8 bytes (64 KiB). */
 export const OUTPUT_LIMIT_BYTES = 65536;
