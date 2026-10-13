@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createNodeRunner } from '../node';
 
+// Dates must not depend on the machine's time zone: the whole file runs the
+// worker under a zone that is neither UTC nor the one of a typical CI machine.
+process.env.TZ = 'Asia/Tokyo';
+
 const runner = createNodeRunner();
 
 afterAll(() => {
@@ -63,11 +67,37 @@ describe('PostgreSQL engine (Node worker)', () => {
     expect(result.sql?.resultSets[0].rows).toEqual([['true', '1.5']]);
   });
 
-  it('turns dates, bytes and big integers into strings', async () => {
+  it('turns bytes and big integers into strings', async () => {
+    const result = await run("SELECT '\\x01ff'::bytea AS b, 9007199254740993::bigint AS big, NULL::text AS n;");
+    expect(result.sql?.resultSets[0].rows).toEqual([['\\x01ff', '9007199254740993', null]]);
+  });
+
+  it('prints date and time values as the server does, whatever the time zone of the machine', async () => {
     const result = await run(
-      "SELECT TIMESTAMPTZ '2020-01-02 03:04:05+00' AS ts, '\\x01ff'::bytea AS b, 9007199254740993::bigint AS big, NULL::text AS n;",
+      `SELECT TIMESTAMP '2020-01-02 03:04:05' AS ts, DATE '2020-01-02' AS d, TIME '03:04:05' AS t,
+              TIMESTAMPTZ '2020-01-02 03:04:05+00' AS tz, TIMETZ '03:04:05+00' AS ttz, INTERVAL '1 day 2 hours' AS i;`,
     );
-    expect(result.sql?.resultSets[0].rows).toEqual([['2020-01-02T03:04:05.000Z', '\\x01ff', '9007199254740993', null]]);
+    expect(result.sql?.resultSets[0].rows).toEqual([
+      ['2020-01-02 03:04:05', '2020-01-02', '03:04:05', '2020-01-02 03:04:05+00', '03:04:05+00', '1 day 02:00:00'],
+    ]);
+  });
+
+  it('keeps the server time zone at UTC, even after a RESET', async () => {
+    const result = await run("RESET ALL; SELECT current_setting('TimeZone') AS zone, TIMESTAMPTZ '2020-01-02 03:04:05+09' AS at;");
+    expect(result.sql?.resultSets[0].rows).toEqual([['UTC', '2020-01-01 18:04:05+00']]);
+  });
+
+  it('prints arrays of dates and times as JSON text of the server values', async () => {
+    const result = await run(
+      "SELECT ARRAY[DATE '2020-01-02'] AS ds, ARRAY[TIMESTAMP '2020-01-02 03:04:05'] AS tss, ARRAY[INTERVAL '1 day'] AS iv;",
+    );
+    expect(result.sql?.resultSets[0].rows).toEqual([['["2020-01-02"]', '["2020-01-02 03:04:05"]', '["1 day"]']]);
+  });
+
+  it('prints infinite dates as the server does', async () => {
+    const result = await run("SELECT 'infinity'::timestamp AS a, '-infinity'::date AS b;");
+    expect(result.status).toBe('ok');
+    expect(result.sql?.resultSets[0].rows).toEqual([['infinity', '-infinity']]);
   });
 
   it('turns json, jsonb and array columns into JSON text', async () => {
@@ -84,12 +114,6 @@ describe('PostgreSQL engine (Node worker)', () => {
     expect(result.stdout).toBe('j | jb | nums | words\n{"a":[1,2]} | {"b":null} | [1,2,3] | ["x","y"]\n');
   });
 
-  it('formats an out-of-range timestamp instead of failing', async () => {
-    const result = await run("SELECT 'infinity'::timestamp AS ts;");
-    expect(result.status).toBe('ok');
-    expect(result.sql?.resultSets[0].rows).toEqual([['Invalid Date']]);
-  });
-
   it('reports a syntax error as a runtime error with the database message', async () => {
     const result = await run('SELEC 1;');
     expect(result.status).toBe('runtime_error');
@@ -104,6 +128,26 @@ describe('PostgreSQL engine (Node worker)', () => {
     expect(result.stderr).toContain('division by zero');
     expect(result.sql?.resultSets).toEqual([{ columns: ['x'], rows: [['1']] }]);
     expect(result.stdout).toBe('x\n1\n');
+  });
+
+  it('adds the DETAIL line of the database error', async () => {
+    const result = await run('CREATE TABLE u(a int PRIMARY KEY); INSERT INTO u VALUES (1); INSERT INTO u VALUES (1);');
+    expect(result.status).toBe('runtime_error');
+    expect(result.stderr).toContain('duplicate key value violates unique constraint');
+    expect(result.stderr).toContain('\nDETAIL: Key (a)=(1) already exists.');
+  });
+
+  it('adds the HINT line of the database error', async () => {
+    const result = await run('SELECT bb FROM t;', SETUP);
+    expect(result.status).toBe('runtime_error');
+    expect(result.stderr).toContain('column "bb" does not exist');
+    expect(result.stderr).toContain('\nHINT: Perhaps you meant to reference the column "t.b".');
+  });
+
+  it('adds nothing when the database error has neither detail nor hint', async () => {
+    const result = await run('SELECT 1 / 0;');
+    expect(result.stderr).toContain('division by zero');
+    expect(result.stderr).not.toMatch(/DETAIL|HINT/);
   });
 
   it('prefixes an error in the setup with "setup:"', async () => {
@@ -127,6 +171,17 @@ describe('PostgreSQL engine (Node worker)', () => {
     const second = await run('SELECT * FROM leak;');
     expect(second.status).toBe('runtime_error');
     expect(second.stderr).toContain('relation "leak" does not exist');
+  });
+
+  it('does not leak schemas, settings or sequences between cases', async () => {
+    const first = await run(
+      "CREATE SCHEMA mine; CREATE SEQUENCE mine.s; SELECT nextval('mine.s'); SET search_path TO mine; CREATE TABLE kept(a int);",
+    );
+    expect(first.status).toBe('ok');
+    const second = await run(
+      "SELECT (SELECT COUNT(*) FROM pg_namespace WHERE nspname = 'mine') AS schemas, current_setting('search_path') AS path;",
+    );
+    expect(second.sql?.resultSets[0].rows).toEqual([['0', 'public']]);
   });
 
   it('runs setup and source in the same database', async () => {
