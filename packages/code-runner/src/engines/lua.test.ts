@@ -148,13 +148,24 @@ describe('Lua engine (Node worker)', () => {
     expect(result).toMatchObject({ stdout: 'a\n', exitCode: 2, stderr: '' });
   });
 
-  it('cannot swallow os.exit with pcall, xpcall or a coroutine', async () => {
-    expect(await run("pcall(os.exit, 4)\nprint('after pcall')")).toMatchObject({ stdout: '', exitCode: 4 });
+  // pcall, xpcall and coroutine.resume are the real library functions, so a
+  // program can swallow the unwinding of os.exit. The exit still counts: its
+  // code wins and the output written after it is discarded.
+  it('keeps the exit code of os.exit swallowed by pcall, xpcall or a coroutine', async () => {
+    expect(await run("print('before')\npcall(os.exit, 4)\nprint('after pcall')")).toMatchObject({
+      stdout: 'before\n',
+      exitCode: 4,
+    });
     expect(await run('xpcall(os.exit, print, 5)\nprint(1)')).toMatchObject({ stdout: '', exitCode: 5 });
     expect(await run('coroutine.resume(coroutine.create(function() os.exit(6) end))\nprint(1)')).toMatchObject({
       stdout: '',
       exitCode: 6,
     });
+  });
+
+  it('lets the first os.exit decide when the program exits again after swallowing it', async () => {
+    expect(await run('pcall(os.exit, 4)\nos.exit(5)')).toMatchObject({ exitCode: 4 });
+    expect(await run('pcall(os.exit, 4)\nerror("late")')).toMatchObject({ exitCode: 4, stderr: '' });
   });
 
   it('does not leak globals or overridden functions between cases', async () => {
@@ -199,6 +210,103 @@ describe('Lua engine (Node worker)', () => {
     const result = await run("warn('hidden')\nwarn('@on')\nwarn('shown ', 'twice')");
     expect(result).toMatchObject({ status: 'ok', stdout: '' });
     expect(result.stderr).toBe('Lua warning: shown twice\n');
+  });
+
+  describe('insulation from the program', () => {
+    // Every global the program could remove or replace, including the library tables.
+    const GLOBALS = [
+      '_G', 'assert', 'collectgarbage', 'coroutine', 'debug', 'error', 'getmetatable', 'io', 'ipairs', 'load',
+      'loadfile', 'math', 'next', 'os', 'package', 'pairs', 'pcall', 'print', 'rawequal', 'rawget', 'rawlen',
+      'rawset', 'require', 'select', 'setmetatable', 'string', 'table', 'tonumber', 'tostring', 'type', 'utf8',
+      'warn', 'xpcall',
+    ];
+    const cases = GLOBALS.map((name) => ({ stdin: name }));
+
+    const header = [
+      'local exit, fail, name = os.exit, error, io.read()',
+      "io.write('hi\\n')",
+    ];
+    const variants: [string, string][] = [
+      ['removes it', '_G[name] = nil'],
+      ['replaces it with a function that fails', "_G[name] = function() exit(9) end"],
+      ['makes undefined globals fail', "setmetatable(_G, { __index = function(_, key) fail('read ' .. key) end })"],
+      ['replaces it with a table', '_G[name] = {}'],
+    ];
+
+    it.each(variants)('keeps the exit code when the program %s', async (_title, tamper) => {
+      const source = [...header, tamper, 'exit(0)'].join('\n');
+      const result = await runner.runCode({ language: 'lua', source, cases });
+      for (const [index, name] of GLOBALS.entries()) {
+        expect([name, result.cases[index]]).toEqual([
+          name,
+          expect.objectContaining({ status: 'ok', stdout: 'hi\n', stderr: '', exitCode: 0 }),
+        ]);
+      }
+    });
+
+    it.each(variants)('keeps the error text when the program %s', async (_title, tamper) => {
+      const source = [...header, tamper, "fail('boom')"].join('\n');
+      const result = await runner.runCode({ language: 'lua', source, cases });
+      for (const [index, name] of GLOBALS.entries()) {
+        const outcome = result.cases[index];
+        expect([name, outcome.status, outcome.exitCode, outcome.stdout]).toEqual([name, 'runtime_error', 1, 'hi\n']);
+        expect([name, outcome.stderr]).toEqual([name, expect.stringContaining('main.lua:4: boom')]);
+        expect(outcome.stderr).not.toContain('lua-support');
+      }
+    });
+
+    it('names the program, not the support code, in every error position', async () => {
+      const failing = [
+        "error('x')",
+        'local t = nil; t.x = 1',
+        "io.read('x')",
+        "io.lines('a')",
+        "os.exit('a')",
+        'os.tmpname()',
+        'dofile("a")',
+        'print(#nil)',
+        'tostring()',
+        "string.rep('x')",
+        "local _ = setmetatable({}, { __index = function() error('deep') end }).x",
+        "error(setmetatable({}, { __tostring = function() error('in tostring') end }))",
+        "print(setmetatable({}, { __tostring = function() error('in print') end }))",
+        'for i = 1, "x" do end',
+        'local function f() return f() + 1 end; f()',
+      ];
+      for (const source of failing) {
+        const result = await run(source);
+        expect([source, result.status]).toEqual([source, 'runtime_error']);
+        expect([source, result.stderr]).toEqual([source, expect.not.stringContaining('[string "')]);
+        expect([source, result.stderr]).toEqual([source, expect.not.stringContaining('lua-support')]);
+      }
+    });
+
+    it('reports the position of the program for invalid io.read formats', async () => {
+      const direct = await run("io.read('x')");
+      expect(direct).toMatchObject({ status: 'runtime_error' });
+      expect(direct.stderr).toContain("main.lua:1: bad argument #1 to 'read' (invalid format)");
+      const caught = await run("print(pcall(function()\n  io.read('x')\nend))");
+      expect(caught.stdout).toBe("false\tmain.lua:2: bad argument #1 to 'read' (invalid format)\n");
+    });
+
+    it('does not add positions of the support code to error levels', async () => {
+      const source = [
+        "local function helper() error('m', 2) end",
+        'print(pcall(helper))',
+        'print(xpcall(helper, function(e) return e end))',
+        'print(pcall(function() helper() end))',
+      ].join('\n');
+      const result = await run(source);
+      expect(result.stdout).toBe('false\tm\nfalse\tm\nfalse\tmain.lua:4: m\n');
+    });
+
+    it('keeps deep recursion through pcall as deep as the real library allows', async () => {
+      const source = [
+        'local function depth(n) if n == 0 then return 0 end local ok, d = pcall(depth, n - 1) return d + 1 end',
+        'print(depth(150))',
+      ].join('\n');
+      expect((await run(source)).stdout).toBe('150\n');
+    });
   });
 
   it('times out an infinite loop and recovers for the next run', async () => {

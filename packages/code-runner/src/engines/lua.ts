@@ -6,7 +6,7 @@ import type { Emit, EngineEnv, EngineFactory } from './types';
 // scripts keep everything they need in locals, so the program cannot reach or
 // shadow it, and a fresh Lua state per case means nothing it changes can leak.
 const COMPILE_SCRIPT = String.raw`
-local source = __birb_source
+local source, load = __birb_source, load
 __birb_source = nil
 local chunk, message = load(source, '=main.lua', 't')
 return message
@@ -16,9 +16,10 @@ const RUN_SCRIPT = String.raw`
 local source, stdin, emit, finish = __birb_source, __birb_stdin, __birb_emit, __birb_finish
 __birb_source, __birb_stdin, __birb_emit, __birb_finish = nil, nil, nil, nil
 
-local type, select, tostring, tonumber, error, setmetatable, getmetatable =
-  type, select, tostring, tonumber, error, setmetatable, getmetatable
-local raw_pcall, raw_xpcall, raw_resume = pcall, xpcall, coroutine.resume
+-- Every global the code below uses is captured here. The program may reassign or
+-- remove any global (even set a metatable on _G), and this code must not notice.
+local type, select, tostring, tonumber, error, setmetatable, getmetatable, load, pcall =
+  type, select, tostring, tonumber, error, setmetatable, getmetatable, load, pcall
 local string_sub, string_find, string_byte, string_match =
   string.sub, string.find, string.byte, string.match
 local table_concat, table_pack, table_unpack = table.concat, table.pack, table.unpack
@@ -31,6 +32,9 @@ local NO_FILES = 'file system access is not available'
 -- A character may arrive split across two writes. The bytes of an unfinished
 -- UTF-8 sequence are held back until the rest comes, so the host never decodes half.
 local held = { stdout = '', stderr = '' }
+
+-- Set by os.exit; once set, it decides the exit code and later output is discarded.
+local exit_code = nil
 
 local function incomplete_tail(text)
   local length = #text
@@ -46,6 +50,7 @@ local function incomplete_tail(text)
 end
 
 local function write_stream(stream, text)
+  if exit_code ~= nil then return end
   text = held[stream] .. text
   local keep = incomplete_tail(text)
   if keep > 0 then
@@ -57,12 +62,15 @@ local function write_stream(stream, text)
   if text ~= '' then emit(stream, text) end
 end
 
+local function flush_stream(stream)
+  local rest = held[stream]
+  held[stream] = ''
+  if rest ~= '' then emit(stream, rest) end
+end
+
 local function flush_streams()
-  for _, stream in ipairs({ 'stdout', 'stderr' }) do
-    local rest = held[stream]
-    held[stream] = ''
-    if rest ~= '' then emit(stream, rest) end
-  end
+  flush_stream('stdout')
+  flush_stream('stderr')
 end
 
 local function join(separator, ...)
@@ -126,7 +134,7 @@ local function read_formats(...)
       value = read_bytes(math_tointeger(format) or 0)
     else
       local reader = type(format) == 'string' and line_readers[string_match(format, '^%*?(.)')]
-      if not reader then error("bad argument #" .. index .. " to 'read' (invalid format)", 3) end
+      if not reader then error("bad argument #" .. index .. " to 'read' (invalid format)", 2) end
       value = reader()
     end
     results[index] = value
@@ -215,17 +223,16 @@ local student_io = {
 
 -- Process control ------------------------------------------------------------
 
--- os.exit unwinds the program with this error value. pcall, xpcall and
--- coroutine.resume pass it on, so the program cannot catch the exit.
+-- os.exit records the exit code and unwinds the program with a unique error
+-- value. pcall, xpcall and coroutine.resume are the real ones (wrapping them
+-- would change error levels and add frames), so a program can swallow that
+-- error and keep running. It cannot undo the exit, though: the first recorded
+-- code decides the result, whatever else happens, and output written after the
+-- exit is discarded.
 local EXIT = {}
-local exit_code = nil
-
-local function rethrow_exit(...)
-  if exit_code ~= nil then error(EXIT, 0) end
-  return ...
-end
 
 local function student_exit(code)
+  if exit_code ~= nil then error(EXIT, 0) end
   if code == nil or code == true then
     exit_code = 0
   elseif code == false then
@@ -269,16 +276,6 @@ os.tmpname = function() error('unable to generate a unique filename', 2) end
 loadfile = function(name) return nil, tostring(name) .. ': ' .. NO_FILES end
 dofile = function(name) error(tostring(name) .. ': ' .. NO_FILES, 2) end
 
-pcall = function(...) return rethrow_exit(raw_pcall(...)) end
-xpcall = function(func, handler, ...)
-  local function guarded_handler(...)
-    if exit_code ~= nil then return ... end
-    return handler(...)
-  end
-  return rethrow_exit(raw_xpcall(func, guarded_handler, ...))
-end
-coroutine.resume = function(...) return rethrow_exit(raw_resume(...)) end
-
 -- Run ------------------------------------------------------------------------
 
 -- Like the standalone interpreter: strings and numbers are shown as they are,
@@ -288,7 +285,7 @@ local function describe_error(value)
   if kind == 'string' or kind == 'number' then return tostring(value) end
   local meta = getmetatable(value)
   if type(meta) == 'table' and meta.__tostring ~= nil then
-    local ok, text = raw_pcall(tostring, value)
+    local ok, text = pcall(tostring, value)
     if ok and type(text) == 'string' then return text end
   end
   return '(error object is a ' .. kind .. ' value)'
@@ -297,7 +294,7 @@ end
 local code, message = 0, nil
 local chunk, load_error = load(source, '=main.lua', 't')
 if chunk then
-  local ok, failure = raw_pcall(chunk)
+  local ok, failure = pcall(chunk)
   if exit_code ~= nil then
     code = exit_code
   elseif not ok then
@@ -321,6 +318,18 @@ async function nodeWasmPath(env: EngineEnv): Promise<string> {
   return fileURLToPath(env.assetUrl('wasmoon', 'dist/glue.wasm'));
 }
 
+// The chunk name of the scripts above, so a position inside them can never be
+// mistaken for one in the student's `main.lua`.
+const SUPPORT_CHUNK_NAME = '=lua-support';
+
+/** Runs a support script on a thread of its own and returns its first result. */
+async function runSupportScript(lua: LuaEngine, script: string): Promise<unknown> {
+  const thread = lua.global.newThread();
+  thread.loadString(script, SUPPORT_CHUNK_NAME);
+  const results = await thread.run(0);
+  return results[0];
+}
+
 /** Runs `use` on a Lua state of its own and closes the state afterwards. */
 async function withEngine<T>(factory: LuaFactory, use: (lua: LuaEngine) => Promise<T>): Promise<T> {
   const lua = await factory.createEngine();
@@ -341,7 +350,7 @@ export const createLuaEngine: EngineFactory = async (env) => {
     async compile(source) {
       return withEngine(factory, async (lua) => {
         lua.global.set('__birb_source', source);
-        const message: unknown = await lua.doString(COMPILE_SCRIPT);
+        const message = await runSupportScript(lua, COMPILE_SCRIPT);
         return typeof message === 'string' ? message : null;
       });
     },
@@ -355,7 +364,7 @@ export const createLuaEngine: EngineFactory = async (env) => {
           outcome = typeof message === 'string' ? { exitCode, error: message } : { exitCode };
         });
         try {
-          await lua.doString(RUN_SCRIPT);
+          await runSupportScript(lua, RUN_SCRIPT);
         } catch (error) {
           // The support script itself failed (for example, out of memory).
           return { exitCode: 1, error: error instanceof Error ? error.message : String(error) };
