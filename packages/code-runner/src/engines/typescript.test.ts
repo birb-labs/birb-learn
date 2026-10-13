@@ -1,5 +1,9 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { createNodeRunner } from '../node';
+import { nodeAssetUrl } from '../worker/node-env';
+import { createTypeScriptEngine, fetchLibFiles } from './typescript';
 
 const runner = createNodeRunner();
 
@@ -90,5 +94,78 @@ describe('TypeScript engine (Node worker)', () => {
     const result = await runner.runCode({ language: 'typescript', source: "throw new Error('boom');" });
     expect(result.status).toBe('ok');
     expect(result.cases[0]).toMatchObject({ status: 'runtime_error', exitCode: 1, stderr: 'Error: boom\n' });
+  });
+});
+
+describe('TypeScript engine (empty and types-only programs)', () => {
+  it.each([
+    ['empty', ''],
+    ['whitespace-only', ' '],
+    ['comment-only', '// hi'],
+    ['types-only', 'type A = number;'],
+  ])('runs a %s program', async (_name, source) => {
+    const result = await runner.runCode({ language: 'typescript', source });
+    expect(result.status).toBe('ok');
+    expect(result.cases).toHaveLength(1);
+    expect(result.cases[0]).toMatchObject({ status: 'ok', stdout: '', stderr: '', exitCode: 0 });
+  });
+
+  it('rejects export statements with a clear compile_error', async () => {
+    for (const source of ['export const x = 1;', 'const y = 2;\nexport { y };', 'export default 3;']) {
+      const result = await runner.runCode({ language: 'typescript', source });
+      expect(result.status).toBe('compile_error');
+      expect(result.compileOutput).toMatch(/^main\.ts:\d+:1 - error: export statements are not supported in this lab$/m);
+    }
+  });
+});
+
+describe('TypeScript engine (browser lib loading)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const env = { isNode: false, assetUrl: nodeAssetUrl };
+
+  /** A `fetch` serving the installed lib files, with optional per-file status overrides. */
+  function stubFetch(overrides: Record<string, number> = {}) {
+    const requested: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      const name = url.slice(url.lastIndexOf('/') + 1);
+      requested.push(name);
+      const status = overrides[name];
+      if (status) return new Response('<html>error page</html>', { status });
+      return new Response(await readFile(fileURLToPath(url), 'utf8'));
+    });
+    return requested;
+  }
+
+  it('fetches the lib files referenced from lib.es2022.d.ts', async () => {
+    const requested = stubFetch();
+    const engine = await createTypeScriptEngine(env);
+    expect(requested).toEqual(expect.arrayContaining(['lib.es2022.d.ts', 'lib.es2022.string.d.ts', 'lib.es5.d.ts']));
+    expect(requested.some((name) => name.startsWith('lib.dom'))).toBe(false);
+    expect(new Set(requested).size).toBe(requested.length);
+    expect(await engine.compile?.('const s: string = 5;')).toContain('TS2322');
+    expect(await engine.compile?.('console.log("a".at(-1))')).toBeNull();
+  });
+
+  it.each([404, 429, 503])('rejects engine creation when a needed lib answers %i', async (status) => {
+    stubFetch({ 'lib.es2022.string.d.ts': status });
+    await expect(createTypeScriptEngine(env)).rejects.toThrow(`lib.es2022.string.d.ts answered ${status}`);
+  });
+
+  it('collects the transitive references', async () => {
+    const texts: Record<string, string> = {
+      'lib.a.d.ts': '/// <reference lib="b" />\n/// <reference lib="c" />',
+      'lib.b.d.ts': '/// <reference lib="c" />',
+      'lib.c.d.ts': 'declare const c: 1;',
+    };
+    const fetched: string[] = [];
+    const files = await fetchLibFiles('a', async (file) => {
+      fetched.push(file);
+      return texts[file];
+    });
+    expect([...files.keys()].sort()).toEqual(['/lib.a.d.ts', '/lib.b.d.ts', '/lib.c.d.ts']);
+    expect(fetched.sort()).toEqual(['lib.a.d.ts', 'lib.b.d.ts', 'lib.c.d.ts']);
   });
 });
