@@ -1,3 +1,4 @@
+import { formatLogArguments, inspect } from './inspect';
 import type { Emit, EngineCaseOutput, EngineEnv, EngineFactory } from './types';
 
 type AsyncFunctionConstructor = new (...args: string[]) => (...args: unknown[]) => Promise<unknown>;
@@ -38,27 +39,15 @@ const HIDDEN = [
 ];
 const PARAMS = [...PROVIDED, ...HIDDEN];
 
-/** Formats a `console` argument like browsers: strings raw, objects as JSON. */
-function formatValue(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (value instanceof Error) return `${value.name}: ${value.message}`;
-  if (typeof value === 'object' && value !== null) {
-    try {
-      return JSON.stringify(value) ?? String(value);
-    } catch {
-      return String(value);
-    }
-  }
-  return String(value);
-}
+// Thrown values as browsers report them: errors as `Name: message`, strings raw.
+const describeValue = (value: unknown): string => (typeof value === 'string' ? value : inspect(value));
 
 function describeThrown(value: unknown): string {
-  if (value instanceof Error) return `${value.name}: ${value.message}`;
-  return `Uncaught ${formatValue(value)}`;
+  return value instanceof Error ? inspect(value) : `Uncaught ${describeValue(value)}`;
 }
 
 function describeRejection(reason: unknown): string {
-  return `Uncaught (in promise) ${reason instanceof Error ? `${reason.name}: ${reason.message}` : formatValue(reason)}`;
+  return `Uncaught (in promise) ${describeValue(reason)}`;
 }
 
 /** Resolves on a later task: every promise callback queued before runs first. */
@@ -166,7 +155,7 @@ function createConsole(scope: CaseScope, emit: Emit) {
   const writer =
     (stream: 'stdout' | 'stderr') =>
     (...args: unknown[]) => {
-      if (scope.live) emit(stream, `${args.map(formatValue).join(' ')}\n`);
+      if (scope.live) emit(stream, `${formatLogArguments(args)}\n`);
     };
   return {
     log: writer('stdout'),

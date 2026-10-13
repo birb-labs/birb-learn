@@ -33,11 +33,34 @@ async function run(source: string, stdin = '') {
 }
 
 describe('JavaScript engine', () => {
-  it('formats console.log arguments like browsers', async () => {
+  it('formats console.log arguments like Node', async () => {
     const { stdout, stderr, result } = await run("console.log('Olá', 1, {a:1})");
-    expect(stdout).toBe('Olá 1 {"a":1}\n');
+    expect(stdout).toBe('Olá 1 { a: 1 }\n');
     expect(stderr).toBe('');
     expect(result).toEqual({ exitCode: 0 });
+  });
+
+  it('shows undefined, NaN, -0, bigints, maps, sets and cycles as Node does', async () => {
+    const { stdout } = await run(
+      [
+        'console.log([1, undefined, NaN], new Map([[1,2]]), new Set([1]), {a: undefined}, -0, 10n);',
+        'const o = { name: "o" }; o.self = o; console.log(o);',
+        "console.log('%s scored %d%%', 'Ana', 97);",
+      ].join('\n'),
+    );
+    expect(stdout).toBe(
+      [
+        '[ 1, undefined, NaN ] Map(1) { 1 => 2 } Set(1) { 1 } { a: undefined } -0 10n',
+        "<ref *1> { name: 'o', self: [Circular *1] }",
+        'Ana scored 97%',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('describes a thrown non-error value like Node', async () => {
+    expect((await run("throw { code: 'E' }")).result).toEqual({ exitCode: 1, error: "Uncaught { code: 'E' }" });
+    expect((await run("throw 'plain'")).result).toEqual({ exitCode: 1, error: 'Uncaught plain' });
   });
 
   it('sends console.error to stderr', async () => {
