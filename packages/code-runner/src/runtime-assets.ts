@@ -8,6 +8,7 @@ export const RUNTIME_PACKAGES = {
   '@typescript/vfs': '1.6.5',
   pyodide: '314.0.7',
   wasmoon: '1.16.0',
+  '@ruby/4.0-wasm-wasi': '2.10.1',
 } as const satisfies Record<string, string>;
 
 export type RuntimePackage = keyof typeof RUNTIME_PACKAGES;

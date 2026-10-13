@@ -1,5 +1,6 @@
 import type { PyodideAPI } from 'pyodide';
-import type { Emit, EngineEnv, EngineFactory } from './types';
+import { streamWriter } from './stream-writer';
+import type { EngineEnv, EngineFactory } from './types';
 
 // The student's source is never part of this code: it is passed to the
 // functions below as an argument. They live in a namespace of their own, so
@@ -115,26 +116,6 @@ function lineReader(stdin: string): () => Uint8Array | null {
     const line = bytes.slice(position, end);
     position = end;
     return line;
-  };
-}
-
-/**
- * A stdout/stderr writer that decodes bytes as they arrive. The decoder is
- * streaming, so a character split across two writes is not corrupted; `finish`
- * flushes whatever it still holds.
- */
-function streamWriter(emit: Emit, stream: 'stdout' | 'stderr') {
-  const decoder = new TextDecoder();
-  return {
-    write(bytes: Uint8Array): number {
-      const text = decoder.decode(bytes, { stream: true });
-      if (text) emit(stream, text);
-      return bytes.length;
-    },
-    finish(): void {
-      const text = decoder.decode();
-      if (text) emit(stream, text);
-    },
   };
 }
 

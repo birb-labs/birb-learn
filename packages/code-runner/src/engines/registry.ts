@@ -8,4 +8,5 @@ export const ENGINE_LOADERS: Partial<Record<Language, () => Promise<EngineFactor
   typescript: () => import('./typescript').then((m) => m.createTypeScriptEngine),
   python: () => import('./python').then((m) => m.createPythonEngine),
   lua: () => import('./lua').then((m) => m.createLuaEngine),
+  ruby: () => import('./ruby').then((m) => m.createRubyEngine),
 };
