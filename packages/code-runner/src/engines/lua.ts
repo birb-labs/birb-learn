@@ -97,10 +97,42 @@ local function read_line(keep_newline)
   return line
 end
 
+-- Consumes the next character if it is one of 'set'.
+local function accept(set)
+  local char = string_sub(stdin, position, position)
+  if char ~= '' and string_find(set, char, 1, true) then
+    position = position + 1
+    return true
+  end
+  return false
+end
+
+local function skip_digits(hex)
+  local count = 0
+  while accept(hex and '0123456789abcdefABCDEF' or '0123456789') do count = count + 1 end
+  return count
+end
+
+-- Like the real library: skip whitespace (newlines included), read the longest
+-- prefix that looks like a numeral (sign, hex prefix, digits, point, exponent)
+-- and convert it. The character that ends it stays unread; the characters
+-- read stay consumed even when they do not form a number.
 local function read_number()
-  local line = read_line(false)
-  if line == nil then return nil end
-  return tonumber(line)
+  while accept(' \t\n\r\f\v') do end
+  local start = position
+  accept('+-')
+  local count, hex = 0, false
+  if accept('0') then
+    count = 1
+    hex = accept('xX')
+  end
+  count = count + skip_digits(hex)
+  if accept('.') then count = count + skip_digits(hex) end
+  if count > 0 and accept(hex and 'pP' or 'eE') then
+    accept('+-')
+    skip_digits(false)
+  end
+  return tonumber(string_sub(stdin, start, position - 1))
 end
 
 local function read_all()

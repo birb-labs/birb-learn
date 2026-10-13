@@ -76,13 +76,51 @@ describe('Lua engine (Node worker)', () => {
     expect(result.stdout).toBe('a\nnil\nnil\n');
   });
 
-  it('parses numbers one line at a time', async () => {
+  it('parses numbers across lines and fails on a non-number', async () => {
     const source = "print(io.read('n'), io.read('*n'), io.read('n'), io.read('n'))";
     expect((await run(source, '1\n2.5\nabc\n')).stdout).toBe('1\t2.5\tnil\tnil\n');
   });
 
-  it('reads several formats in one call', async () => {
-    expect((await run("print(io.read('n', 'l'))", '7\nrest')).stdout).toBe('7\trest\n');
+  it('reads several numbers from one line', async () => {
+    expect((await run("print(io.read('n', 'n'))", '3 4')).stdout).toBe('3\t4\n');
+    expect((await run("print(io.read('n', 'n', 'n'))", '  1\t\n\n 2   3\n')).stdout).toBe('1\t2\t3\n');
+  });
+
+  it('leaves the rest of the line after a number unread', async () => {
+    expect((await run("print(io.read('n', 'l'))", '7\nrest')).stdout).toBe('7\t\n');
+    expect((await run("print(io.read('n')); print(string.format('%q', io.read('l')))", '5 tail\nnext')).stdout).toBe(
+      '5\n" tail"\n',
+    );
+  });
+
+  it('reads hexadecimal, signed, decimal and exponent numbers', async () => {
+    expect((await run("print(io.read('n', 'n', 'n', 'n'))", '0x10 -2.5e1 +.5 0x1p4')).stdout).toBe(
+      '16\t-25.0\t0.5\t16.0\n',
+    );
+  });
+
+  it('returns nil for a non-number without consuming the character that stopped it', async () => {
+    expect((await run("print(io.read('n')); print(io.read('l'))", 'abc\n')).stdout).toBe('nil\nabc\n');
+    // Like real Lua, the formats after a failed one are not read.
+    expect((await run("print(io.read('n', 'l')); print(io.read('a'))", 'x 1\n')).stdout).toBe('nil\nx 1\n\n');
+  });
+
+  it('reads numbers exactly like the reference Lua interpreter', async () => {
+    // Output of Lua 5.3/5.4 (same `read_number`) for this program and input.
+    const source = [
+      "print(io.read('n', 'n'))",
+      "print(io.read('n'))",
+      "print(string.format('%q', io.read('l')))",
+      "print(io.read('n'))",
+      "print(io.read('n'))",
+      "print(io.read('n'))",
+      "print(string.format('%q', io.read('l')))",
+      "print(io.read('n', 'l'))",
+      "print(io.read('n', 'n'))",
+      "print(string.format('%q', io.read('a')))",
+    ].join('\n');
+    const stdin = '3 4\n5\n0x10 -2.5e1\nabc\n7\nrest\n0x 9';
+    expect((await run(source, stdin)).stdout).toBe('3\t4\n5\n""\n16\n-25.0\nnil\n"abc"\n7\t\nnil\n"rest\\\n0x 9"\n');
   });
 
   it('reads the rest of the input', async () => {
