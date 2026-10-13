@@ -45,6 +45,13 @@ lambda do |sink|
   detail_of = Exception.instance_method(:detailed_message)
   backtrace_of = Exception.instance_method(:backtrace)
   each_item = Array.instance_method(:each)
+  report = JS::Object.instance_method(:call)
+  matches = Module.instance_method(:===)
+
+  # A rescue clause matches through Module#===, which the program may redefine.
+  # Exception classes get their own copy of the original, so the clauses below
+  # keep working whatever the program does to Module.
+  Exception.define_singleton_method(:===) { |object| matches.bind_call(self, object) }
 
   # Nothing may wait in a buffer when the program ends abruptly (exit!, a crash).
   set_sync.bind_call(stdout, true)
@@ -76,12 +83,12 @@ lambda do |sink|
     begin
       message = detail_of.bind_call(failure, highlight: false)
       frames = backtrace_of.bind_call(failure)
-      each_item.bind_call(frames) { |frame| sink.call(:frame, frame) } if frames
+      each_item.bind_call(frames) { |frame| report.bind_call(sink, :frame, frame) } if frames
     rescue base_error
       message = 'The error could not be described'
     end
   end
-  sink.call(:done, code, message)
+  report.bind_call(sink, :done, code, message)
 end
 `;
 
@@ -112,6 +119,9 @@ interface Outcome {
   frames: string[];
 }
 
+/** Shown when the program broke the runner so badly that no outcome could be reported. */
+const INTERFERENCE_MESSAGE = 'internal error: the program interfered with the runner';
+
 // A deep recursion has thousands of frames; Ruby itself shows a handful.
 const MAX_FRAMES = 20;
 
@@ -136,7 +146,7 @@ function formatFailure(rawMessage: string, frames: string[]): string {
 }
 
 export const createRubyEngine: EngineFactory = async (env) => {
-  const [{ RubyVM }, { WASI, WASIProcExit, OpenFile, File: WasiFile, ConsoleStdout }, bytes] = await Promise.all([
+  const [{ RubyVM, RbError }, { WASI, WASIProcExit, OpenFile, File: WasiFile, ConsoleStdout }, bytes] = await Promise.all([
     import('@ruby/wasm-wasi'),
     import('@bjorn3/browser_wasi_shim'),
     fetchModuleBytes(env),
@@ -192,13 +202,15 @@ export const createRubyEngine: EngineFactory = async (env) => {
       const { vm, finishOutput } = await startMachine(input.stdin, emit);
       try {
         const { code, message, frames } = runScript(vm, RUN_SCRIPT, input.source);
-        if (typeof code !== 'number') return { exitCode: 1, error: 'The Ruby program ended without a result' };
+        if (typeof code !== 'number') return { exitCode: 1, error: INTERFERENCE_MESSAGE };
         // Like a process exit status.
         const exitCode = code & 0xff;
         return message === null ? { exitCode } : { exitCode, error: formatFailure(message, frames) };
       } catch (error) {
         // `exit!` leaves the VM through the WASI exit call.
         if (error instanceof WASIProcExit) return { exitCode: error.code & 0xff };
+        // An error of the VM itself carries Ruby frames of the support code: the student never sees them.
+        if (error instanceof RbError) return { exitCode: 1, error: INTERFERENCE_MESSAGE };
         return { exitCode: 1, error: error instanceof Error ? error.message : String(error) };
       } finally {
         finishOutput();

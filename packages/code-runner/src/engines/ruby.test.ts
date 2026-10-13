@@ -248,6 +248,10 @@ describe('Ruby engine (Node worker)', () => {
       ['redefines SystemExit#status', 'class SystemExit\n  def status = 77\n  def success? = false\nend'],
       ['redefines Integer, Array and Object methods', 'class Integer\n  def to_s(*) = "x"\n  def &(_) = 99\nend\nclass Array\n  def first = nil\n  def join(*) = ""\n  def each = nil\n  def select = []\nend\nclass Object\n  def nil? = false\n  def class = String\nend'],
       ['redefines Proc and Module methods', 'class Proc\n  def call(*) = nil\n  def to_proc = nil\nend\nclass Module\n  def instance_method(*) = nil\n  def name = "x"\nend'],
+      ['redefines JS::Object#call', 'class JS::Object\n  def call(*) = nil\nend'],
+      ['redefines Module#=== to never match', 'class Module\n  def ===(other) = false\nend'],
+      ['redefines Module#=== to fail', 'class Module\n  def ===(other) = raise("no")\nend'],
+      ['redefines Kernel#eval', 'module Kernel\n  def eval(*) = raise("no eval")\nend'],
       ['redefines raise, exit and abort', 'module Kernel\n  def raise(*) = nil\n  def exit(*) = nil\n  def abort(*) = nil\n  def loop = nil\nend'],
     ];
 
@@ -267,6 +271,14 @@ describe('Ruby engine (Node worker)', () => {
       expect(result.stderr).not.toMatch(INTERNAL_NAME);
       // A message that cannot be read cannot be shown, but the exit code still holds.
       if (!tamper.includes('def message')) expect(result.stderr).toMatch(/main\.rb:\d+:in '<main>': undefined method 'undefined_thing'/);
+    });
+
+    it('reports a generic error, never the support frames, when the runner cannot recover', async () => {
+      const result = await run("puts 'hi'\nclass UnboundMethod\n  def bind_call(*) = raise('no')\nend\nProcess.exit(0)");
+      expect(result).toMatchObject({ status: 'runtime_error', stdout: 'hi\n', exitCode: 1 });
+      expect(result.stderr).toContain('the program interfered with the runner');
+      expect(result.stderr).not.toMatch(INTERNAL_NAME);
+      expect(result.stderr).not.toMatch(/-e|eval|RbError/);
     });
 
     it('reports a program that returns normally after tampering as ok', async () => {
