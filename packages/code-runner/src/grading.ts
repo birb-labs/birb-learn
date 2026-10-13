@@ -181,10 +181,15 @@ export async function runTests(
   return { unavailable: false, tests: outcomesFromRun(run, tests) };
 }
 
+/**
+ * A failed check that needs no run (a wrong blank, a wrong line) makes the answer
+ * incorrect whatever the tests say, even when they could not run.
+ */
 function verdictFromTests(
   run: Awaited<ReturnType<typeof runTests>>,
   otherChecksPass: boolean,
 ): CodeGradeResult['verdict'] {
+  if (!otherChecksPass) return 'incorrect';
   if (run.unavailable) return 'not_graded';
   const allPassed = run.tests.every((test) => test.passed);
   return otherChecksPass && allPassed ? 'correct' : 'incorrect';

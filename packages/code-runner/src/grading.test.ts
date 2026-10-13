@@ -228,6 +228,16 @@ describe('gradeCodeTask: fill_blank', () => {
     expect(result.verdict).toBe('incorrect');
     expect(result.blanksCorrect).toEqual({ 1: false });
   });
+
+  it('is incorrect when a blank is wrong even if the runner is unavailable', async () => {
+    const { runner } = fakeRunner(() => ({ status: 'unavailable', cases: [] }));
+    const base = payload({ starterCode: 'y = ___1___', blanks, tests: ioTests });
+    const wrong = await gradeCodeTask('fill_blank', 'python', base, { kind: 'fill_blank', blanks: { 1: 'nope' } }, runner);
+    expect(wrong).toEqual({ verdict: 'incorrect', tests: [], blanksCorrect: { 1: false } });
+
+    const right = await gradeCodeTask('fill_blank', 'python', base, { kind: 'fill_blank', blanks: { 1: 'x+1' } }, runner);
+    expect(right.verdict).toBe('not_graded');
+  });
 });
 
 describe('gradeCodeTask: find_bug', () => {
@@ -253,6 +263,22 @@ describe('gradeCodeTask: find_bug', () => {
     const result = await gradeCodeTask('find_bug', 'python', bugPayload, { kind: 'find_bug', line: 3, code: 'fixed' }, runner);
     expect(result.verdict).toBe('incorrect');
     expect(result.lineCorrect).toBe(true);
+  });
+
+  it('is incorrect for a line outside the range even if the runner is unavailable', async () => {
+    const { runner } = fakeRunner(() => ({ status: 'unavailable', cases: [] }));
+    const wrong = await gradeCodeTask('find_bug', 'python', bugPayload, { kind: 'find_bug', line: 1, code: 'x' }, runner);
+    expect(wrong).toEqual({ verdict: 'incorrect', tests: [], lineCorrect: false });
+
+    const right = await gradeCodeTask('find_bug', 'python', bugPayload, { kind: 'find_bug', line: 3, code: 'x' }, runner);
+    expect(right.verdict).toBe('not_graded');
+  });
+
+  it('reports the test outcomes of a wrong line when the tests ran', async () => {
+    const { runner } = echoRunner(['a', 'b']);
+    const result = await gradeCodeTask('find_bug', 'python', bugPayload, { kind: 'find_bug', line: 1, code: 'x' }, runner);
+    expect(result.verdict).toBe('incorrect');
+    expect(result.tests.map((test) => test.passed)).toEqual([true, true]);
   });
 
   it('grades the line alone when there are no tests', async () => {
