@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
@@ -19,6 +19,31 @@ function sourceFiles(dir: string): string[] {
 // `import type` is erased and therefore allowed.
 const STATIC_NODE_IMPORT = /^\s*(import|export)\b(?!\s+type\b)[^;]*?\bfrom\s+['"]node:|^\s*import\s+['"]node:/m;
 
+// Relative `from '...'` and side-effect `import '...'` specifiers. Type-only
+// ones are erased, but following them too is the conservative choice.
+const RELATIVE_SPECIFIER = /(?:\bfrom\s+|^\s*import\s+)['"](\.{1,2}\/[^'"]+)['"]/gm;
+// Any `node:` specifier: static, side-effect or dynamic.
+const ANY_NODE_SPECIFIER = /\bfrom\s+['"]node:|^\s*import\s+['"]node:|\bimport\(\s*['"]node:/m;
+
+function resolveRelative(from: string, specifier: string): string {
+  const base = join(dirname(from), specifier);
+  return [`${base}.ts`, join(base, 'index.ts')].find((path) => existsSync(path) && statSync(path).isFile()) ?? base;
+}
+
+/** Every file reachable from `entry` through relative imports, `entry` included. */
+function reachableFrom(entry: string): string[] {
+  const seen = new Set<string>();
+  const queue = [entry];
+  while (queue.length > 0) {
+    const file = queue.pop() as string;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    const source = readFileSync(file, 'utf8');
+    for (const match of source.matchAll(RELATIVE_SPECIFIER)) queue.push(resolveRelative(file, match[1]));
+  }
+  return [...seen];
+}
+
 // Engines and the worker entry are bundled into browser workers: `node:*`
 // modules may only be reached through guarded dynamic imports.
 describe('browser safety', () => {
@@ -34,6 +59,18 @@ describe('browser safety', () => {
     const source = readFileSync(join(SRC, 'worker', 'engine-worker.ts'), 'utf8');
     expect(source).not.toMatch(/['"`]node:/);
     expect(source).not.toContain('import.meta.resolve');
+  });
+
+  it('reaches no node: specifier from the public entry point', () => {
+    const reachable = reachableFrom(join(SRC, 'index.ts'));
+    // Guards the walk itself: the entry point must really pull in the runner.
+    expect(reachable.map((path) => relative(SRC, path))).toEqual(
+      expect.arrayContaining(['index.ts', 'run-code.ts', 'browser-runner.ts', 'spawn-browser.ts']),
+    );
+    const offenders = reachable
+      .filter((path) => ANY_NODE_SPECIFIER.test(readFileSync(path, 'utf8')))
+      .map((path) => relative(SRC, path));
+    expect(offenders).toEqual([]);
   });
 
   it('detects static node: imports but not type-only or dynamic ones', () => {
