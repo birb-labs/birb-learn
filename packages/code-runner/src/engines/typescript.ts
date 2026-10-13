@@ -1,6 +1,6 @@
 import type * as TS from 'typescript';
 import { createSystem, createVirtualTypeScriptEnvironment, type VirtualTypeScriptEnvironment } from '@typescript/vfs';
-import { runJavaScript } from './javascript';
+import { createJavaScriptRunner } from './javascript';
 import { TS_GLOBALS_DTS } from './typescript-globals';
 import type { EngineEnv, EngineFactory } from './types';
 
@@ -98,6 +98,7 @@ export const createTypeScriptEngine: EngineFactory = async (env) => {
   const loaded = (await import('typescript')) as typeof TS & { default?: typeof TS };
   const ts = loaded.default ?? loaded;
   const options = compilerOptions(ts);
+  const runJavaScript = createJavaScriptRunner(env);
 
   const files = await loadLibFiles(env);
   files.set(MAIN_FILE, '\n');

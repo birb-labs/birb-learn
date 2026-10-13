@@ -39,6 +39,11 @@ export interface EngineEnv {
   assetLocation(pkg: RuntimePackage, path: string): string;
   /** The contents of a file of a runtime package; rejects when it cannot be loaded. */
   readAsset(pkg: RuntimePackage, path: string): Promise<Uint8Array>;
+  /**
+   * Makes `handler` receive the reason of every promise rejection of the worker
+   * that nothing handles, instead of letting it crash the worker. Call once.
+   */
+  onUnhandledRejection(handler: (reason: unknown) => void): void;
 }
 
 export type EngineFactory = (env: EngineEnv) => Promise<Engine>;

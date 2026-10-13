@@ -1,11 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { createJavaScriptEngine } from './javascript';
-import type { Engine, EngineCaseOutput } from './types';
+import type { Engine, EngineCaseOutput, EngineEnv } from './types';
 
 const noAssets = (): never => {
   throw new Error('the JavaScript engine needs no assets');
 };
-const env = { assetLocation: noAssets, readAsset: noAssets };
+
+/** An environment whose unhandled rejections the test reports by hand. */
+function createEnv() {
+  let handler: (reason: unknown) => void = () => {};
+  const env: EngineEnv = {
+    assetLocation: noAssets,
+    readAsset: noAssets,
+    onUnhandledRejection: (h) => {
+      handler = h;
+    },
+  };
+  return { env, reject: (reason: unknown) => handler(reason) };
+}
+
+const { env } = createEnv();
 
 async function run(source: string, stdin = '') {
   const engine: Engine = await createJavaScriptEngine(env);
@@ -58,5 +72,19 @@ describe('JavaScript engine', () => {
     const { stdout, result } = await run('const n = await Promise.resolve(1); console.log(n)');
     expect(stdout).toBe('1\n');
     expect(result).toEqual({ exitCode: 0 });
+  });
+
+  it('ends the running case with an unhandled rejection and ignores one between cases', async () => {
+    const { env: own, reject } = createEnv();
+    const engine = await createJavaScriptEngine(own);
+    const pending = engine.runCase({ source: 'await new Promise((r) => setTimeout(r, 5000))', stdin: '' }, () => {});
+    setTimeout(() => reject(new TypeError('lost')), 20);
+    const started = performance.now();
+    expect(await pending).toEqual({ exitCode: 1, error: 'Uncaught (in promise) TypeError: lost' });
+    expect(performance.now() - started).toBeLessThan(1000);
+
+    reject('between cases');
+    const next = await engine.runCase({ source: 'console.log(1)', stdin: '' }, () => {});
+    expect(next).toEqual({ exitCode: 0 });
   });
 });

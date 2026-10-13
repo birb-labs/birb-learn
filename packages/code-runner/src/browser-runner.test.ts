@@ -97,9 +97,11 @@ describe('BrowserRunner with Node workers (JavaScript)', () => {
   });
 
   it('reports a worker crash as runtime_error and recovers on the next run', async () => {
+    // The worker's own `setTimeout` is not the program's tracked one: its exception crashes the worker.
     const result = await runner.runCode({
       language: 'javascript',
-      source: "setTimeout(() => { throw new Error('late') }, 0); await new Promise((r) => setTimeout(r, 1000));",
+      source:
+        "globalThis.setTimeout(() => { throw new Error('late') }, 0); await new Promise((r) => setTimeout(r, 1000));",
     });
     expect(result.cases[0].status).toBe('runtime_error');
     expect(result.cases[0].stderr).toContain('late');
@@ -111,7 +113,7 @@ describe('BrowserRunner with Node workers (JavaScript)', () => {
   it('drops a worker that crashes while idle, so the next run is ok and fast', async () => {
     const result = await runner.runCode({
       language: 'javascript',
-      source: "setTimeout(() => { throw new Error('late') }, 50)",
+      source: "globalThis.setTimeout(() => { throw new Error('late') }, 50)",
     });
     expect(result.cases[0].status).toBe('ok');
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -163,6 +165,90 @@ describe('BrowserRunner with Node workers (JavaScript)', () => {
     });
     expect(result.cases[0].status).toBe('timeout');
     expect(result.cases[0].stdout).toBe('');
+  });
+});
+
+describe('BrowserRunner with Node workers (JavaScript asynchronous work)', () => {
+  function runJs(source: string, extra: { cases?: { stdin?: string }[]; timeoutMs?: number } = {}) {
+    return runner.runCode({ language: 'javascript', source, ...extra });
+  }
+
+  it('waits for setTimeout callbacks before ending the case', async () => {
+    const result = await runJs("setTimeout(() => console.log('later'), 20); console.log('now')");
+    expect(result.cases[0]).toMatchObject({ status: 'ok', stdout: 'now\nlater\n', stderr: '', exitCode: 0 });
+  });
+
+  it('runs nested promise chains to completion', async () => {
+    const result = await runJs(
+      'Promise.resolve(1).then((x) => x + 1).then((x) => Promise.resolve(x * 10)).then((x) => console.log(x));',
+    );
+    expect(result.cases[0]).toMatchObject({ status: 'ok', stdout: '20\n' });
+  });
+
+  it('keeps the output of an un-awaited async main', async () => {
+    const result = await runJs(
+      "async function main() { await new Promise((r) => setTimeout(r, 20)); console.log('done'); }\nmain();",
+    );
+    expect(result.cases[0]).toMatchObject({ status: 'ok', stdout: 'done\n' });
+  });
+
+  it('reports an unhandled rejection as runtime_error', async () => {
+    const result = await runJs("console.log('before'); Promise.reject(new TypeError('nope'));");
+    expect(result.cases[0]).toMatchObject({
+      status: 'runtime_error',
+      stdout: 'before\n',
+      stderr: 'Uncaught (in promise) TypeError: nope\n',
+      exitCode: 1,
+    });
+    const main = await runJs("async function main() { throw new Error('boom'); }\nmain();");
+    expect(main.cases[0]).toMatchObject({ status: 'runtime_error', stderr: 'Uncaught (in promise) Error: boom\n' });
+  });
+
+  it('reports an exception thrown by a timer callback as runtime_error', async () => {
+    const result = await runJs(
+      "setTimeout(() => { throw new RangeError('tick'); }, 5); setTimeout(() => console.log('never'), 50);",
+    );
+    expect(result.cases[0]).toMatchObject({ status: 'runtime_error', stdout: '', stderr: 'RangeError: tick\n' });
+  });
+
+  it('cancels timers with clearTimeout and clearInterval', async () => {
+    const result = await runJs(
+      [
+        "const t = setTimeout(() => console.log('cancelled'), 10);",
+        'clearTimeout(t);',
+        'let n = 0;',
+        'const i = setInterval(() => { n += 1; if (n === 3) { clearInterval(i); console.log(n); } }, 5);',
+        "queueMicrotask(() => console.log('micro'));",
+      ].join('\n'),
+    );
+    expect(result.cases[0]).toMatchObject({ status: 'ok', stdout: 'micro\n3\n' });
+  });
+
+  it('times out an endless setInterval and recovers on the next run', async () => {
+    const result = await runJs("setInterval(() => {}, 10); console.log('started')", { timeoutMs: 500 });
+    expect(result.cases[0]).toMatchObject({ status: 'timeout', stdout: 'started\n', exitCode: null });
+
+    const next = await runJs("console.log('again')");
+    expect(next.cases[0]).toMatchObject({ status: 'ok', stdout: 'again\n' });
+  });
+
+  it('never lets a timer of a finished case print into the next case', async () => {
+    // Case 1 fails while its timer is pending; case 2 outlives that timer's delay
+    // and lists (through a worker global) every timer that fired meanwhile.
+    const result = await runJs(
+      [
+        'const n = input();',
+        'setTimeout(() => { (globalThis.fired ??= []).push(n); console.log(`late ${n}`); }, 100);',
+        "if (n === '1') throw new Error('fail');",
+        'await new Promise((r) => setTimeout(r, 300));',
+        "console.log(globalThis.fired.join(','));",
+      ].join('\n'),
+      { cases: [{ stdin: '1' }, { stdin: '2' }] },
+    );
+    expect(result.cases.map((c) => [c.status, c.stdout])).toEqual([
+      ['runtime_error', ''],
+      ['ok', 'late 2\n2\n'],
+    ]);
   });
 });
 

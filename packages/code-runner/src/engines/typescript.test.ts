@@ -97,6 +97,45 @@ describe('TypeScript engine (Node worker)', () => {
     expect(result.status).toBe('ok');
     expect(result.cases[0]).toMatchObject({ status: 'runtime_error', exitCode: 1, stderr: 'Error: boom\n' });
   });
+
+  it('type-checks and waits for timers, promise chains and an un-awaited async main', async () => {
+    const result = await runner.runCode({
+      language: 'typescript',
+      source: [
+        "const timer: number = setTimeout((label: string) => console.log(label), 10, 'timer');",
+        "const cancelled = setTimeout(() => console.log('cancelled'), 5);",
+        'clearTimeout(cancelled);',
+        'let ticks = 0;',
+        'const interval = setInterval(() => { ticks += 1; if (ticks === 2) clearInterval(interval); }, 5);',
+        "queueMicrotask(() => console.log('micro'));",
+        'Promise.resolve(1).then((x) => x + 1).then((x) => console.log(x));',
+        'async function main(): Promise<void> {',
+        '  await new Promise((resolve) => setTimeout(resolve, 30));',
+        "  console.log('main', ticks, typeof timer);",
+        '}',
+        'main();',
+      ].join('\n'),
+    });
+    expect(result.status).toBe('ok');
+    expect(result.cases[0]).toMatchObject({ status: 'ok', stdout: 'micro\n2\ntimer\nmain 2 number\n', stderr: '' });
+  });
+
+  it('reports an unhandled rejection as runtime_error', async () => {
+    const result = await runner.runCode({
+      language: 'typescript',
+      source: "async function main(): Promise<void> { throw new RangeError('async boom'); }\nmain();",
+    });
+    expect(result.cases[0]).toMatchObject({
+      status: 'runtime_error',
+      exitCode: 1,
+      stderr: 'Uncaught (in promise) RangeError: async boom\n',
+    });
+  });
+
+  it('times out an endless setInterval', async () => {
+    const result = await runner.runCode({ language: 'typescript', source: 'setInterval(() => {}, 10);', timeoutMs: 500 });
+    expect(result.cases[0].status).toBe('timeout');
+  });
 });
 
 describe('TypeScript engine (empty and types-only programs)', () => {
@@ -141,6 +180,7 @@ describe('TypeScript engine (browser lib loading)', () => {
   const env: EngineEnv = {
     assetLocation: nodeAssetUrl,
     readAsset: (pkg, path) => fetchAsset(nodeAssetUrl(pkg, path)),
+    onUnhandledRejection: () => {},
   };
 
   /** A `fetch` serving the installed lib files, with optional per-file status overrides. */

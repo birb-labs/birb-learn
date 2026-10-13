@@ -67,6 +67,7 @@ function start(port: WorkerPort, env: EngineEnv): void {
 interface BrowserScope {
   postMessage(msg: unknown): void;
   addEventListener(type: 'message', cb: (event: MessageEvent) => void): void;
+  addEventListener(type: 'unhandledrejection', cb: (event: PromiseRejectionEvent) => void): void;
 }
 
 const scope = (globalThis as { self?: Partial<BrowserScope> }).self;
@@ -79,7 +80,16 @@ if (scope && typeof scope.postMessage === 'function' && typeof scope.addEventLis
       post: (msg) => browser.postMessage(msg),
       listen: (cb) => browser.addEventListener('message', (event) => cb(event.data as HostMessage)),
     },
-    { assetLocation: cdnAssetUrl, readAsset: cdnReadAsset },
+    {
+      assetLocation: cdnAssetUrl,
+      readAsset: cdnReadAsset,
+      onUnhandledRejection(handler) {
+        browser.addEventListener('unhandledrejection', (event) => {
+          event.preventDefault();
+          handler(event.reason);
+        });
+      },
+    },
   );
 } else {
   void (
