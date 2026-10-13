@@ -1,0 +1,136 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createNodeRunner } from '../node';
+
+const runner = createNodeRunner();
+
+afterAll(() => {
+  runner.dispose();
+});
+
+// Load the WASM runtime once, before the tests that need it.
+beforeAll(async () => {
+  await runner.runCode({ language: 'postgresql', source: 'SELECT 1;' });
+}, 120_000);
+
+async function run(source: string, sqlSetup?: string) {
+  const result = await runner.runCode({ language: 'postgresql', source, sqlSetup });
+  return result.cases[0];
+}
+
+const SETUP = "CREATE TABLE t(a INTEGER, b TEXT); INSERT INTO t VALUES (1,'Olá'),(2,NULL);";
+
+describe('PostgreSQL engine (Node worker)', () => {
+  it('returns the result set of a query run on the setup data', async () => {
+    const result = await run('SELECT a, b FROM t ORDER BY a;', SETUP);
+    expect(result).toMatchObject({ status: 'ok', exitCode: 0, stdout: 'a | b\n1 | Olá\n2 | NULL\n', stderr: '' });
+    expect(result.sql?.resultSets[0]).toEqual({ columns: ['a', 'b'], rows: [['1', 'Olá'], ['2', null]] });
+  });
+
+  it('collects the result set of every statement that returns columns', async () => {
+    const result = await run('SELECT 1 AS x; CREATE TABLE u(c int); SELECT 2 AS y, 3 AS z;');
+    expect(result.status).toBe('ok');
+    expect(result.sql?.resultSets).toEqual([
+      { columns: ['x'], rows: [['1']] },
+      { columns: ['y', 'z'], rows: [['2', '3']] },
+    ]);
+    expect(result.stdout).toBe('x\n1\n\ny | z\n2 | 3\n');
+  });
+
+  it('keeps a result set that has columns but no rows', async () => {
+    const result = await run('SELECT a FROM t WHERE a > 100;', SETUP);
+    expect(result.sql?.resultSets).toEqual([{ columns: ['a'], rows: [] }]);
+    expect(result.stdout).toBe('a\n');
+  });
+
+  it('accepts a source with only DDL', async () => {
+    const result = await run('CREATE TABLE v(a int); INSERT INTO v VALUES (1);');
+    expect(result).toMatchObject({ status: 'ok', exitCode: 0, stdout: '' });
+    expect(result.sql).toEqual({ resultSets: [] });
+  });
+
+  it('does not report the result sets of the setup', async () => {
+    const result = await run('SELECT 2 AS two;', 'SELECT 1 AS one;');
+    expect(result.sql?.resultSets).toEqual([{ columns: ['two'], rows: [['2']] }]);
+  });
+
+  it('keeps duplicate column names', async () => {
+    const result = await run('SELECT 1 AS a, 2 AS a;');
+    expect(result.sql?.resultSets).toEqual([{ columns: ['a', 'a'], rows: [['1', '2']] }]);
+  });
+
+  it('turns booleans and numerics into strings', async () => {
+    const result = await run('SELECT true AS t, 1.5::numeric AS n');
+    expect(result.sql?.resultSets[0].rows).toEqual([['true', '1.5']]);
+  });
+
+  it('turns dates, bytes and big integers into strings', async () => {
+    const result = await run(
+      "SELECT TIMESTAMPTZ '2020-01-02 03:04:05+00' AS ts, '\\x01ff'::bytea AS b, 9007199254740993::bigint AS big, NULL::text AS n;",
+    );
+    expect(result.sql?.resultSets[0].rows).toEqual([['2020-01-02T03:04:05.000Z', '\\x01ff', '9007199254740993', null]]);
+  });
+
+  it('turns json, jsonb and array columns into JSON text', async () => {
+    const result = await run(
+      `CREATE TABLE docs(id int, j json, jb jsonb, nums int[], words text[]);
+       INSERT INTO docs VALUES (1, '{"a": [1, 2]}', '{"b": null}', ARRAY[1, 2, 3], ARRAY['x', 'y']);
+       SELECT j, jb, nums, words FROM docs;`,
+    );
+    expect(result.status).toBe('ok');
+    expect(result.sql?.resultSets[0]).toEqual({
+      columns: ['j', 'jb', 'nums', 'words'],
+      rows: [['{"a":[1,2]}', '{"b":null}', '[1,2,3]', '["x","y"]']],
+    });
+    expect(result.stdout).toBe('j | jb | nums | words\n{"a":[1,2]} | {"b":null} | [1,2,3] | ["x","y"]\n');
+  });
+
+  it('formats an out-of-range timestamp instead of failing', async () => {
+    const result = await run("SELECT 'infinity'::timestamp AS ts;");
+    expect(result.status).toBe('ok');
+    expect(result.sql?.resultSets[0].rows).toEqual([['Invalid Date']]);
+  });
+
+  it('reports a syntax error as a runtime error with the database message', async () => {
+    const result = await run('SELEC 1;');
+    expect(result.status).toBe('runtime_error');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain('syntax error');
+    expect(result.stdout).toBe('');
+  });
+
+  it('keeps the result sets collected before the error', async () => {
+    const result = await run('SELECT 1 AS x; SELECT 1 / 0;');
+    expect(result.status).toBe('runtime_error');
+    expect(result.stderr).toContain('division by zero');
+    expect(result.sql?.resultSets).toEqual([{ columns: ['x'], rows: [['1']] }]);
+    expect(result.stdout).toBe('x\n1\n');
+  });
+
+  it('prefixes an error in the setup with "setup:"', async () => {
+    const result = await run('SELECT 1;', 'CREATE TABEL t(a int);');
+    expect(result.status).toBe('runtime_error');
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.startsWith('setup:')).toBe(true);
+    expect(result.stderr).toContain('syntax error');
+    expect(result.stdout).toBe('');
+  });
+
+  it('never exposes engine internals in an error', async () => {
+    const result = await run('SELECT * FROM missing;');
+    expect(result.stderr).toContain('relation "missing" does not exist');
+    expect(result.stderr).not.toMatch(/\bat\s|node_modules|\.js|\.wasm|file:|\/home\//);
+  });
+
+  it('gives every case a fresh database', async () => {
+    const first = await run('CREATE TABLE leak(a int); INSERT INTO leak VALUES (1);');
+    expect(first.status).toBe('ok');
+    const second = await run('SELECT * FROM leak;');
+    expect(second.status).toBe('runtime_error');
+    expect(second.stderr).toContain('relation "leak" does not exist');
+  });
+
+  it('runs setup and source in the same database', async () => {
+    const result = await run('INSERT INTO t VALUES (3, NULL); SELECT COUNT(*) AS n FROM t;', SETUP);
+    expect(result.sql?.resultSets).toEqual([{ columns: ['n'], rows: [['3']] }]);
+  });
+});

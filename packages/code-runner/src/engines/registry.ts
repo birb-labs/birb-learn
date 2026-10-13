@@ -9,4 +9,6 @@ export const ENGINE_LOADERS: Partial<Record<Language, () => Promise<EngineFactor
   python: () => import('./python').then((m) => m.createPythonEngine),
   lua: () => import('./lua').then((m) => m.createLuaEngine),
   ruby: () => import('./ruby').then((m) => m.createRubyEngine),
+  sqlite: () => import('./sqlite').then((m) => m.createSqliteEngine),
+  postgresql: () => import('./postgresql').then((m) => m.createPostgresqlEngine),
 };

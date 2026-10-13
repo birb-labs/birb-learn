@@ -79,6 +79,21 @@ describe('toCell', () => {
     expect(toCell(new Uint8Array([1, 255]))).toBe('\\x01ff');
   });
 
+  it('formats an invalid date instead of throwing', () => {
+    expect(toCell(new Date(Number.NaN))).toBe('Invalid Date');
+  });
+
+  it('formats plain objects and arrays as JSON', () => {
+    expect(toCell({ a: 1, b: ['x', null] })).toBe('{"a":1,"b":["x",null]}');
+    expect(toCell([1, 2, 3])).toBe('[1,2,3]');
+    expect(toCell([])).toBe('[]');
+    expect(toCell({})).toBe('{}');
+  });
+
+  it('keeps big integers inside JSON values', () => {
+    expect(toCell([1n, 2n ** 70n])).toBe('[1,"1180591620717411303424"]');
+  });
+
   it('stringifies bigint, number, boolean and strings', () => {
     expect(toCell(1n)).toBe('1');
     expect(toCell(1.5)).toBe('1.5');

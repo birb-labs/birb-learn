@@ -68,14 +68,29 @@ export class OutputCollector {
   }
 }
 
-/** Normalizes a database value to the string-or-null cell representation. */
+// JSON has no big integers: keep them as numbers when exact, as strings otherwise.
+function jsonReplacer(_key: string, value: unknown): unknown {
+  if (typeof value !== 'bigint') return value;
+  return value >= BigInt(Number.MIN_SAFE_INTEGER) && value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : value.toString();
+}
+
+/**
+ * Normalizes a database value to the string-or-null cell representation.
+ * Dates are ISO strings, bytes are `\x` hex, plain objects and arrays (JSON
+ * columns, Postgres arrays) are JSON text.
+ */
 export function toCell(value: unknown): string | null {
   if (value === null || value === undefined) return null;
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? 'Invalid Date' : value.toISOString();
   if (value instanceof Uint8Array) {
     let hex = '';
     for (const byte of value) hex += byte.toString(16).padStart(2, '0');
     return `\\x${hex}`;
+  }
+  if (Array.isArray(value)) return JSON.stringify(value, jsonReplacer);
+  if (typeof value === 'object') {
+    const prototype: unknown = Object.getPrototypeOf(value);
+    if (prototype === Object.prototype || prototype === null) return JSON.stringify(value, jsonReplacer);
   }
   return String(value);
 }

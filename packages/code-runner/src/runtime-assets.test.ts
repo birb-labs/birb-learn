@@ -15,7 +15,7 @@ describe('runtime packages', () => {
   });
 
   it('lists the packages the engines load assets from', () => {
-    expect(Object.keys(RUNTIME_PACKAGES)).toEqual(expect.arrayContaining(['typescript', '@typescript/vfs', 'pyodide', 'wasmoon', '@ruby/4.0-wasm-wasi']));
+    expect(Object.keys(RUNTIME_PACKAGES)).toEqual(expect.arrayContaining(['typescript', '@typescript/vfs', 'pyodide', 'wasmoon', '@ruby/4.0-wasm-wasi', 'sql.js', '@electric-sql/pglite']));
   });
 
   it('finds the manifest of a package that does not export it', () => {
