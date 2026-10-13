@@ -138,6 +138,53 @@ describe('Python engine (Node worker)', () => {
     expect(result.cases[0]).toMatchObject({ status: 'runtime_error', exitCode: 1, stderr: 'bye\n' });
   });
 
+  it('restores the standard streams for the next case and the next run', async () => {
+    const rebind = "import sys\nif input() == 'rebind':\n    sys.stdout = sys.stderr = sys.stdin = open('/dev/null', 'w')\nprint('after')\n1/0";
+    const first = await runner.runCode({
+      language: 'python',
+      source: rebind,
+      cases: [{ stdin: 'rebind' }, { stdin: 'plain' }],
+    });
+    // The rebound streams swallow the program's own output; the host appends the traceback.
+    expect(first.cases[0].stdout).toBe('');
+    expect(first.cases[1].stdout).toBe('after\n');
+    expect(first.cases[1].stderr).toContain('ZeroDivisionError');
+    const next = await runner.runCode({ language: 'python', source: 'print(input())\n1/0', cases: [{ stdin: 'plain' }] });
+    expect(next.cases[0].stdout).toBe('plain\n');
+    expect(next.cases[0].stderr).toContain('ZeroDivisionError');
+  });
+
+  it('restores the recursion limit for the next case', async () => {
+    const source = "import sys\nif input() == 'lower':\n    sys.setrecursionlimit(50)\nprint(sys.getrecursionlimit())";
+    const result = await runner.runCode({ language: 'python', source, cases: [{ stdin: 'lower' }, { stdin: 'keep' }] });
+    const [lowered, kept] = result.cases;
+    expect(lowered.stdout).toBe('50\n');
+    expect(kept.stdout).not.toBe('50\n');
+    const next = await runner.runCode({ language: 'python', source: 'import sys; print(sys.getrecursionlimit())' });
+    expect(next.cases[0].stdout).toBe(kept.stdout);
+  });
+
+  it('gives every case an empty working directory', async () => {
+    const source = [
+      'import os',
+      "if input() == 'write':",
+      "    open('note.txt', 'w').write('data')",
+      "print(sorted(os.listdir('.')))",
+    ].join('\n');
+    const result = await runner.runCode({ language: 'python', source, cases: [{ stdin: 'write' }, { stdin: 'read' }] });
+    expect(result.cases.map((c) => c.stdout)).toEqual(["['note.txt']\n", '[]\n']);
+    const next = await runner.runCode({ language: 'python', source: "import os; print(os.listdir('.'))" });
+    expect(next.cases[0].stdout).toBe('[]\n');
+  });
+
+  it('always reports a numeric exit code', async () => {
+    const run = async (arg: string) =>
+      (await runner.runCode({ language: 'python', source: `import sys; sys.exit(${arg})` })).cases[0];
+    expect(await run('True')).toMatchObject({ status: 'runtime_error', exitCode: 1 });
+    expect(await run('256')).toMatchObject({ status: 'ok', exitCode: 0 });
+    expect(await run('-1')).toMatchObject({ status: 'runtime_error', exitCode: 255 });
+  });
+
   it('maps sys.exit codes to the exit code', async () => {
     const failing = await runner.runCode({ language: 'python', source: 'import sys; sys.exit(3)' });
     expect(failing.cases[0]).toMatchObject({ status: 'runtime_error', exitCode: 3 });

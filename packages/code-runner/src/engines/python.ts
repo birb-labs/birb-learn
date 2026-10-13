@@ -7,10 +7,15 @@ import type { Emit, EngineEnv, EngineFactory } from './types';
 const PYTHON_SUPPORT = `
 import json
 import linecache
+import os
+import shutil
 import sys
 import traceback
 
 FILE_NAME = 'main.py'
+DEFAULT_RECURSION_LIMIT = sys.getrecursionlimit()
+case_count = 0
+scratch_dir = None
 
 
 def check_syntax(source):
@@ -32,7 +37,24 @@ def flush_streams():
             pass
 
 
+def reset_environment():
+    # A case runs in the interpreter of the previous ones: undo what they may
+    # have changed. Rebound streams, a lowered recursion limit and files written
+    # to the working directory must not reach the next case.
+    global case_count, scratch_dir
+    sys.stdin, sys.stdout, sys.stderr = sys.__stdin__, sys.__stdout__, sys.__stderr__
+    sys.setrecursionlimit(DEFAULT_RECURSION_LIMIT)
+    os.chdir('/')
+    if scratch_dir is not None:
+        shutil.rmtree(scratch_dir, ignore_errors=True)
+    case_count += 1
+    scratch_dir = f'/tmp/case-{case_count}'
+    os.makedirs(scratch_dir)
+    os.chdir(scratch_dir)
+
+
 def run_program(source):
+    reset_environment()
     # Lets tracebacks show the lines of the student's program.
     linecache.cache[FILE_NAME] = (len(source), None, source.splitlines(True), FILE_NAME)
     namespace = {'__name__': '__main__'}
@@ -45,7 +67,8 @@ def run_program(source):
         if code is None:
             exit_code = 0
         elif isinstance(code, int):
-            exit_code = code
+            # Like a process exit status; also turns a bool into a number.
+            exit_code = int(code) & 0xFF
         else:
             print(code, file=sys.stderr)
             exit_code = 1
