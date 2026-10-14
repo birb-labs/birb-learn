@@ -34,9 +34,26 @@ describe('createRunner', () => {
 
     expect(await runner.runCode({ language: 'rust', source: 'fn main() {}' })).toEqual({
       status: 'unavailable',
+      reason: 'service_error',
+      message: 'No remote runner configured',
       cases: [],
     });
     expect(browser.calls).toEqual([]);
+  });
+
+  it('reports a read-only language as unavailable without calling any runner', async () => {
+    const browser = fakeRunner(BROWSER_RESULT);
+    const remote = fakeRunner(REMOTE_RESULT);
+    const runner = createRunner({ browser, remote });
+
+    expect(await runner.runCode({ language: 'mysql', source: 'SELECT 1;' })).toEqual({
+      status: 'unavailable',
+      reason: 'read_only',
+      message: 'MySQL code is read-only in this lab',
+      cases: [],
+    });
+    expect(browser.calls).toEqual([]);
+    expect(remote.calls).toEqual([]);
   });
 
   it('forwards the request and the abort signal unchanged', async () => {

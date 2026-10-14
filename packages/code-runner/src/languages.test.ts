@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LANGUAGES, SQL_LANGUAGES } from '@birb-learn/content-schema';
-import { BROWSER_LANGUAGES, LANGUAGE_INFO, REMOTE_LANGUAGES } from './languages';
+import { BROWSER_LANGUAGES, LANGUAGE_INFO, READ_ONLY_LANGUAGES, REMOTE_LANGUAGES } from './languages';
 import { clampTimeout, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS } from './protocol';
 
 describe('LANGUAGE_INFO', () => {
@@ -8,11 +8,13 @@ describe('LANGUAGE_INFO', () => {
     expect(new Set(Object.keys(LANGUAGE_INFO))).toEqual(new Set(LANGUAGES));
   });
 
-  it('splits engines into browser and remote', () => {
+  it('splits engines into browser, remote and none', () => {
     expect([...BROWSER_LANGUAGES].sort()).toEqual(
       ['javascript', 'lua', 'postgresql', 'python', 'ruby', 'sqlite', 'typescript'].sort(),
     );
-    expect([...REMOTE_LANGUAGES].sort()).toEqual(['c', 'cpp', 'go', 'java', 'mysql', 'rust'].sort());
+    expect([...REMOTE_LANGUAGES].sort()).toEqual(['c', 'cpp', 'go', 'java', 'rust'].sort());
+    expect(READ_ONLY_LANGUAGES).toEqual(['mysql']);
+    expect(LANGUAGE_INFO.mysql.engine).toBe('none');
   });
 
   it('flags SQL exactly for the SQL languages', () => {
@@ -24,7 +26,7 @@ describe('LANGUAGE_INFO', () => {
   it('has the expected labels and highlighter ids', () => {
     expect(LANGUAGES.map((l) => LANGUAGE_INFO[l].label)).toEqual([
       'C', 'C++', 'Java', 'JavaScript', 'TypeScript', 'Python', 'Lua', 'Go', 'Rust', 'Ruby',
-      'SQLite', 'MySQL (MariaDB)', 'PostgreSQL',
+      'SQLite', 'MySQL', 'PostgreSQL',
     ]);
     expect(LANGUAGES.map((l) => LANGUAGE_INFO[l].shikiLang)).toEqual([
       'c', 'cpp', 'java', 'javascript', 'typescript', 'python', 'lua', 'go', 'rust', 'ruby',

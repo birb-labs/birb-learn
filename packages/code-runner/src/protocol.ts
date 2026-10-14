@@ -11,6 +11,9 @@ export type RunStatus =
   | 'output_limit'
   | 'unavailable';
 
+/** Why a run is `unavailable`. The UI translates by reason; `message` is for developers. */
+export type UnavailableReason = 'read_only' | 'rate_limited' | 'offline' | 'service_error' | 'engine_load';
+
 export interface RunRequest {
   language: Language;
   /** Single source file. */
@@ -43,6 +46,10 @@ export interface RunResult {
   /** `'ok'` unless compilation failed, or `'unavailable'`. */
   status: RunStatus;
   compileOutput?: string;
+  /** Set only when `status` is `'unavailable'`. */
+  reason?: UnavailableReason;
+  /** English developer message; set only when `status` is `'unavailable'`. */
+  message?: string;
   cases: CaseResult[];
 }
 

@@ -41,7 +41,12 @@ type Outcome =
   | { kind: 'timeout' }
   | { kind: 'output_limit' };
 
-const UNAVAILABLE: RunResult = { status: 'unavailable', cases: [] };
+/** An engine that failed, or could not load or compile in time, makes the run unavailable. */
+function engineUnavailable(message: string): RunResult {
+  return { status: 'unavailable', reason: 'engine_load', message, cases: [] };
+}
+
+const LOAD_TIMED_OUT = 'Engine load timed out';
 
 function abortError(): DOMException {
   return new DOMException('Aborted', 'AbortError');
@@ -97,10 +102,11 @@ export class BrowserRunner implements Runner {
       signal,
     );
     if (compiled.outcome.kind !== 'done') {
-      // A failed engine, or one that cannot load or compile in time, is
-      // unavailable. (`request` already killed the worker on timeouts.)
+      // (`request` already killed the worker on timeouts.)
       this.kill(slot);
-      return UNAVAILABLE;
+      const { outcome } = compiled;
+      if (outcome.kind === 'failed') return engineUnavailable(outcome.message);
+      return engineUnavailable(outcome.kind === 'timeout' ? 'Engine compile timed out' : LOAD_TIMED_OUT);
     }
     const { compileOutput } = compiled.outcome.result as CompileOutcome;
     if (compileOutput !== null) return { status: 'compile_error', compileOutput, cases: [] };
@@ -127,14 +133,14 @@ export class BrowserRunner implements Runner {
 
       switch (outcome.kind) {
         case 'load_timeout':
-          return UNAVAILABLE;
+          return engineUnavailable(LOAD_TIMED_OUT);
         case 'timeout':
         case 'output_limit':
           cases.push({ status: outcome.kind, ...output, exitCode: null });
           break;
         case 'failed':
           this.kill(caseSlot);
-          if (outcome.reason === 'engine_load') return UNAVAILABLE;
+          if (outcome.reason === 'engine_load') return engineUnavailable(outcome.message);
           appendError(collector, outcome.message);
           cases.push({ status: 'runtime_error', ...output, stderr: collector.stderr, exitCode: null });
           break;

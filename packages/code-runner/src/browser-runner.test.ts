@@ -290,7 +290,7 @@ describe('BrowserRunner with a fake worker', () => {
       message: 'no engine',
     }));
     const result = await fake.runCode({ language: 'python', source: "print('hi')" });
-    expect(result).toEqual({ status: 'unavailable', cases: [] });
+    expect(result).toEqual({ status: 'unavailable', reason: 'engine_load', message: 'no engine', cases: [] });
     expect(stats.terminated).toBe(1);
     fake.dispose();
   });
@@ -362,7 +362,12 @@ describe('BrowserRunner engine load budget', () => {
     await vi.advanceTimersByTimeAsync(49999);
     expect(result.settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
-    expect(result.value).toEqual({ status: 'unavailable', cases: [] });
+    expect(result.value).toEqual({
+      status: 'unavailable',
+      reason: 'engine_load',
+      message: 'Engine compile timed out',
+      cases: [],
+    });
     expect(stats.terminated).toBe(1);
     fake.dispose();
   });
@@ -373,7 +378,12 @@ describe('BrowserRunner engine load budget', () => {
     await vi.advanceTimersByTimeAsync(119999);
     expect(result.settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
-    expect(result.value).toEqual({ status: 'unavailable', cases: [] });
+    expect(result.value).toEqual({
+      status: 'unavailable',
+      reason: 'engine_load',
+      message: 'Engine load timed out',
+      cases: [],
+    });
     expect(stats.terminated).toBe(1);
     fake.dispose();
   });

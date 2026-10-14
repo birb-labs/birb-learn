@@ -3,19 +3,32 @@ import { LANGUAGE_INFO } from './languages';
 import type { RunResult, Runner } from './protocol';
 import { spawnBrowserWorker } from './spawn-browser';
 
-const UNAVAILABLE: RunResult = { status: 'unavailable', cases: [] };
-
 /**
  * Routes each run by the engine of its language: `browser` languages go to
- * `browser`, `remote` languages to `remote`. Without a `remote` runner a
- * remote language is `unavailable`.
+ * `browser`, `remote` languages to `remote`. Read-only (`none`)
+ * languages never reach a runner. Both are `unavailable`, as is a remote
+ * language without a `remote` runner.
  */
 export function createRunner({ browser, remote }: { browser: Runner; remote?: Runner }): Runner {
   return {
     runCode(req, opts) {
-      if (LANGUAGE_INFO[req.language].engine === 'browser') return browser.runCode(req, opts);
+      const info = LANGUAGE_INFO[req.language];
+      if (info.engine === 'none') {
+        return Promise.resolve({
+          status: 'unavailable',
+          reason: 'read_only',
+          message: `${info.label} code is read-only in this lab`,
+          cases: [],
+        });
+      }
+      if (info.engine === 'browser') return browser.runCode(req, opts);
       if (remote) return remote.runCode(req, opts);
-      return Promise.resolve({ ...UNAVAILABLE, cases: [] });
+      return Promise.resolve({
+        status: 'unavailable',
+        reason: 'service_error',
+        message: 'No remote runner configured',
+        cases: [],
+      });
     },
   };
 }

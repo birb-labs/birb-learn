@@ -2,8 +2,8 @@ import { LANGUAGES, type Language } from '@birb-learn/content-schema';
 
 export interface LanguageInfo {
   label: string;
-  /** `browser` runs in a Web Worker; `remote` goes through the container runner. */
-  engine: 'browser' | 'remote';
+  /** `browser` runs in a Web Worker, `remote` goes through the remote runner and `none` is never executed (read-only). */
+  engine: 'browser' | 'remote' | 'none';
   isSql: boolean;
   /** Syntax highlighter language id. */
   shikiLang: string;
@@ -120,9 +120,11 @@ func main() {
 `,
   },
   sqlite: { label: 'SQLite', engine: 'browser', isSql: true, shikiLang: 'sql', template: SQL_HELLO },
-  mysql: { label: 'MySQL (MariaDB)', engine: 'remote', isSql: true, shikiLang: 'sql', template: SQL_HELLO },
+  mysql: { label: 'MySQL', engine: 'none', isSql: true, shikiLang: 'sql', template: SQL_HELLO },
   postgresql: { label: 'PostgreSQL', engine: 'browser', isSql: true, shikiLang: 'sql', template: SQL_HELLO },
 };
 
 export const BROWSER_LANGUAGES: Language[] = LANGUAGES.filter((l) => LANGUAGE_INFO[l].engine === 'browser');
 export const REMOTE_LANGUAGES: Language[] = LANGUAGES.filter((l) => LANGUAGE_INFO[l].engine === 'remote');
+/** Languages whose code is shown but never executed. */
+export const READ_ONLY_LANGUAGES: Language[] = LANGUAGES.filter((l) => LANGUAGE_INFO[l].engine === 'none');
