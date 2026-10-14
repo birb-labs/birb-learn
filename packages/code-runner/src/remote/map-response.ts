@@ -31,6 +31,8 @@ export function buildCompileRequest(language: RemoteLanguage, source: string, st
     body: {
       source,
       lang,
+      // Asks Compiler Explorer not to retain the student's code.
+      allowStoreCodeDebug: false,
       options: {
         userArguments: flags,
         executeParameters: { args: [], stdin },
@@ -96,10 +98,11 @@ export function mapCompilerExplorerResponse(json: unknown): MappedResponse {
   }
 
   if (json.didExecute !== true) throw new CompilerExplorerFormatError('the program was not executed');
-  if (typeof json.code !== 'number') throw new CompilerExplorerFormatError('the exit code is not a number');
   const stdout = readLines(json.stdout, 'stdout', true);
   const stderr = readLines(json.stderr, 'stderr', true);
 
+  // Checked before the exit code: a killed program does not need to report one.
   if (json.timedOut === true) return { kind: 'case', status: 'timeout', stdout, stderr, exitCode: null };
+  if (typeof json.code !== 'number') throw new CompilerExplorerFormatError('the exit code is not a number');
   return { kind: 'case', status: json.code === 0 ? 'ok' : 'runtime_error', stdout, stderr, exitCode: json.code };
 }

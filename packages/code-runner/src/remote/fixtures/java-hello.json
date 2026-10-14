@@ -27,9 +27,9 @@
       "/app/example.java"
     ],
     "preparedLdPaths": [
-      "/opt/compiler-explorer/jdk-27.0.0/lib",
-      "/opt/compiler-explorer/jdk-27.0.0/lib32",
-      "/opt/compiler-explorer/jdk-27.0.0/lib64"
+      "/opt/compiler-explorer/jdk-25.0.0/lib",
+      "/opt/compiler-explorer/jdk-25.0.0/lib32",
+      "/opt/compiler-explorer/jdk-25.0.0/lib64"
     ],
     "defaultExecOptions": {
       "timeoutMs": 20000,

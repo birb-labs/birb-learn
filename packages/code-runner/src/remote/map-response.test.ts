@@ -50,6 +50,8 @@ describe('buildCompileRequest', () => {
     expect(body).toEqual({
       source: 'SOURCE',
       lang,
+      // Asks Compiler Explorer not to keep the student's code.
+      allowStoreCodeDebug: false,
       options: {
         userArguments: flags,
         executeParameters: { args: [], stdin: 'line one\nline two\n' },
@@ -143,6 +145,34 @@ describe('mapCompilerExplorerResponse', () => {
     expect(mapped).toMatchObject({ kind: 'case', status: 'timeout', stdout: 'start\n', exitCode: null });
     if (mapped.kind !== 'case') return;
     expect(mapped.stderr).toContain('Killed - processing time exceeded');
+  });
+
+  it('maps a timed-out response that carries no exit code to timeout', () => {
+    expect(
+      mapCompilerExplorerResponse({
+        timedOut: true,
+        didExecute: true,
+        stdout: [{ text: 'partial' }],
+        stderr: [{ text: 'Killed - processing time exceeded' }],
+        buildResult: { code: 0, stdout: [], stderr: [] },
+      }),
+    ).toEqual({
+      kind: 'case',
+      status: 'timeout',
+      stdout: 'partial\n',
+      stderr: 'Killed - processing time exceeded\n',
+      exitCode: null,
+    });
+  });
+
+  it('tolerates unknown extra top-level fields', () => {
+    expect(
+      mapCompilerExplorerResponse({
+        ...cHello,
+        somethingNew: { nested: [1, 2, 3] },
+        anotherField: 'x',
+      }),
+    ).toEqual(mapCompilerExplorerResponse(cHello));
   });
 
   it('falls back to the top-level stderr when buildResult is absent', () => {

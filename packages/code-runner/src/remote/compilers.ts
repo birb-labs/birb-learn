@@ -21,10 +21,10 @@ export const COMPILER_EXPLORER_API = 'https://godbolt.org/api';
 //   c     cg162     x86-64 gcc 16.2
 //   c++   g162      x86-64 gcc 16.2
 //   go    gl1260    x86-64 gc 1.26.0
-//   java  java2700  jdk 27.0.0
+//   java  java2500  jdk 25.0.0 (the newest LTS; deliberately not the newer non-LTS 26/27)
 //   rust  r1990     rustc 1.99.0
 // Re-pin deliberately (and re-record the fixtures) when a newer release is wanted;
-// the opt-in `CE_NETWORK_TESTS=1` tests check that every id below still exists.
+// Task 4 adds opt-in network tests that check every id below still exists.
 //
 // Java: the executor compiles the source as `example.java`, so a top-level
 // `public class Main` is a compile error ("class Main is public, should be
@@ -36,6 +36,6 @@ export const COMPILER_EXPLORER_COMPILERS: Record<RemoteLanguage, CompilerExplore
   c: { id: 'cg162', lang: 'c', flags: '-std=c17 -O0 -Wall' },
   cpp: { id: 'g162', lang: 'c++', flags: '-std=c++20 -O0 -Wall' },
   go: { id: 'gl1260', lang: 'go', flags: '' },
-  java: { id: 'java2700', lang: 'java', flags: '' },
+  java: { id: 'java2500', lang: 'java', flags: '' },
   rust: { id: 'r1990', lang: 'rust', flags: '--edition 2021 -C opt-level=0' },
 };
