@@ -47,7 +47,10 @@ int main() {
     engine: 'remote',
     isSql: false,
     shikiLang: 'java',
-    template: `public class Main {
+    // Not `public`: Compiler Explorer compiles the source as `example.java`, and a
+    // public class must live in a file named after it. Content authors must follow
+    // the same rule (see `COMPILER_EXPLORER_COMPILERS`).
+    template: `class Main {
     public static void main(String[] args) {
         System.out.println("Hello, world!");
     }

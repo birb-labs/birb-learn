@@ -1,0 +1,44 @@
+{
+  "code": 0,
+  "okToCache": true,
+  "timedOut": false,
+  "stdout": [
+    {
+      "text": "Hello, world!"
+    }
+  ],
+  "stderr": [],
+  "truncated": false,
+  "didExecute": true,
+  "buildResult": {
+    "inputFilename": "example.java",
+    "code": 0,
+    "okToCache": true,
+    "timedOut": false,
+    "stdout": [],
+    "stderr": [],
+    "truncated": false,
+    "instructionSet": "java",
+    "downloads": [],
+    "compilationOptions": [
+      "-Xlint:all",
+      "-encoding",
+      "utf8",
+      "/app/example.java"
+    ],
+    "preparedLdPaths": [
+      "/opt/compiler-explorer/jdk-27.0.0/lib",
+      "/opt/compiler-explorer/jdk-27.0.0/lib32",
+      "/opt/compiler-explorer/jdk-27.0.0/lib64"
+    ],
+    "defaultExecOptions": {
+      "timeoutMs": 20000,
+      "maxErrorOutput": 5000,
+      "env": {
+        "LD_LIBRARY_PATH": "",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin",
+        "HOME": "/home/ce"
+      }
+    }
+  }
+}

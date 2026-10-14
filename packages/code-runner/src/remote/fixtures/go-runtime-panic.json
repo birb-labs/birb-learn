@@ -1,0 +1,67 @@
+{
+  "code": 2,
+  "okToCache": true,
+  "timedOut": false,
+  "stdout": [
+    {
+      "text": "before panic"
+    }
+  ],
+  "stderr": [
+    {
+      "text": "panic: runtime error: index out of range [3] with length 0"
+    },
+    {
+      "text": ""
+    },
+    {
+      "text": "goroutine 1 [running]:"
+    },
+    {
+      "text": "main.main()"
+    },
+    {
+      "text": "\t./example.go:8 +0x4b"
+    }
+  ],
+  "truncated": false,
+  "didExecute": true,
+  "buildResult": {
+    "inputFilename": "example.go",
+    "code": 0,
+    "okToCache": true,
+    "timedOut": false,
+    "stdout": [],
+    "stderr": [],
+    "truncated": false,
+    "instructionSet": "amd64",
+    "downloads": [],
+    "compilationOptions": [
+      "build",
+      "-trimpath",
+      "-o",
+      "/app/output.s",
+      "-gcflags=",
+      "/app/example.go"
+    ],
+    "preparedLdPaths": [
+      "/opt/compiler-explorer/golang-1.26.0/go/lib",
+      "/opt/compiler-explorer/golang-1.26.0/go/lib32",
+      "/opt/compiler-explorer/golang-1.26.0/go/lib64"
+    ],
+    "defaultExecOptions": {
+      "timeoutMs": 20000,
+      "maxErrorOutput": 5000,
+      "env": {
+        "LD_LIBRARY_PATH": "",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin",
+        "HOME": "/home/ce",
+        "LIBRARY_PATH": "/usr/lib/x86_64-linux-gnu",
+        "C_INCLUDE_PATH": "/usr/include/x86_64-linux-gnu",
+        "CPLUS_INCLUDE_PATH": "/usr/include/x86_64-linux-gnu",
+        "GOROOT": "/opt/compiler-explorer/golang-1.26.0/go"
+      },
+      "maxOutput": 1073741824
+    }
+  }
+}

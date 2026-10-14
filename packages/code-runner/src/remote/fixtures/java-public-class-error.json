@@ -1,0 +1,65 @@
+{
+  "stdout": [],
+  "stderr": [
+    {
+      "text": "<source>:1: error: class Main is public, should be declared in a file named Main.java",
+      "tag": {
+        "line": 1,
+        "column": 0,
+        "text": "error: class Main is public, should be declared in a file named Main.java",
+        "severity": 3,
+        "file": "example.java"
+      }
+    },
+    {
+      "text": "public class Main {"
+    },
+    {
+      "text": "       ^"
+    },
+    {
+      "text": "1 error"
+    }
+  ],
+  "code": 1,
+  "didExecute": false,
+  "buildResult": {
+    "inputFilename": "example.java",
+    "code": 1,
+    "okToCache": true,
+    "timedOut": false,
+    "stdout": [],
+    "stderr": [
+      {
+        "text": "<source>:1: error: class Main is public, should be declared in a file named Main.java",
+        "tag": {
+          "line": 1,
+          "column": 0,
+          "text": "error: class Main is public, should be declared in a file named Main.java",
+          "severity": 3,
+          "file": "example.java"
+        }
+      },
+      {
+        "text": "public class Main {"
+      },
+      {
+        "text": "       ^"
+      },
+      {
+        "text": "1 error"
+      }
+    ],
+    "truncated": false,
+    "instructionSet": "java",
+    "downloads": [],
+    "compilationOptions": [
+      "-Xlint:all",
+      "-encoding",
+      "utf8",
+      "/app/example.java"
+    ]
+  },
+  "timedOut": false,
+  "okToCache": false
+}

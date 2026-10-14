@@ -1,0 +1,65 @@
+{
+  "code": -1,
+  "didExecute": false,
+  "buildResult": {
+    "inputFilename": "example.c",
+    "code": 1,
+    "okToCache": true,
+    "timedOut": false,
+    "stdout": [],
+    "stderr": [
+      {
+        "text": "\u001b[01m\u001b[K<source>:\u001b[m\u001b[K In function '\u001b[01m\u001b[Kmain\u001b[m\u001b[K':"
+      },
+      {
+        "text": "\u001b[01m\u001b[K<source>:4:30:\u001b[m\u001b[K \u001b[01;31m\u001b[Kerror: \u001b[m\u001b[Kexpected '\u001b[01m\u001b[K;\u001b[m\u001b[K' before '\u001b[01m\u001b[Kreturn\u001b[m\u001b[K'",
+        "tag": {
+          "line": 4,
+          "column": 30,
+          "text": "error: expected ';' before 'return'",
+          "severity": 3,
+          "file": "example.c"
+        }
+      },
+      {
+        "text": "    4 |     printf(\"Hello, world!\\n\")"
+      },
+      {
+        "text": "      |                              \u001b[01;31m\u001b[K^\u001b[m\u001b[K"
+      },
+      {
+        "text": "      |                              \u001b[32m\u001b[K;\u001b[m\u001b[K"
+      },
+      {
+        "text": "    5 |     \u001b[32m\u001b[Kreturn\u001b[m\u001b[K 0;"
+      },
+      {
+        "text": "      |     \u001b[32m\u001b[K~~~~~~\u001b[m\u001b[K                    "
+      }
+    ],
+    "truncated": false,
+    "instructionSet": "amd64",
+    "downloads": [],
+    "compilationOptions": [
+      "-g",
+      "-o",
+      "/app/output.s",
+      "-fno-verbose-asm",
+      "-fdiagnostics-color=always",
+      "-std=c17",
+      "-O0",
+      "-Wall",
+      "/app/example.c",
+      "-L./lib",
+      "-Wl,-rpath,./lib"
+    ]
+  },
+  "stderr": [
+    {
+      "text": "Build failed"
+    }
+  ],
+  "stdout": [],
+  "timedOut": false,
+  "okToCache": false
+}

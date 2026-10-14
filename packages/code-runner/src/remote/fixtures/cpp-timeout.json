@@ -1,0 +1,63 @@
+{
+  "code": 143,
+  "okToCache": false,
+  "timedOut": true,
+  "stdout": [
+    {
+      "text": "start"
+    }
+  ],
+  "stderr": [
+    {
+      "text": ""
+    },
+    {
+      "text": "Killed - processing time exceeded"
+    },
+    {
+      "text": "Program terminated with signal: SIGKILL"
+    }
+  ],
+  "truncated": false,
+  "didExecute": true,
+  "buildResult": {
+    "inputFilename": "example.cpp",
+    "code": 0,
+    "okToCache": true,
+    "timedOut": false,
+    "stdout": [],
+    "stderr": [],
+    "truncated": false,
+    "instructionSet": "amd64",
+    "downloads": [],
+    "compilationOptions": [
+      "-g",
+      "-o",
+      "/app/output.s",
+      "-fno-verbose-asm",
+      "-fdiagnostics-color=always",
+      "-std=c++20",
+      "-O0",
+      "-Wall",
+      "/app/example.cpp",
+      "-L./lib",
+      "-Wl,-rpath,./lib",
+      "-Wl,-rpath,/opt/compiler-explorer/gcc-16.2.0/lib64",
+      "-Wl,-rpath,/opt/compiler-explorer/gcc-16.2.0/lib32"
+    ],
+    "preparedLdPaths": [
+      "/opt/compiler-explorer/gcc-16.2.0/lib",
+      "/opt/compiler-explorer/gcc-16.2.0/lib32",
+      "/opt/compiler-explorer/gcc-16.2.0/lib64"
+    ],
+    "defaultExecOptions": {
+      "timeoutMs": 20000,
+      "maxErrorOutput": 5000,
+      "env": {
+        "LD_LIBRARY_PATH": "",
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin",
+        "HOME": "/home/ce"
+      }
+    }
+  }
+}
