@@ -109,6 +109,16 @@ describe('validateCodeSnippet', () => {
     expect(errors[0]).toContain('variants[0].annotations[0].lines');
   });
 
+  it('rejects a runnable mysql variant', () => {
+    expect(validateCodeSnippet(snippet({ language: 'mysql', runnable: true }))).toEqual([
+      'variants[0].runnable: mysql code is read-only',
+    ]);
+  });
+
+  it('accepts a non-runnable mysql variant', () => {
+    expect(validateCodeSnippet(snippet({ language: 'mysql' }))).toEqual([]);
+  });
+
   it('prefixes errors with the variant index', () => {
     const payload = CodeSnippetPayload.parse({
       variants: [
@@ -136,6 +146,7 @@ describe('validateCodeTask', () => {
 
   const ioTest = { stdin: '', expectedStdout: '3' };
   const sqlTest = { expectedRows: { columns: ['n'], rows: [['1']] } };
+  const READ_ONLY_TASK_ERROR = 'language: mysql code is read-only; use sqlite or postgresql for runnable tasks';
 
   const cases: Array<{
     name: string;
@@ -196,6 +207,21 @@ describe('validateCodeTask', () => {
     { name: 'sqlite with an IoTest', kind: 'write', language: 'sqlite', payload: { solution: 'select 1', tests: [ioTest] }, expected: 'tests[0]' },
     { name: 'python with a SqlTest', kind: 'write', language: 'python', payload: { solution: 'print(3)', tests: [sqlTest] }, expected: 'tests[0]' },
     { name: 'valid sql write', kind: 'write', language: 'postgresql', payload: { solution: 'select 1', tests: [sqlTest] }, expected: null },
+    { name: 'mysql write', kind: 'write', language: 'mysql', payload: { solution: 'select 1', tests: [sqlTest] }, expected: READ_ONLY_TASK_ERROR },
+    {
+      name: 'mysql fill_blank',
+      kind: 'fill_blank',
+      language: 'mysql',
+      payload: {
+        starterCode: 'select ___1___',
+        solution: 'select 1',
+        blanks: [{ id: 1, accepted: ['1'] }],
+        tests: [sqlTest],
+      },
+      expected: READ_ONLY_TASK_ERROR,
+    },
+    { name: 'mysql find_bug', kind: 'find_bug', language: 'mysql', payload: { solution: 'select 1', bugLines: '1' }, expected: READ_ONLY_TASK_ERROR },
+    { name: 'mysql predict_output stays valid', kind: 'predict_output', language: 'mysql', payload: { expectedOutput: '1' }, expected: null },
   ];
 
   it.each(cases)('$name', ({ kind, language, payload, expected }) => {

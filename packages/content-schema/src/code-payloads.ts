@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isSqlLanguage, LANGUAGES, type CodeKind, type Language } from './code-languages';
+import { isReadOnlyCodeLanguage, isSqlLanguage, LANGUAGES, type CodeKind, type Language } from './code-languages';
 
 // "3" or "3-5": 1-based, inclusive line numbers.
 const LINE_RANGE_PATTERN = /^\d+(-\d+)?$/;
@@ -128,6 +128,10 @@ export function validateCodeSnippet(payload: CodeSnippetPayloadData): string[] {
     }
     seenLanguages.add(variant.language);
 
+    if (variant.runnable && isReadOnlyCodeLanguage(variant.language)) {
+      errors.push(`${variantPath}.runnable: ${variant.language} code is read-only`);
+    }
+
     const lineCount = countLines(variant.code);
     for (const field of ['annotations', 'walkthrough'] as const) {
       variant[field].forEach((note, noteIndex) => {
@@ -147,6 +151,11 @@ export function validateCodeSnippet(payload: CodeSnippetPayloadData): string[] {
  */
 export function validateCodeTask(kind: CodeKind, language: Language, payload: CodeTaskPayloadData): string[] {
   const errors: string[] = [];
+
+  // predict_output only shows code, so a read-only language is fine there.
+  if (kind !== 'predict_output' && isReadOnlyCodeLanguage(language)) {
+    errors.push(`language: ${language} code is read-only; use sqlite or postgresql for runnable tasks`);
+  }
 
   switch (kind) {
     case 'write':
