@@ -14,7 +14,7 @@ export const REMOTE_REQUEST_TIMEOUT_MS = 45000;
 
 export const DEFAULT_REQUEST_BUDGET = { requests: 20, windowMs: 60000 };
 
-/** Successful results kept in memory per runner; the oldest is dropped first. */
+/** Results (and, separately, compile errors) kept in memory per runner; the oldest is dropped first. */
 const CACHE_LIMIT = 200;
 
 export interface CompilerExplorerRunnerOptions {
@@ -63,9 +63,9 @@ function parseRetryAfterMs(header: string | null): number | undefined {
  * in flight (other runs queue), at most `budget.requests` requests per rolling
  * `budget.windowMs` (beyond that the run is `unavailable` with `rate_limited`, a
  * `retryAfterMs` hint and nothing more is sent), an HTTP 429 cool-down, and an
- * in-memory cache of finished results so an identical program and input is never
- * sent twice. A run whose uncached cases fit the budget but not what is left of
- * it fails fast, before anything is sent.
+ * in-memory cache of finished results (and of compile errors, per source) so an
+ * identical program and input is never sent twice. A run whose uncached cases fit
+ * the budget but not what is left of it fails fast, before anything is sent.
  *
  * `RunRequest.timeoutMs` is ignored: the service has its own execution limit and
  * every request is bounded by `REMOTE_REQUEST_TIMEOUT_MS` (see there).
@@ -78,6 +78,9 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
   const doFetch: typeof fetch = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
 
   const cache = new Map<string, CaseResult>();
+  // Compile errors are deterministic and independent of stdin, and beginners re-run
+  // broken code often: remember them per (compiler, flags, source).
+  const compileErrors = new Map<string, string>();
   const requestTimes: number[] = [];
   // After an HTTP 429 the budget counts as spent until this instant.
   let blockedUntil = 0;
@@ -103,10 +106,10 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
     return unavailable('rate_limited', message, retryAfterMs(needed));
   }
 
-  function remember(key: string, result: CaseResult): void {
-    cache.delete(key);
-    cache.set(key, result);
-    if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value as string);
+  function remember<T>(store: Map<string, T>, key: string, value: T): void {
+    store.delete(key);
+    store.set(key, value);
+    if (store.size > CACHE_LIMIT) store.delete(store.keys().next().value as string);
   }
 
   /** Sends one request. Throws `AbortError` when the caller aborts. */
@@ -212,6 +215,10 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
     const { id, flags } = COMPILER_EXPLORER_COMPILERS[language];
     const cases: CaseResult[] = [];
 
+    const sourceKey = JSON.stringify([id, flags, req.source]);
+    const knownCompileError = compileErrors.get(sourceKey);
+    if (knownCompileError !== undefined) return { status: 'compile_error', compileOutput: knownCompileError, cases: [] };
+
     const keyOf = (stdin: string) => JSON.stringify([id, flags, req.source, stdin]);
     const testCases = req.cases ?? [{}];
 
@@ -248,8 +255,11 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
       const outcome = await sendCase(language, req.source, stdin, signal);
       if (outcome.kind === 'unavailable') return unavailable(outcome.reason, outcome.message, outcome.retryAfterMs);
       // The program is compiled for every case, so a build failure ends the run at once.
-      if (outcome.kind === 'compile_error') return { status: 'compile_error', compileOutput: outcome.compileOutput, cases: [] };
-      if (outcome.cacheable) remember(key, outcome.result);
+      if (outcome.kind === 'compile_error') {
+        remember(compileErrors, sourceKey, outcome.compileOutput);
+        return { status: 'compile_error', compileOutput: outcome.compileOutput, cases: [] };
+      }
+      if (outcome.cacheable) remember(cache, key, outcome.result);
       cases.push(outcome.result);
     }
     return { status: 'ok', cases };

@@ -696,25 +696,51 @@ describe('createCompilerExplorerRunner', () => {
       expect(again.cases[0]).toMatchObject({ status: 'runtime_error', exitCode: 3 });
     });
 
-    it('does not cache failures, timeouts or compile errors', async () => {
-      const answers = [
-        () => Promise.reject(new TypeError('down')),
-        () => Promise.resolve(jsonResponse(cCompileError)),
-        () => Promise.resolve(jsonResponse(cCompileError)),
-      ];
-      const fake = recordingFetch((index) => answers[index]());
+    it('does not cache failures or service timeouts', async () => {
+      const fake = recordingFetch((index) =>
+        index === 0 ? Promise.reject(new TypeError('down')) : Promise.resolve(jsonResponse({}, 503)),
+      );
       const runner = createCompilerExplorerRunner({ fetch: fake.fetch });
 
       await runner.runCode({ language: 'c', source: 'same' });
       await runner.runCode({ language: 'c', source: 'same' });
-      await runner.runCode({ language: 'c', source: 'same' });
-      expect(fake.calls).toHaveLength(3);
+      expect(fake.calls).toHaveLength(2);
 
       const hanging = recordingFetch((_index, init) => hangUntilAborted(init));
       const timing = createCompilerExplorerRunner({ fetch: hanging.fetch, requestTimeoutMs: 20 });
       await timing.runCode(RUST);
       await timing.runCode(RUST);
       expect(hanging.calls).toHaveLength(2);
+    });
+
+    it('caches a compile error per source, whatever the stdin', async () => {
+      const fake = recordingFetch(() => Promise.resolve(jsonResponse(cCompileError)));
+      const runner = createCompilerExplorerRunner({
+        fetch: fake.fetch,
+        now: () => 0,
+        budget: { requests: 1, windowMs: 60000 },
+      });
+      const broken: RunRequest = { language: 'c', source: 'int main(' };
+
+      const first = await runner.runCode(broken);
+      const again = await runner.runCode(broken);
+      const otherInput = await runner.runCode({ ...broken, cases: [{ stdin: 'x' }, { stdin: 'y' }] });
+
+      expect(fake.calls).toHaveLength(1);
+      expect(first.status).toBe('compile_error');
+      expect(again).toEqual(first);
+      expect(otherInput).toEqual(first);
+    });
+
+    it('keys cached compile errors on language and source', async () => {
+      const fake = recordingFetch(() => Promise.resolve(jsonResponse(cCompileError)));
+      const runner = createCompilerExplorerRunner({ fetch: fake.fetch });
+
+      await runner.runCode({ language: 'c', source: 'one' });
+      await runner.runCode({ language: 'c', source: 'two' });
+      await runner.runCode({ language: 'cpp', source: 'one' });
+
+      expect(fake.calls).toHaveLength(3);
     });
   });
 
