@@ -1,6 +1,7 @@
 import { BrowserRunner } from './browser-runner';
 import { LANGUAGE_INFO } from './languages';
 import type { RunResult, Runner } from './protocol';
+import { createCompilerExplorerRunner } from './remote/compiler-explorer';
 import { spawnBrowserWorker } from './spawn-browser';
 
 /**
@@ -36,4 +37,9 @@ export function createRunner({ browser, remote }: { browser: Runner; remote?: Ru
 /** A runner backed by Web Workers (the site and the admin). */
 export function createBrowserRunner(): BrowserRunner {
   return new BrowserRunner(spawnBrowserWorker);
+}
+
+/** The runner of the site: Web Workers for browser languages, Compiler Explorer for the compiled ones. */
+export function createSiteRunner(): Runner {
+  return createRunner({ browser: createBrowserRunner(), remote: createCompilerExplorerRunner() });
 }

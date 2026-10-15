@@ -4,6 +4,7 @@ export * from './output';
 export * from './grading';
 export * from './run-code';
 export { BrowserRunner } from './browser-runner';
+export * from './remote/compiler-explorer';
 
 // `./node` (worker_threads-based) is deliberately NOT re-exported from this
 // barrel. It statically imports `node:worker_threads`, which does not exist
