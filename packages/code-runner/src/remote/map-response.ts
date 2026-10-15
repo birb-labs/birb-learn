@@ -15,6 +15,8 @@ export interface CompileRequest {
 
 export type MappedResponse =
   | { kind: 'compile_error'; compileOutput: string }
+  /** The service's own limit stopped the build step: not the student's fault, nothing to grade. */
+  | { kind: 'service_timeout' }
   | {
       kind: 'case';
       status: 'ok' | 'runtime_error' | 'timeout';
@@ -79,14 +81,17 @@ function compileError(output: string): MappedResponse {
  * - Executed program: top-level `code` is the exit code, `stdout`/`stderr` are the
  *   program's lines.
  * - Time limit (20 s on the service): top-level `timedOut: true` with `code: 143`
- *   (SIGKILL) and "Killed - processing time exceeded" on stderr. `buildResult`
- *   carries its own `timedOut` for the build step.
+ *   (SIGKILL) and "Killed - processing time exceeded" on stderr.
+ * - Build time limit: `buildResult.timedOut: true` (a cold Go build can take long).
+ *   This is the service being slow, not a compile error, so it maps to
+ *   `service_timeout` and is checked before the build exit code.
  */
 export function mapCompilerExplorerResponse(json: unknown): MappedResponse {
   if (!isObject(json)) throw new CompilerExplorerFormatError('the payload is not an object');
   const build = json.buildResult;
 
   if (build !== undefined) {
+    if (isObject(build) && build.timedOut === true) return { kind: 'service_timeout' };
     if (!isObject(build) || typeof build.code !== 'number') throw new CompilerExplorerFormatError('buildResult has no numeric code');
     if (build.code !== 0) {
       const output = readLines(build.stderr, 'buildResult.stderr', false);

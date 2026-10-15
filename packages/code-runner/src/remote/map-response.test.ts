@@ -193,6 +193,15 @@ describe('mapCompilerExplorerResponse', () => {
     ).toEqual({ kind: 'compile_error', compileOutput: 'first\nsecond' });
   });
 
+  it('maps a build step that hit the service time limit to service_timeout, not a compile error', () => {
+    const timedOutBuild = { ...cCompileError, buildResult: { ...cCompileError.buildResult, timedOut: true } };
+    expect(mapCompilerExplorerResponse(timedOutBuild)).toEqual({ kind: 'service_timeout' });
+    // Also when the killed build carries no usable exit code.
+    expect(
+      mapCompilerExplorerResponse({ ...cCompileError, buildResult: { timedOut: true, stdout: [], stderr: [] } }),
+    ).toEqual({ kind: 'service_timeout' });
+  });
+
   it.each([
     ['null', null],
     ['a string', 'oops'],

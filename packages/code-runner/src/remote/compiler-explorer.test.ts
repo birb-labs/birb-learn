@@ -113,6 +113,24 @@ describe('createCompilerExplorerRunner', () => {
       expect(result.cases).toEqual([]);
     });
 
+    it('reports a build step that timed out as a service error, not a compile error', async () => {
+      const timedOutBuild = { ...cCompileError, buildResult: { ...cCompileError.buildResult, timedOut: true } };
+      const fake = recordingFetch(() => Promise.resolve(jsonResponse(timedOutBuild)));
+      const result = await createCompilerExplorerRunner({ fetch: fake.fetch }).runCode({
+        language: 'go',
+        source: 'x',
+        cases: [{ stdin: '1' }, { stdin: '2' }],
+      });
+
+      expect(result).toEqual({
+        status: 'unavailable',
+        reason: 'service_error',
+        message: 'Compiler Explorer build timed out',
+        cases: [],
+      });
+      expect(fake.calls).toHaveLength(1);
+    });
+
     it('reports a non-zero exit code as a runtime error with that exit code', async () => {
       const fake = recordingFetch(() => Promise.resolve(jsonResponse(cExit3)));
       const result = await createCompilerExplorerRunner({ fetch: fake.fetch }).runCode({ language: 'c', source: 'x' });

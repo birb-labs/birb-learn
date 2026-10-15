@@ -128,6 +128,9 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
       }
 
       const mapped = mapCompilerExplorerResponse(json);
+      if (mapped.kind === 'service_timeout') {
+        return { kind: 'unavailable', reason: 'service_error', message: 'Compiler Explorer build timed out' };
+      }
       if (mapped.kind === 'compile_error') return { kind: 'compile_error', compileOutput: mapped.compileOutput };
 
       const collector = new OutputCollector();
