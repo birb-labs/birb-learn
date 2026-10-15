@@ -728,6 +728,27 @@ describe('createSiteRunner', () => {
     expect(result.cases[0]).toMatchObject({ status: 'ok', stdout: 'hi\n' });
   });
 
+  it('shares one remote runner (queue, budget and cache) between site runners', async () => {
+    // A fresh module, so the shared runner starts with an untouched budget.
+    vi.resetModules();
+    const { createSiteRunner: freshSiteRunner } = await import('../run-code');
+    const fake = recordingFetch(() => Promise.resolve(jsonResponse(executed('x'))));
+    vi.stubGlobal('fetch', fake.fetch);
+
+    for (let i = 0; i < 20; i += 1) {
+      expect((await freshSiteRunner().runCode({ ...RUST, source: `program ${i}` })).status).toBe('ok');
+    }
+    expect(await freshSiteRunner().runCode({ ...RUST, source: 'program 21' })).toMatchObject({
+      status: 'unavailable',
+      reason: 'rate_limited',
+    });
+    expect(fake.calls).toHaveLength(20);
+
+    // The cache is shared too: no new request, no budget needed.
+    expect((await freshSiteRunner().runCode({ ...RUST, source: 'program 0' })).status).toBe('ok');
+    expect(fake.calls).toHaveLength(20);
+  });
+
   it('keeps read-only languages read-only without any request', async () => {
     const fake = recordingFetch(echo);
     vi.stubGlobal('fetch', fake.fetch);

@@ -39,7 +39,17 @@ export function createBrowserRunner(): BrowserRunner {
   return new BrowserRunner(spawnBrowserWorker);
 }
 
-/** The runner of the site: Web Workers for browser languages, Compiler Explorer for the compiled ones. */
+// One Compiler Explorer runner per page: its queue (one request in flight), request
+// budget and cache must be shared by every caller, however many site runners exist.
+let siteRemoteRunner: Runner | undefined;
+
+/**
+ * The runner of the site: Web Workers for browser languages, Compiler Explorer for the
+ * compiled ones. The Compiler Explorer runner is created once and shared by every call,
+ * so all site runners on a page share one queue, budget and cache (use
+ * `createCompilerExplorerRunner` directly for an independent instance).
+ */
 export function createSiteRunner(): Runner {
-  return createRunner({ browser: createBrowserRunner(), remote: createCompilerExplorerRunner() });
+  siteRemoteRunner ??= createCompilerExplorerRunner();
+  return createRunner({ browser: createBrowserRunner(), remote: siteRemoteRunner });
 }
