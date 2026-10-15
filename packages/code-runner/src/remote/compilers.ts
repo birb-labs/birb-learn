@@ -17,14 +17,14 @@ export const COMPILER_EXPLORER_API = 'https://godbolt.org/api';
 // Pinned on 2026-10-13 from
 //   GET https://godbolt.org/api/compilers/<lang>?fields=id,name,semver,supportsExecute
 // to the newest stable release that reports `supportsExecute: true` (no trunk,
-// beta, nightly or tip builds):
+// beta, nightly or tip builds), except Java, which follows the LTS line:
 //   c     cg162     x86-64 gcc 16.2
 //   c++   g162      x86-64 gcc 16.2
 //   go    gl1260    x86-64 gc 1.26.0
 //   java  java2500  jdk 25.0.0 (the newest LTS; deliberately not the newer non-LTS 26/27)
 //   rust  r1990     rustc 1.99.0
 // Re-pin deliberately (and re-record the fixtures) when a newer release is wanted;
-// Task 4 adds opt-in network tests that check every id below still exists.
+// the opt-in network test checks that every id below still exists and can execute.
 //
 // Java: the executor compiles the source as `example.java`, so a top-level
 // `public class Main` is a compile error ("class Main is public, should be

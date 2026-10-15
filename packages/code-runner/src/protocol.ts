@@ -22,7 +22,7 @@ export interface RunRequest {
   cases?: { stdin?: string }[];
   /** SQL only: executed before `source` in the same fresh database. */
   sqlSetup?: string;
-  /** Per case, default 5000 ms, max 10000 ms. */
+  /** Per case, default 5000 ms, max 10000 ms. Ignored by remote (Compiler Explorer) runs, which enforce their own 20 s limit. */
   timeoutMs?: number;
 }
 
