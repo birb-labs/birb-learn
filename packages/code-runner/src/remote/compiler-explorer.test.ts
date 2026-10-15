@@ -165,6 +165,17 @@ describe('createCompilerExplorerRunner', () => {
       expect(result.cases[0].durationMs).toBe(250);
     });
 
+    it('does not mistake an inherited property name for a configured language', async () => {
+      const fake = recordingFetch(echo);
+      const result = await createCompilerExplorerRunner({ fetch: fake.fetch }).runCode({
+        language: 'constructor' as RunRequest['language'],
+        source: 'x',
+      });
+
+      expect(result).toMatchObject({ status: 'unavailable', reason: 'service_error', cases: [] });
+      expect(fake.calls).toEqual([]);
+    });
+
     it('reports a language without a compiler as a service error without sending anything', async () => {
       const fake = recordingFetch(echo);
       const result = await createCompilerExplorerRunner({ fetch: fake.fetch }).runCode({
@@ -341,6 +352,22 @@ describe('createCompilerExplorerRunner', () => {
 
       await expect(runner.runCode(RUST, { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
       expect(fake.calls).toEqual([]);
+    });
+
+    it('rejects between cases when aborted after one finished, without sending the next', async () => {
+      const controller = new AbortController();
+      // The signal aborts just as the first response is being turned into a result.
+      const fake = recordingFetch(() => Promise.resolve(jsonResponse(executed('one'))));
+      const now = () => {
+        if (fake.calls.length > 0) controller.abort();
+        return 0;
+      };
+      const runner = createCompilerExplorerRunner({ fetch: fake.fetch, now });
+
+      await expect(
+        runner.runCode({ ...RUST, cases: [{ stdin: '1' }, { stdin: '2' }] }, { signal: controller.signal }),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(fake.calls).toHaveLength(1);
     });
 
     it('rejects a queued run on abort without ever sending its request', async () => {

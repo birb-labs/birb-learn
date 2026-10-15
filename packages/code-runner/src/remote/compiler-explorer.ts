@@ -233,6 +233,7 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
     }
 
     for (const testCase of testCases) {
+      if (signal?.aborted) throw abortError();
       const stdin = testCase.stdin ?? '';
       const key = keyOf(stdin);
       const cached = cache.get(key);
@@ -257,7 +258,7 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
   return {
     async runCode(req, opts) {
       const signal = opts?.signal;
-      if (!(req.language in COMPILER_EXPLORER_COMPILERS)) {
+      if (!Object.hasOwn(COMPILER_EXPLORER_COMPILERS, req.language)) {
         return unavailable('service_error', `No Compiler Explorer compiler is configured for ${req.language}`);
       }
       if (signal?.aborted) throw abortError();
