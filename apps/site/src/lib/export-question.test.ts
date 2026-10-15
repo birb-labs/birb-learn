@@ -1,16 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type ExportableQuestion,
   compileQuestionForExport,
   isValidNumericCorrectAnswer,
   assertValidNumericCorrectAnswer,
   assertValidShortTextAnswer,
   assertValidMatchingPairs,
 } from './export-question';
-import type { QuestionExport } from '@birb-learn/content-schema';
 
-const mcQuestion: QuestionExport = {
+const mcQuestion: ExportableQuestion = {
   id: 1,
   type: 'multiple_choice',
+  codeKind: null,
+  codeLanguage: null,
+  codeJson: null,
   difficulty: 'easy',
   promptMdx: 'Qual é o valor de $1 + 1$?',
   resolutionMdx: 'A soma vale $2$.',
@@ -26,9 +29,12 @@ const mcQuestion: QuestionExport = {
   tagIds: [5],
 };
 
-const numericQuestion: QuestionExport = {
+const numericQuestion: ExportableQuestion = {
   id: 2,
   type: 'numeric',
+  codeKind: null,
+  codeLanguage: null,
+  codeJson: null,
   difficulty: 'medium',
   promptMdx: 'Quanto é $3 \\div 2$?',
   resolutionMdx: 'A divisão de $3$ por $2$ é igual a $1.5$.',
@@ -41,9 +47,12 @@ const numericQuestion: QuestionExport = {
   tagIds: [5, 6],
 };
 
-const multiResponseQuestion: QuestionExport = {
+const multiResponseQuestion: ExportableQuestion = {
   id: 3,
   type: 'multiple_response',
+  codeKind: null,
+  codeLanguage: null,
+  codeJson: null,
   difficulty: 'hard',
   promptMdx: 'Quais afirmações são verdadeiras?',
   resolutionMdx: 'A primeira e a terceira são verdadeiras.',
@@ -60,9 +69,12 @@ const multiResponseQuestion: QuestionExport = {
   tagIds: [7],
 };
 
-const trueFalseQuestion: QuestionExport = {
+const trueFalseQuestion: ExportableQuestion = {
   id: 3,
   type: 'true_false',
+  codeKind: null,
+  codeLanguage: null,
+  codeJson: null,
   difficulty: 'easy',
   promptMdx: 'O céu é azul?',
   resolutionMdx: 'Sim.',
@@ -75,9 +87,12 @@ const trueFalseQuestion: QuestionExport = {
   tagIds: [],
 };
 
-const shortTextQuestion: QuestionExport = {
+const shortTextQuestion: ExportableQuestion = {
   id: 4,
   type: 'short_text',
+  codeKind: null,
+  codeLanguage: null,
+  codeJson: null,
   difficulty: 'medium',
   promptMdx: 'Qual gás as plantas liberam na fotossíntese?',
   resolutionMdx: 'Oxigênio.',
@@ -93,9 +108,12 @@ const shortTextQuestion: QuestionExport = {
   tagIds: [],
 };
 
-const mathShortTextQuestion: QuestionExport = {
+const mathShortTextQuestion: ExportableQuestion = {
   id: 7,
   type: 'short_text',
+  codeKind: null,
+  codeLanguage: null,
+  codeJson: null,
   difficulty: 'hard',
   promptMdx: 'Calcule $\\lim_{x \\to 2} (3x + 1)$.',
   resolutionMdx: 'Substituição direta.',
@@ -108,9 +126,12 @@ const mathShortTextQuestion: QuestionExport = {
   tagIds: [],
 };
 
-const orderingQuestion: QuestionExport = {
+const orderingQuestion: ExportableQuestion = {
   id: 5,
   type: 'ordering',
+  codeKind: null,
+  codeLanguage: null,
+  codeJson: null,
   difficulty: 'medium',
   promptMdx: 'Ordene os passos.',
   resolutionMdx: 'Ver resolução.',
@@ -126,9 +147,12 @@ const orderingQuestion: QuestionExport = {
   tagIds: [],
 };
 
-const matchingQuestion: QuestionExport = {
+const matchingQuestion: ExportableQuestion = {
   id: 6,
   type: 'matching',
+  codeKind: null,
+  codeLanguage: null,
+  codeJson: null,
   difficulty: 'hard',
   promptMdx: 'Associe.',
   resolutionMdx: 'Ver resolução.',
@@ -231,6 +255,9 @@ describe('compileQuestionForExport', () => {
     const exported = await compileQuestionForExport({
       id: 1,
       type: 'true_false',
+      codeKind: null,
+      codeLanguage: null,
+      codeJson: null,
       difficulty: 'easy',
       promptMdx: 'Verdadeiro?',
       resolutionMdx: 'Sim.',

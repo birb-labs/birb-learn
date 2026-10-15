@@ -27,6 +27,15 @@ import {
   topics,
   topicTranslations,
 } from './schema';
+import type { CodeKind, Language } from './code-languages';
+import {
+  CodeSnippetPayload,
+  CodeTaskPayload,
+  validateCodeSnippet,
+  validateCodeTask,
+  type CodeSnippetPayloadData,
+  type CodeTaskPayloadData,
+} from './code-payloads';
 
 type Db = BetterSQLite3Database<Record<string, unknown>> | DrizzleD1Database<Record<string, unknown>>;
 
@@ -167,6 +176,54 @@ export interface LessonBlockContent {
   caption: string | null;
   simulatorKey: string | null;
   simulatorParams: string | null;
+  // Code blocks only: kind/language are structural, the payload is localized (pt-BR fallback).
+  codeKind: CodeKind | null;
+  codeLanguage: Language | null;
+  payloadJson: string | null;
+}
+
+export type LessonCodePayload =
+  | { kind: 'snippet'; payload: CodeSnippetPayloadData }
+  | { kind: 'task'; codeKind: CodeKind; language: Language; payload: CodeTaskPayloadData };
+
+/**
+ * Parses and validates the payload of a code block. Returns null for any
+ * other block type; throws an Error naming the block when the JSON is
+ * malformed or fails schema or cross-field validation, so a bad block fails
+ * the build loudly instead of rendering wrong.
+ */
+export function parseLessonCodePayload(block: LessonBlockContent): LessonCodePayload | null {
+  if (block.type !== 'code_snippet' && block.type !== 'code_exercise') return null;
+
+  const fail = (reason: string): never => {
+    throw new Error(`Invalid ${block.type} payload in block ${block.id}: ${reason}`);
+  };
+
+  if (block.payloadJson === null) return fail('payloadJson is missing');
+  let raw: unknown;
+  try {
+    raw = JSON.parse(block.payloadJson);
+  } catch (error) {
+    return fail(`malformed JSON (${error instanceof Error ? error.message : String(error)})`);
+  }
+
+  if (block.type === 'code_snippet') {
+    const parsed = CodeSnippetPayload.safeParse(raw);
+    if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'schema validation failed');
+    const [firstError] = validateCodeSnippet(parsed.data);
+    if (firstError) return fail(firstError);
+    return { kind: 'snippet', payload: parsed.data };
+  }
+
+  if (block.codeKind === null || block.codeLanguage === null) return fail('codeKind and codeLanguage are required');
+  const parsed = CodeTaskPayload.safeParse(raw);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return fail(issue ? `${issue.path.join('.')}: ${issue.message}` : 'schema validation failed');
+  }
+  const [firstError] = validateCodeTask(block.codeKind, block.codeLanguage, parsed.data);
+  if (firstError) return fail(firstError);
+  return { kind: 'task', codeKind: block.codeKind, language: block.codeLanguage, payload: parsed.data };
 }
 
 export interface LessonWithAncestors {
@@ -239,6 +296,9 @@ export async function getLessonBySlug(db: Db, slug: string, locale: Locale): Pro
       caption: blockT.caption,
       simulatorKey: block.simulatorKey,
       simulatorParams: block.simulatorParams,
+      codeKind: block.codeKind,
+      codeLanguage: block.codeLanguage,
+      payloadJson: blockT.payloadJson,
     };
   });
 
@@ -327,7 +387,8 @@ export interface QuestionExport {
     | 'true_false'
     | 'short_text'
     | 'ordering'
-    | 'matching';
+    | 'matching'
+    | 'code';
   difficulty: 'easy' | 'medium' | 'hard';
   promptMdx: string;
   resolutionMdx: string;
@@ -338,6 +399,9 @@ export interface QuestionExport {
   acceptedAnswers: QuestionAcceptedAnswerExport[];
   matchingPairs: QuestionMatchingPairExport[];
   tagIds: number[];
+  codeKind: CodeKind | null;
+  codeLanguage: Language | null;
+  codeJson: string | null;
 }
 
 export async function getQuestionsForExport(db: Db, locale: Locale): Promise<QuestionExport[]> {
@@ -401,6 +465,9 @@ export async function getQuestionsForExport(db: Db, locale: Locale): Promise<Que
       tagIds: allQuestionTags
         .filter((questionTag) => questionTag.questionId === question.id)
         .map((questionTag) => questionTag.tagId),
+      codeKind: question.codeKind,
+      codeLanguage: question.codeLanguage,
+      codeJson: promptRow.codeJson,
     };
   });
 }
@@ -408,6 +475,7 @@ export async function getQuestionsForExport(db: Db, locale: Locale): Promise<Que
 export interface AdminQuestionEditTranslation {
   promptMdx: string;
   resolutionMdx: string;
+  codeJson: string | null;
   options: { id: number; textMdx: string; isCorrect: boolean; order: number }[];
   matchingPairs: { id: number; leftMdx: string; rightMdx: string; order: number }[];
 }
@@ -418,6 +486,9 @@ export interface AdminQuestionEdit {
   difficulty: QuestionExport['difficulty'];
   correctAnswer: string | null;
   answerFormat: 'text' | 'math';
+  codeKind: CodeKind | null;
+  codeLanguage: Language | null;
+  key: string | null;
   tagIds: number[];
   translations: Partial<Record<Locale, AdminQuestionEditTranslation>>;
   acceptedAnswersShared: string[];
@@ -443,6 +514,7 @@ export async function getQuestionForAdminEdit(db: Db, id: number): Promise<Admin
     translations[locale] = {
       promptMdx: promptRow.promptMdx,
       resolutionMdx: promptRow.resolutionMdx,
+      codeJson: promptRow.codeJson,
       options: options.map((option) => {
         const t = optionTranslationRows.find((ot) => ot.optionId === option.id && ot.locale === locale);
         return { id: option.id, textMdx: t?.textMdx ?? '', isCorrect: option.isCorrect, order: option.order };
@@ -467,6 +539,9 @@ export async function getQuestionForAdminEdit(db: Db, id: number): Promise<Admin
     difficulty: question.difficulty,
     correctAnswer: question.correctAnswer,
     answerFormat: question.answerFormat,
+    codeKind: question.codeKind,
+    codeLanguage: question.codeLanguage,
+    key: question.key,
     tagIds: questionTagRows.map((qt) => qt.tagId),
     translations,
     acceptedAnswersShared: acceptedAnswerRows.filter((a) => a.locale === null).map((a) => a.text),
@@ -480,6 +555,7 @@ export interface AdminLessonBlockTranslation {
   promptMdx: string | null;
   resolutionMdx: string | null;
   caption: string | null;
+  payloadJson: string | null;
 }
 
 export interface AdminLessonBlockEdit {
@@ -488,6 +564,8 @@ export interface AdminLessonBlockEdit {
   type: LessonBlockType;
   simulatorKey: string | null;
   simulatorParams: string | null;
+  codeKind: CodeKind | null;
+  codeLanguage: Language | null;
   translations: Partial<Record<Locale, AdminLessonBlockTranslation>>;
 }
 
@@ -523,6 +601,7 @@ export async function getLessonForAdminEdit(db: Db, id: number): Promise<AdminLe
         promptMdx: t.promptMdx,
         resolutionMdx: t.resolutionMdx,
         caption: t.caption,
+        payloadJson: t.payloadJson,
       };
     }
     return {
@@ -531,6 +610,8 @@ export async function getLessonForAdminEdit(db: Db, id: number): Promise<AdminLe
       type: block.type,
       simulatorKey: block.simulatorKey,
       simulatorParams: block.simulatorParams,
+      codeKind: block.codeKind,
+      codeLanguage: block.codeLanguage,
       translations: blockTranslations,
     };
   });

@@ -12,6 +12,8 @@ const labels = {
     real_world_application: 'No mundo real',
     solved_exercise: 'Exercício resolvido',
     simulator: 'Simulador',
+    code_snippet: 'Código',
+    code_exercise: 'Exercício de código',
   },
   showResolution: 'Ver resolução',
   hideResolution: 'Ocultar resolução',
@@ -20,11 +22,11 @@ const labels = {
 };
 
 const fixtureBlocks: LessonBlockContent[] = [
-  { id: 1, order: 1, type: 'text', title: null, bodyMdx: 'Texto normal.', promptMdx: null, resolutionMdx: null, caption: null, simulatorKey: null, simulatorParams: null },
-  { id: 2, order: 2, type: 'curiosity', title: 'Você sabia?', bodyMdx: 'Uma curiosidade.', promptMdx: null, resolutionMdx: null, caption: null, simulatorKey: null, simulatorParams: null },
-  { id: 3, order: 3, type: 'real_world_application', title: 'No mundo real', bodyMdx: 'Uma aplicação.', promptMdx: null, resolutionMdx: null, caption: null, simulatorKey: null, simulatorParams: null },
-  { id: 4, order: 4, type: 'solved_exercise', title: null, bodyMdx: null, promptMdx: 'Enunciado do exercício.', resolutionMdx: 'Resolução do exercício.', caption: null, simulatorKey: null, simulatorParams: null },
-  { id: 5, order: 5, type: 'simulator', title: null, bodyMdx: null, promptMdx: null, resolutionMdx: null, caption: 'Legenda do simulador.', simulatorKey: 'function-approach-grapher', simulatorParams: '{"expression":"x^2","approachPoint":1,"domain":[-2,2]}' },
+  { id: 1, order: 1, type: 'text', title: null, bodyMdx: 'Texto normal.', promptMdx: null, resolutionMdx: null, caption: null, simulatorKey: null, simulatorParams: null, codeKind: null, codeLanguage: null, payloadJson: null },
+  { id: 2, order: 2, type: 'curiosity', title: 'Você sabia?', bodyMdx: 'Uma curiosidade.', promptMdx: null, resolutionMdx: null, caption: null, simulatorKey: null, simulatorParams: null, codeKind: null, codeLanguage: null, payloadJson: null },
+  { id: 3, order: 3, type: 'real_world_application', title: 'No mundo real', bodyMdx: 'Uma aplicação.', promptMdx: null, resolutionMdx: null, caption: null, simulatorKey: null, simulatorParams: null, codeKind: null, codeLanguage: null, payloadJson: null },
+  { id: 4, order: 4, type: 'solved_exercise', title: null, bodyMdx: null, promptMdx: 'Enunciado do exercício.', resolutionMdx: 'Resolução do exercício.', caption: null, simulatorKey: null, simulatorParams: null, codeKind: null, codeLanguage: null, payloadJson: null },
+  { id: 5, order: 5, type: 'simulator', title: null, bodyMdx: null, promptMdx: null, resolutionMdx: null, caption: 'Legenda do simulador.', simulatorKey: 'function-approach-grapher', simulatorParams: '{"expression":"x^2","approachPoint":1,"domain":[-2,2]}', codeKind: null, codeLanguage: null, payloadJson: null },
 ];
 
 describe('LessonBlocks', () => {

@@ -15,7 +15,8 @@ type QuestionType =
   | 'true_false'
   | 'short_text'
   | 'ordering'
-  | 'matching';
+  | 'matching'
+  | 'code';
 type Difficulty = 'easy' | 'medium' | 'hard';
 
 type Locale = 'pt-BR' | 'en-US' | 'es';

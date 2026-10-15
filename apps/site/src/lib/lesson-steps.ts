@@ -15,6 +15,8 @@ export const BLOCK_TYPE_META: Record<LessonBlockType, BlockTypeMeta> = {
   real_world_application: { icon: 'compass', tone: 'info' },
   solved_exercise: { icon: 'pencil', tone: 'success' },
   simulator: { icon: 'sliders', tone: 'accent' },
+  code_snippet: { icon: 'code', tone: 'info' },
+  code_exercise: { icon: 'target', tone: 'success' },
 };
 
 /** One entry of the lesson's step list (the stepper / side outline). */

@@ -6,6 +6,7 @@ import {
   text,
   unique,
 } from 'drizzle-orm/sqlite-core';
+import { CODE_KINDS, LANGUAGES } from './code-languages';
 
 export const LOCALES = ['pt-BR', 'en-US', 'es'] as const;
 export type Locale = (typeof LOCALES)[number];
@@ -147,6 +148,8 @@ export const LESSON_BLOCK_TYPES = [
   'real_world_application',
   'solved_exercise',
   'simulator',
+  'code_snippet',
+  'code_exercise',
 ] as const;
 export type LessonBlockType = (typeof LESSON_BLOCK_TYPES)[number];
 
@@ -163,6 +166,11 @@ export const lessonBlocks = sqliteTable('lesson_blocks', {
   // "Data model" section.
   simulatorKey: text('simulator_key'),
   simulatorParams: text('simulator_params'),
+  // Only set when type === 'code_exercise': the task kind and its language.
+  // Structural (shared across locales) so they cannot diverge between
+  // translations; the localized payload lives in `payloadJson`.
+  codeKind: text('code_kind', { enum: CODE_KINDS }),
+  codeLanguage: text('code_language', { enum: LANGUAGES }),
 });
 
 export const lessonBlockTranslations = sqliteTable(
@@ -181,6 +189,10 @@ export const lessonBlockTranslations = sqliteTable(
     promptMdx: text('prompt_mdx'),
     resolutionMdx: text('resolution_mdx'),
     caption: text('caption'),
+    // JSON of a CodeSnippetPayload (code_snippet) or CodeTaskPayload
+    // (code_exercise); localized because comments, printed strings and
+    // expected outputs change per locale. See ./code-payloads.
+    payloadJson: text('payload_json'),
   },
   (table) => [unique().on(table.blockId, table.locale)],
 );
@@ -196,11 +208,18 @@ export const questions = sqliteTable('questions', {
       'short_text',
       'ordering',
       'matching',
+      'code',
     ],
   }).notNull(),
   difficulty: text('difficulty', { enum: ['easy', 'medium', 'hard'] }).notNull(),
   correctAnswer: text('correct_answer'),
   answerFormat: text('answer_format', { enum: ['text', 'math'] }).notNull().default('text'),
+  // Only set when type === 'code': the task kind and its language.
+  codeKind: text('code_kind', { enum: CODE_KINDS }),
+  codeLanguage: text('code_language', { enum: LANGUAGES }),
+  // Stable identity for content-pack imports; null for hand-authored questions.
+  // SQLite allows many NULLs in a unique index.
+  key: text('key').unique(),
 });
 
 export const questionTranslations = sqliteTable(
@@ -213,6 +232,8 @@ export const questionTranslations = sqliteTable(
     locale: text('locale', { enum: LOCALES }).notNull(),
     promptMdx: text('prompt_mdx').notNull(),
     resolutionMdx: text('resolution_mdx').notNull(),
+    // JSON of a CodeTaskPayload; only set for type === 'code'.
+    codeJson: text('code_json'),
   },
   (table) => [unique().on(table.questionId, table.locale)],
 );

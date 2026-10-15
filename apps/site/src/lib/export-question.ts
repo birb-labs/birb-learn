@@ -41,6 +41,9 @@ export interface ExportedQuestion {
   tagIds: number[];
 }
 
+/** A question the simulado export can compile: every type except `code`, which needs the code-task export. */
+export type ExportableQuestion = QuestionExport & { type: ExportedQuestion['type'] };
+
 async function compileToHtml(source: string): Promise<string> {
   const element = await compileLessonMdx(source);
   return renderToStaticMarkup(element);
@@ -76,7 +79,7 @@ export function assertValidMatchingPairs(question: { id: number; matchingPairs: 
   }
 }
 
-export async function compileQuestionForExport(question: QuestionExport): Promise<ExportedQuestion> {
+export async function compileQuestionForExport(question: ExportableQuestion): Promise<ExportedQuestion> {
   const promptHtml = await compileToHtml(question.promptMdx);
   const resolutionHtml = await compileToHtml(question.resolutionMdx);
 

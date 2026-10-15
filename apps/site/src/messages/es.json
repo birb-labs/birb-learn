@@ -169,6 +169,8 @@
       "real_world_application": "En el mundo real",
       "solved_exercise": "Ejercicio resuelto",
       "simulator": "Simulador",
+      "code_snippet": "Código",
+      "code_exercise": "Ejercicio de código",
       "untitled": "Paso {number}"
     },
     "hideResolution": "Ocultar resolución",

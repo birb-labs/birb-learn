@@ -11,7 +11,8 @@ interface AdminQuestionSummary {
     | 'true_false'
     | 'short_text'
     | 'ordering'
-    | 'matching';
+    | 'matching'
+    | 'code';
   difficulty: 'easy' | 'medium' | 'hard';
   promptMdx: string;
 }

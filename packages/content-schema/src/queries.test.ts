@@ -454,6 +454,61 @@ describe('content-schema queries', () => {
     expect(lesson!.isFallback).toBe(true);
   });
 
+  it('getLessonBySlug returns the code columns of a code_exercise and falls back to the pt-BR payload', async () => {
+    const lessonRow = db.select().from(schema.lessons).where(eq(schema.lessons.slug, 'definicao-de-limite')).get()!;
+    const block = db
+      .insert(schema.lessonBlocks)
+      .values({ lessonId: lessonRow.id, order: 3, type: 'code_exercise', codeKind: 'write', codeLanguage: 'python' })
+      .returning()
+      .get();
+    db.insert(schema.lessonBlockTranslations)
+      .values({
+        blockId: block.id,
+        locale: 'pt-BR',
+        title: 'Dobro',
+        promptMdx: 'Escreva o dobro.',
+        resolutionMdx: 'Multiplique por 2.',
+        payloadJson: '{"starterCode":"# pt-BR"}',
+      })
+      .run();
+
+    const ptBr = await getLessonBySlug(db, 'definicao-de-limite', 'pt-BR');
+    const exercise = ptBr!.blocks.find((b) => b.type === 'code_exercise')!;
+    expect(exercise.codeKind).toBe('write');
+    expect(exercise.codeLanguage).toBe('python');
+    expect(exercise.payloadJson).toBe('{"starterCode":"# pt-BR"}');
+
+    const enUs = await getLessonBySlug(db, 'definicao-de-limite', 'en-US');
+    const fallback = enUs!.blocks.find((b) => b.type === 'code_exercise')!;
+    expect(fallback.codeKind).toBe('write');
+    expect(fallback.payloadJson).toBe('{"starterCode":"# pt-BR"}');
+    expect(enUs!.isFallback).toBe(true);
+
+    // Non-code blocks carry nulls for the new fields.
+    const text = ptBr!.blocks.find((b) => b.type === 'text')!;
+    expect(text.codeKind).toBeNull();
+    expect(text.codeLanguage).toBeNull();
+    expect(text.payloadJson).toBeNull();
+  });
+
+  it('getLessonForAdminEdit returns the code columns of a code block', async () => {
+    const lessonRow = db.select().from(schema.lessons).where(eq(schema.lessons.slug, 'definicao-de-limite')).get()!;
+    const block = db
+      .insert(schema.lessonBlocks)
+      .values({ lessonId: lessonRow.id, order: 3, type: 'code_exercise', codeKind: 'find_bug', codeLanguage: 'ruby' })
+      .returning()
+      .get();
+    db.insert(schema.lessonBlockTranslations)
+      .values({ blockId: block.id, locale: 'pt-BR', promptMdx: 'p', resolutionMdx: 'r', payloadJson: '{"a":1}' })
+      .run();
+
+    const edit = await getLessonForAdminEdit(db, lessonRow.id);
+    const edited = edit!.blocks.find((b) => b.type === 'code_exercise')!;
+    expect(edited.codeKind).toBe('find_bug');
+    expect(edited.codeLanguage).toBe('ruby');
+    expect(edited.translations['pt-BR']!.payloadJson).toBe('{"a":1}');
+  });
+
   it('getLessonBySlug returns undefined for an unknown slug', async () => {
     expect(await getLessonBySlug(db, 'does-not-exist', 'pt-BR')).toBeUndefined();
   });
@@ -657,6 +712,48 @@ describe('content-schema queries', () => {
     const mathEdit = await getQuestionForAdminEdit(db, mathQuestion.id);
     expect(mathEdit!.acceptedAnswersShared).toEqual(['7']);
     expect(mathEdit!.acceptedAnswersByLocale).toEqual({});
+  });
+
+  it('getQuestionsForExport returns a code question with its code fields', async () => {
+    const question = db
+      .insert(schema.questions)
+      .values({ type: 'code', difficulty: 'medium', key: 'cs-test-code', codeKind: 'predict_output', codeLanguage: 'postgresql' })
+      .returning()
+      .get();
+    db.insert(schema.questionTranslations)
+      .values({
+        questionId: question.id,
+        locale: 'pt-BR',
+        promptMdx: 'Qual a saída?',
+        resolutionMdx: 'A saída é 1.',
+        codeJson: '{"starterCode":"SELECT 1;","expectedOutput":"1"}',
+      })
+      .run();
+
+    const exported = await getQuestionsForExport(db, 'en-US');
+    const code = exported.find((q) => q.type === 'code')!;
+    expect(code).toBeDefined();
+    expect(code.codeKind).toBe('predict_output');
+    expect(code.codeLanguage).toBe('postgresql');
+    expect(code.codeJson).toBe('{"starterCode":"SELECT 1;","expectedOutput":"1"}');
+    expect(code.isFallback).toBe(true);
+
+    const mc = exported.find((q) => q.type === 'multiple_choice')!;
+    expect(mc.codeKind).toBeNull();
+    expect(mc.codeLanguage).toBeNull();
+    expect(mc.codeJson).toBeNull();
+
+    const edit = await getQuestionForAdminEdit(db, question.id);
+    expect(edit!.codeKind).toBe('predict_output');
+    expect(edit!.codeLanguage).toBe('postgresql');
+    expect(edit!.translations['pt-BR']!.codeJson).toBe('{"starterCode":"SELECT 1;","expectedOutput":"1"}');
+  });
+
+  it('enforces a unique question key but allows many null keys', () => {
+    db.insert(schema.questions).values({ type: 'code', difficulty: 'easy', key: 'dup' }).run();
+    expect(() => db.insert(schema.questions).values({ type: 'code', difficulty: 'easy', key: 'dup' }).run()).toThrow();
+    db.insert(schema.questions).values({ type: 'code', difficulty: 'easy' }).run();
+    db.insert(schema.questions).values({ type: 'code', difficulty: 'easy' }).run();
   });
 
   it('getQuestionForAdminEdit returns undefined for an unknown id', async () => {

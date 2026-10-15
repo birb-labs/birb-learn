@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import type { LessonBlockContent, LessonBlockType } from '@birb-learn/content-schema';
+import { parseLessonCodePayload, type LessonBlockContent, type LessonBlockType } from '@birb-learn/content-schema';
 import { Icon } from '@birb-learn/theme';
 import { compileLessonMdx } from '@/lib/compile-lesson-mdx';
 import { stepId } from '@/lib/lesson-steps';
@@ -62,6 +62,25 @@ async function renderBlock(
             {await compileLessonMdx(block.resolutionMdx ?? '')}
           </div>
         </details>
+      </BlockFrame>
+    );
+  }
+
+  // Interim rendering: the real code blocks replace these two branches later.
+  if (block.type === 'code_snippet') {
+    const parsed = parseLessonCodePayload(block);
+    const code = parsed?.kind === 'snippet' ? parsed.payload.variants[0].code : '';
+    return (
+      <BlockFrame key={block.id} {...frame} title={block.title}>
+        <pre>{code}</pre>
+      </BlockFrame>
+    );
+  }
+
+  if (block.type === 'code_exercise') {
+    return (
+      <BlockFrame key={block.id} {...frame} title={block.title}>
+        <div className={styles.prompt}>{await compileLessonMdx(block.promptMdx ?? '')}</div>
       </BlockFrame>
     );
   }

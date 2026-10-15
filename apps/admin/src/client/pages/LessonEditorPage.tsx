@@ -6,7 +6,14 @@ import styles from './LessonEditorPage.module.css';
 type Locale = 'pt-BR' | 'en-US' | 'es';
 const LOCALES: Locale[] = ['pt-BR', 'en-US', 'es'];
 
-type BlockType = 'text' | 'curiosity' | 'real_world_application' | 'solved_exercise' | 'simulator';
+type BlockType =
+  | 'text'
+  | 'curiosity'
+  | 'real_world_application'
+  | 'solved_exercise'
+  | 'simulator'
+  | 'code_snippet'
+  | 'code_exercise';
 const BLOCK_TYPES: { value: BlockType; label: string }[] = [
   { value: 'text', label: 'Texto' },
   { value: 'curiosity', label: 'Curiosidade' },

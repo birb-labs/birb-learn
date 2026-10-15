@@ -8,6 +8,8 @@ const labels: Record<LessonBlockType, string> = {
   real_world_application: 'No mundo real',
   solved_exercise: 'Exercício resolvido',
   simulator: 'Simulador',
+  code_snippet: 'Código',
+  code_exercise: 'Exercício de código',
 };
 
 function block(partial: Partial<LessonBlockContent> & Pick<LessonBlockContent, 'type'>): LessonBlockContent {
@@ -21,6 +23,9 @@ function block(partial: Partial<LessonBlockContent> & Pick<LessonBlockContent, '
     caption: null,
     simulatorKey: null,
     simulatorParams: null,
+    codeKind: null,
+    codeLanguage: null,
+    payloadJson: null,
     ...partial,
   };
 }
