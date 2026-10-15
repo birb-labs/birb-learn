@@ -290,6 +290,12 @@ describe('createCompilerExplorerRunner', () => {
       expect(result.message).toContain('503');
     });
 
+    it('names the pinned compiler when the service no longer has it (HTTP 404)', async () => {
+      const result = await run(() => Promise.resolve(jsonResponse({}, 404)));
+      expect(result).toMatchObject({ status: 'unavailable', reason: 'service_error', cases: [] });
+      expect(result.message).toBe('Compiler Explorer no longer has compiler r1990');
+    });
+
     it('reports invalid JSON as service_error', async () => {
       const result = await run(() => Promise.resolve(new Response('<html>oops</html>', { status: 200 })));
       expect(result).toMatchObject({ status: 'unavailable', reason: 'service_error', cases: [] });

@@ -45,13 +45,17 @@ describe.skipIf(!process.env.CE_NETWORK_TESTS)('Compiler Explorer (network)', ()
     expect(result.compileOutput).toContain('error');
   }, 90000);
 
-  it('still lists every pinned compiler id', async () => {
-    const response = await fetch(`${COMPILER_EXPLORER_API}/compilers?fields=id`, {
+  it('still lists every pinned compiler id, and each one can execute programs', async () => {
+    const response = await fetch(`${COMPILER_EXPLORER_API}/compilers?fields=id,supportsExecute`, {
       headers: { Accept: 'application/json' },
       credentials: 'omit',
     });
     expect(response.ok).toBe(true);
-    const ids = new Set(((await response.json()) as { id: string }[]).map((compiler) => compiler.id));
-    for (const { id } of Object.values(COMPILER_EXPLORER_COMPILERS)) expect(ids.has(id)).toBe(true);
+    const compilers = (await response.json()) as { id: string; supportsExecute: boolean }[];
+    const byId = new Map(compilers.map((compiler) => [compiler.id, compiler]));
+    for (const { id } of Object.values(COMPILER_EXPLORER_COMPILERS)) {
+      expect(byId.has(id), `${id} is listed`).toBe(true);
+      expect(byId.get(id)?.supportsExecute, `${id} supports execution`).toBe(true);
+    }
   }, 90000);
 });

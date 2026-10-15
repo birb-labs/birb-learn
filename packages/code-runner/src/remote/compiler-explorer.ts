@@ -1,7 +1,7 @@
 import { OutputCollector } from '../output';
 import type { CaseResult, RunRequest, RunResult, Runner, UnavailableReason } from '../protocol';
 import { COMPILER_EXPLORER_COMPILERS, type RemoteLanguage } from './compilers';
-import { CompilerExplorerFormatError, buildCompileRequest, mapCompilerExplorerResponse } from './map-response';
+import { buildCompileRequest, mapCompilerExplorerResponse } from './map-response';
 
 /**
  * Fixed time budget of one Compiler Explorer request. Every request includes the
@@ -166,6 +166,11 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
           retryAfterMs: coolDownMs,
         };
       }
+      // An unknown compiler id answers 404: the pin in `compilers.ts` needs refreshing.
+      if (status === 404) {
+        const { id } = COMPILER_EXPLORER_COMPILERS[language];
+        return { kind: 'unavailable', reason: 'service_error', message: `Compiler Explorer no longer has compiler ${id}` };
+      }
       if (status < 200 || status > 299) {
         return { kind: 'unavailable', reason: 'service_error', message: `Compiler Explorer answered HTTP ${status}` };
       }
@@ -203,7 +208,7 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
       if (error instanceof TypeError) {
         return { kind: 'unavailable', reason: 'offline', message: 'Could not reach Compiler Explorer (network error)' };
       }
-      const detail = error instanceof CompilerExplorerFormatError || error instanceof Error ? error.message : String(error);
+      const detail = error instanceof Error ? error.message : String(error);
       return { kind: 'unavailable', reason: 'service_error', message: `Compiler Explorer request failed: ${detail}` };
     } finally {
       clearTimeout(timer);
