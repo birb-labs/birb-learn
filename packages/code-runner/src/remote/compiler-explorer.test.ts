@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { READ_ONLY_CODE_LANGUAGES } from '@birb-learn/content-schema';
 import { READ_ONLY_LANGUAGES } from '../languages';
+import { gradeCodeTask } from '../grading';
 import { OUTPUT_LIMIT_BYTES, type RunRequest, type RunResult } from '../protocol';
 import { createRunner, createSiteRunner } from '../run-code';
 import { createCompilerExplorerRunner } from './compiler-explorer';
@@ -159,7 +160,7 @@ describe('createCompilerExplorerRunner', () => {
   });
 
   describe('limits', () => {
-    it('times a request out on its own timer, then still runs the next case', async () => {
+    it('treats its own timer firing as a service failure and stops the run', async () => {
       const fake = recordingFetch((index, init) =>
         index === 0 ? hangUntilAborted(init) : Promise.resolve(jsonResponse(executed('second'))),
       );
@@ -169,10 +170,33 @@ describe('createCompilerExplorerRunner', () => {
       const result = await runner.runCode({ ...RUST, cases: [{}, {}], timeoutMs: 10000 });
 
       expect(Date.now() - started).toBeLessThan(2000);
-      expect(result.status).toBe('ok');
-      expect(result.cases[0]).toMatchObject({ status: 'timeout', stdout: '', stderr: '', exitCode: null });
-      expect(result.cases[1]).toMatchObject({ status: 'ok', stdout: 'second\n' });
-      expect(fake.calls).toHaveLength(2);
+      expect(result).toEqual({
+        status: 'unavailable',
+        reason: 'service_error',
+        message: 'Compiler Explorer did not answer within 45 s',
+        cases: [],
+      });
+      expect(fake.calls).toHaveLength(1);
+    });
+
+    it('is not_graded at the grading level when the service hangs', async () => {
+      const fake = recordingFetch((_index, init) => hangUntilAborted(init));
+      const runner = createCompilerExplorerRunner({ fetch: fake.fetch, requestTimeoutMs: 20 });
+      const tests = [
+        { name: 'one', stdin: '1\n', expectedStdout: 'a' },
+        { name: 'two', stdin: '2\n', expectedStdout: 'b' },
+      ];
+
+      const graded = await gradeCodeTask(
+        'write',
+        'rust',
+        { starterCode: '', tests, blanks: [], hints: [] },
+        { kind: 'write', code: 'fn main() {}' },
+        runner,
+      );
+
+      expect(graded.verdict).toBe('not_graded');
+      expect(fake.calls).toHaveLength(1);
     });
 
     it('does not wait for a fetch that ignores its signal', async () => {
@@ -181,7 +205,7 @@ describe('createCompilerExplorerRunner', () => {
 
       const result = await runner.runCode(RUST);
 
-      expect(result.cases[0].status).toBe('timeout');
+      expect(result).toMatchObject({ status: 'unavailable', reason: 'service_error' });
     });
 
     it('ignores the per-case timeout of the request: the service enforces its own limit', async () => {

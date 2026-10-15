@@ -6,8 +6,9 @@ import { CompilerExplorerFormatError, buildCompileRequest, mapCompilerExplorerRe
 /**
  * Fixed time budget of one Compiler Explorer request. Every request includes the
  * compilation (a cold Go build took about 30 s), and the service enforces its own
- * 20 s execution limit, which it reports as `timedOut` (a `timeout` case). When this
- * timer fires first the case is a `timeout` too.
+ * 20 s execution limit, which it reports as `timedOut` (a `timeout` case, about 22 s
+ * round-trip). When this timer fires first the service is slow or hung, so the run
+ * is `unavailable` (`service_error`), never a student's `timeout`.
  */
 export const REMOTE_REQUEST_TIMEOUT_MS = 45000;
 
@@ -145,8 +146,13 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
     } catch (error) {
       if (signal?.aborted) throw abortError();
       if (timedOut) {
-        const result: CaseResult = { status: 'timeout', stdout: '', stderr: '', exitCode: null, durationMs: durationMs() };
-        return { kind: 'case', result, cacheable: false };
+        // The service reports its own execution limit as `timedOut`, so a silent
+        // service is slow or hung: never blame the student's program for it.
+        return {
+          kind: 'unavailable',
+          reason: 'service_error',
+          message: `Compiler Explorer did not answer within ${REMOTE_REQUEST_TIMEOUT_MS / 1000} s`,
+        };
       }
       if (error instanceof TypeError) {
         return { kind: 'unavailable', reason: 'offline', message: 'Could not reach Compiler Explorer (network error)' };
