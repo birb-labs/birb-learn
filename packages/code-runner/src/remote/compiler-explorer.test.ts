@@ -475,6 +475,149 @@ describe('createCompilerExplorerRunner', () => {
       expect(fake.calls).toHaveLength(1);
     });
 
+    it('hints when to retry: the oldest request leaves the window', async () => {
+      let clock = 1000;
+      const fake = recordingFetch(() => Promise.resolve(jsonResponse(executed('x'))));
+      const runner = createCompilerExplorerRunner({
+        fetch: fake.fetch,
+        now: () => clock,
+        budget: { requests: 2, windowMs: 60000 },
+      });
+
+      await runner.runCode({ ...RUST, source: 'one' });
+      clock = 1500;
+      await runner.runCode({ ...RUST, source: 'two' });
+      clock = 2000;
+      const refused = await runner.runCode({ ...RUST, source: 'three' });
+
+      expect(refused).toMatchObject({ status: 'unavailable', reason: 'rate_limited', retryAfterMs: 59000 });
+      clock = 61000; // exactly when the first request leaves the window
+      expect((await runner.runCode({ ...RUST, source: 'three' })).status).toBe('ok');
+    });
+
+    it('sets retryAfterMs only for rate_limited', async () => {
+      const offline = await createCompilerExplorerRunner({
+        fetch: recordingFetch(() => Promise.reject(new TypeError('down'))).fetch,
+      }).runCode(RUST);
+      const failing = await createCompilerExplorerRunner({
+        fetch: recordingFetch(() => Promise.resolve(jsonResponse({}, 503))).fetch,
+      }).runCode(RUST);
+
+      expect(offline.reason).toBe('offline');
+      expect(failing.reason).toBe('service_error');
+      expect(offline).not.toHaveProperty('retryAfterMs');
+      expect(failing).not.toHaveProperty('retryAfterMs');
+    });
+
+    it('fails fast, sending nothing, when the uncached cases do not fit the remaining budget', async () => {
+      let clock = 0;
+      const fake = recordingFetch(() => Promise.resolve(jsonResponse(executed('x'))));
+      const runner = createCompilerExplorerRunner({
+        fetch: fake.fetch,
+        now: () => clock,
+        budget: { requests: 3, windowMs: 60000 },
+      });
+      await runner.runCode({ ...RUST, source: 'warm up' }); // one of three used at t=0
+      clock = 10000;
+
+      const refused = await runner.runCode({ ...RUST, cases: [{ stdin: '1' }, { stdin: '2' }, { stdin: '3' }] });
+
+      expect(refused).toEqual({
+        status: 'unavailable',
+        reason: 'rate_limited',
+        message: expect.any(String),
+        retryAfterMs: 50000,
+        cases: [],
+      });
+      expect(fake.calls).toHaveLength(1);
+    });
+
+    it('does not count cached cases when deciding whether a run fits the budget', async () => {
+      const fake = recordingFetch(echo);
+      const runner = createCompilerExplorerRunner({
+        fetch: fake.fetch,
+        now: () => 0,
+        budget: { requests: 2, windowMs: 60000 },
+      });
+      await runner.runCode({ ...RUST, cases: [{ stdin: 'a' }] });
+
+      const result = await runner.runCode({ ...RUST, cases: [{ stdin: 'a' }, { stdin: 'b' }] });
+
+      expect(result.status).toBe('ok');
+      expect(fake.calls.map((c) => c.stdin)).toEqual(['a', 'b']);
+    });
+
+    it('still progresses through a run larger than the whole budget, then reports when to retry', async () => {
+      const fake = recordingFetch(echo);
+      const runner = createCompilerExplorerRunner({
+        fetch: fake.fetch,
+        now: () => 0,
+        budget: { requests: 2, windowMs: 60000 },
+      });
+
+      const result = await runner.runCode({ ...RUST, cases: [{ stdin: '1' }, { stdin: '2' }, { stdin: '3' }] });
+
+      expect(fake.calls.map((c) => c.stdin)).toEqual(['1', '2']);
+      expect(result).toMatchObject({ status: 'unavailable', reason: 'rate_limited', retryAfterMs: 60000 });
+    });
+
+    it('honours HTTP 429: sends nothing until Retry-After has passed', async () => {
+      let clock = 0;
+      const fake = recordingFetch((index) =>
+        Promise.resolve(
+          index === 0
+            ? new Response('{}', { status: 429, headers: { 'Retry-After': '7' } })
+            : jsonResponse(executed('x')),
+        ),
+      );
+      const runner = createCompilerExplorerRunner({ fetch: fake.fetch, now: () => clock });
+
+      const first = await runner.runCode({ ...RUST, source: 'one' });
+      expect(first).toMatchObject({ reason: 'rate_limited', retryAfterMs: 7000 });
+
+      clock = 3000;
+      const blocked = await runner.runCode({ ...RUST, source: 'two' });
+      expect(blocked).toMatchObject({ status: 'unavailable', reason: 'rate_limited', retryAfterMs: 4000, cases: [] });
+      expect(fake.calls).toHaveLength(1);
+
+      clock = 7000;
+      expect((await runner.runCode({ ...RUST, source: 'two' })).status).toBe('ok');
+      expect(fake.calls).toHaveLength(2);
+    });
+
+    it.each([
+      ['has no Retry-After', {}],
+      ['has an unparseable Retry-After', { 'Retry-After': 'soon' }],
+    ])('blocks for one full window after an HTTP 429 that %s', async (_label, headers) => {
+      let clock = 100;
+      const fake = recordingFetch(() => Promise.resolve(new Response('{}', { status: 429, headers })));
+      const runner = createCompilerExplorerRunner({
+        fetch: fake.fetch,
+        now: () => clock,
+        budget: { requests: 20, windowMs: 60000 },
+      });
+
+      expect(await runner.runCode(RUST)).toMatchObject({ reason: 'rate_limited', retryAfterMs: 60000 });
+      clock = 30100;
+      expect(await runner.runCode({ ...RUST, source: 'other' })).toMatchObject({ reason: 'rate_limited', retryAfterMs: 30000 });
+      expect(fake.calls).toHaveLength(1);
+    });
+
+    it('still answers from the cache during a 429 cool-down', async () => {
+      let clock = 0;
+      const fake = recordingFetch((index) =>
+        Promise.resolve(index === 0 ? jsonResponse(executed('cached')) : new Response('{}', { status: 429 })),
+      );
+      const runner = createCompilerExplorerRunner({ fetch: fake.fetch, now: () => clock });
+      await runner.runCode({ ...RUST, source: 'known' });
+      await runner.runCode({ ...RUST, source: 'new' }); // 429
+
+      const again = await runner.runCode({ ...RUST, source: 'known' });
+
+      expect(again.status).toBe('ok');
+      expect(fake.calls).toHaveLength(2);
+    });
+
     it('gives every runner instance its own budget', async () => {
       const fake = recordingFetch(() => Promise.resolve(jsonResponse(executed('x'))));
       const options = { fetch: fake.fetch, now: () => 0, budget: { requests: 1, windowMs: 60000 } };

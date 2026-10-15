@@ -31,7 +31,7 @@ export interface CompilerExplorerRunnerOptions {
 type CaseOutcome =
   | { kind: 'case'; result: CaseResult; cacheable: boolean }
   | { kind: 'compile_error'; compileOutput: string }
-  | { kind: 'unavailable'; reason: UnavailableReason; message: string };
+  | { kind: 'unavailable'; reason: UnavailableReason; message: string; retryAfterMs?: number };
 
 class RequestTimeoutError extends Error {}
 
@@ -39,8 +39,20 @@ function abortError(): DOMException {
   return new DOMException('The run was aborted', 'AbortError');
 }
 
-function unavailable(reason: UnavailableReason, message: string): RunResult {
-  return { status: 'unavailable', reason, message, cases: [] };
+function unavailable(reason: UnavailableReason, message: string, retryAfterMs?: number): RunResult {
+  return {
+    status: 'unavailable',
+    reason,
+    message,
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+    cases: [],
+  };
+}
+
+/** A `Retry-After` header in whole seconds as milliseconds, or `undefined` when it is missing or not that form. */
+function parseRetryAfterMs(header: string | null): number | undefined {
+  if (header === null || !/^\s*\d+\s*$/.test(header)) return undefined;
+  return Number(header) * 1000;
 }
 
 /**
@@ -49,9 +61,11 @@ function unavailable(reason: UnavailableReason, message: string): RunResult {
  *
  * Politeness towards the volunteer-run service, per runner instance: one request
  * in flight (other runs queue), at most `budget.requests` requests per rolling
- * `budget.windowMs` (beyond that the run is `unavailable` with `rate_limited` and
- * nothing is sent), and an in-memory cache of finished results so an identical
- * program and input is never sent twice.
+ * `budget.windowMs` (beyond that the run is `unavailable` with `rate_limited`, a
+ * `retryAfterMs` hint and nothing more is sent), an HTTP 429 cool-down, and an
+ * in-memory cache of finished results so an identical program and input is never
+ * sent twice. A run whose uncached cases fit the budget but not what is left of
+ * it fails fast, before anything is sent.
  *
  * `RunRequest.timeoutMs` is ignored: the service has its own execution limit and
  * every request is bounded by `REMOTE_REQUEST_TIMEOUT_MS` (see there).
@@ -65,13 +79,28 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
 
   const cache = new Map<string, CaseResult>();
   const requestTimes: number[] = [];
+  // After an HTTP 429 the budget counts as spent until this instant.
+  let blockedUntil = 0;
   // Settles when the run before the newest one has finished.
   let tail: Promise<void> = Promise.resolve();
 
-  function hasBudget(): boolean {
+  /** Requests that may still be sent in the current window. */
+  function remainingBudget(): number {
     const current = now();
     while (requestTimes.length > 0 && requestTimes[0] <= current - budget.windowMs) requestTimes.shift();
-    return requestTimes.length < budget.requests;
+    return budget.requests - requestTimes.length;
+  }
+
+  /** Milliseconds until `needed` requests have left the window (0: none), never less than the 429 cool-down. */
+  function retryAfterMs(needed: number): number {
+    const current = now();
+    const oldestToLeave = requestTimes[Math.min(needed, requestTimes.length) - 1];
+    const windowWait = oldestToLeave === undefined ? 0 : oldestToLeave + budget.windowMs - current;
+    return Math.max(0, windowWait, blockedUntil - current);
+  }
+
+  function rateLimited(message: string, needed: number): RunResult {
+    return unavailable('rate_limited', message, retryAfterMs(needed));
   }
 
   function remember(key: string, result: CaseResult): void {
@@ -106,7 +135,7 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
     });
     cancelled.catch(() => {});
 
-    const exchange = (async (): Promise<{ status: number; json: unknown }> => {
+    const exchange = (async (): Promise<{ status: number; json: unknown; retryAfter: string | null }> => {
       const response = await doFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -114,15 +143,26 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
         credentials: 'omit',
         signal: controller.signal,
       });
-      if (!response.ok) return { status: response.status, json: undefined };
-      return { status: response.status, json: await response.json() };
+      const retryAfter = response.headers.get('Retry-After');
+      if (!response.ok) return { status: response.status, json: undefined, retryAfter };
+      return { status: response.status, json: await response.json(), retryAfter };
     })();
     exchange.catch(() => {});
 
     const durationMs = () => now() - startedAt;
     try {
-      const { status, json } = await Promise.race([exchange, cancelled]);
-      if (status === 429) return { kind: 'unavailable', reason: 'rate_limited', message: 'Compiler Explorer answered HTTP 429 (too many requests)' };
+      const { status, json, retryAfter } = await Promise.race([exchange, cancelled]);
+      if (status === 429) {
+        // Treat the budget as spent until the service says it is fine again.
+        const coolDownMs = parseRetryAfterMs(retryAfter) ?? budget.windowMs;
+        blockedUntil = now() + coolDownMs;
+        return {
+          kind: 'unavailable',
+          reason: 'rate_limited',
+          message: 'Compiler Explorer answered HTTP 429 (too many requests)',
+          retryAfterMs: coolDownMs,
+        };
+      }
       if (status < 200 || status > 299) {
         return { kind: 'unavailable', reason: 'service_error', message: `Compiler Explorer answered HTTP ${status}` };
       }
@@ -172,20 +212,40 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
     const { id, flags } = COMPILER_EXPLORER_COMPILERS[language];
     const cases: CaseResult[] = [];
 
-    for (const testCase of req.cases ?? [{}]) {
+    const keyOf = (stdin: string) => JSON.stringify([id, flags, req.source, stdin]);
+    const testCases = req.cases ?? [{}];
+
+    // Fail fast: a run that fits the budget but not what is left of it would waste
+    // requests on a partial result. A run larger than the whole budget cannot fit
+    // ever, so it is sent in order and stops where the budget runs out.
+    const uncached = new Set(testCases.map((c) => keyOf(c.stdin ?? '')).filter((key) => !cache.has(key))).size;
+    if (uncached > 0) {
+      const remaining = remainingBudget();
+      if (blockedUntil > now()) {
+        return rateLimited('Compiler Explorer asked for a pause after HTTP 429', 0);
+      }
+      if (uncached > remaining && uncached <= budget.requests) {
+        return rateLimited(
+          `${uncached} Compiler Explorer requests needed, ${remaining} left of ${budget.requests} per ${budget.windowMs / 1000} s`,
+          uncached - remaining,
+        );
+      }
+    }
+
+    for (const testCase of testCases) {
       const stdin = testCase.stdin ?? '';
-      const key = JSON.stringify([id, flags, req.source, stdin]);
+      const key = keyOf(stdin);
       const cached = cache.get(key);
       if (cached) {
         cases.push({ ...cached });
         continue;
       }
-      if (!hasBudget()) {
-        return unavailable('rate_limited', `More than ${budget.requests} Compiler Explorer requests in ${budget.windowMs / 1000} s`);
+      if (remainingBudget() <= 0) {
+        return rateLimited(`More than ${budget.requests} Compiler Explorer requests in ${budget.windowMs / 1000} s`, 1);
       }
 
       const outcome = await sendCase(language, req.source, stdin, signal);
-      if (outcome.kind === 'unavailable') return unavailable(outcome.reason, outcome.message);
+      if (outcome.kind === 'unavailable') return unavailable(outcome.reason, outcome.message, outcome.retryAfterMs);
       // The program is compiled for every case, so a build failure ends the run at once.
       if (outcome.kind === 'compile_error') return { status: 'compile_error', compileOutput: outcome.compileOutput, cases: [] };
       if (outcome.cacheable) remember(key, outcome.result);

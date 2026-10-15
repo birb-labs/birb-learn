@@ -50,6 +50,8 @@ export interface RunResult {
   reason?: UnavailableReason;
   /** English developer message; set only when `status` is `'unavailable'`. */
   message?: string;
+  /** Set only when `reason` is `'rate_limited'`: how long to wait before a retry can succeed. */
+  retryAfterMs?: number;
   cases: CaseResult[];
 }
 
