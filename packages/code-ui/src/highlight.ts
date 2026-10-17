@@ -47,6 +47,11 @@ function getHighlighter(): Promise<HighlighterCore> {
     themes: [createCssVariablesTheme({ name: THEME_NAME, variablePrefix: '--code-' })],
     langs: Object.values(GRAMMAR_LOADERS).map((load) => load()),
     engine: createJavaScriptRegexEngine(),
+  }).catch((error: unknown) => {
+    // Concurrent callers share the in-flight promise, but a failed load (for
+    // example a dropped chunk request) must not be cached: the next call retries.
+    highlighterPromise = undefined;
+    throw error;
   });
   return highlighterPromise;
 }

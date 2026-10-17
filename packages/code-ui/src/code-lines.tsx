@@ -14,6 +14,8 @@ export interface CodeLinesProps {
   /** Turns every line into a button that reports its 1-based number. */
   onLineClick?: (lineNumber: number) => void;
   selectedLine?: number;
+  /** Accessible name of each line button (only used with `onLineClick`); the caller supplies the translated text. */
+  lineLabel?: (lineNumber: number) => string;
 }
 
 export function CodeLines({
@@ -24,6 +26,7 @@ export function CodeLines({
   renderToken,
   onLineClick,
   selectedLine,
+  lineLabel,
 }: CodeLinesProps) {
   return (
     <pre className={styles.code}>
@@ -66,6 +69,7 @@ export function CodeLines({
                 type="button"
                 className={`${styles.line} ${styles.clickable}`}
                 aria-pressed={selectedLine === lineNumber}
+                aria-label={lineLabel?.(lineNumber)}
                 onClick={() => onLineClick(lineNumber)}
                 {...stateProps}
               >

@@ -56,6 +56,19 @@ describe('CodeLines', () => {
     expect(onLineClick).toHaveBeenCalledWith(3);
   });
 
+  it('names every line button with lineLabel, blank lines included', () => {
+    render(<CodeLines lines={LINES} onLineClick={() => {}} lineLabel={(n) => `Line ${n}`} />);
+    const buttons = screen.getAllByRole('button');
+    expect(buttons.map((el) => el.getAttribute('aria-label'))).toEqual(['Line 1', 'Line 2', 'Line 3', 'Line 4']);
+    // Line 3 is blank: without a label it would have no accessible name.
+    expect(screen.getByRole('button', { name: 'Line 3' })).toBeTruthy();
+  });
+
+  it('ignores lineLabel when lines are not clickable', () => {
+    const { container } = render(<CodeLines lines={LINES} lineLabel={(n) => `Line ${n}`} />);
+    expect(container.querySelector('[aria-label]')).toBeNull();
+  });
+
   it('does not render buttons without onLineClick', () => {
     const { container } = render(<CodeLines lines={LINES} selectedLine={2} />);
     expect(container.querySelector('button')).toBeNull();
