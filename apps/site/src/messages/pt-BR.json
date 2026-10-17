@@ -278,7 +278,7 @@
     "walkthroughNext": "Próximo passo",
     "walkthroughStep": "Passo {current} de {total}",
     "walkthroughNarration": "Explicação do passo atual",
-    "openRunner": "Executar o código",
+    "openRunner": "Abrir execução",
     "closeRunner": "Ocultar execução",
     "openInLab": "Abrir no laboratório",
     "copy": "Copiar",

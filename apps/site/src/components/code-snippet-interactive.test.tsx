@@ -51,6 +51,8 @@ const python = variant({
   ],
 });
 const c = variant({ language: 'c', code: C_CODE, runnable: true });
+// A second variant that also has a walkthrough, so a tab switch has a start button to steal the focus for.
+const cWithSteps = variant({ language: 'c', code: C_CODE, walkthrough: [{ start: 1, end: 1, content: <p>Passo em C.</p> }] });
 const mysql = variant({ language: 'mysql', code: 'SELECT 1;\n', sqlSetup: 'CREATE TABLE t (a INT);' });
 
 class FakeRunner implements Runner {
@@ -201,9 +203,9 @@ describe('CodeSnippetInteractive annotations', () => {
 });
 
 describe('CodeSnippetInteractive walkthrough', () => {
-  async function startWalkthrough() {
+  async function startWalkthrough(variants: SnippetVariant[] = [python, c]) {
     const user = userEvent.setup();
-    const view = renderSnippet([python, c]);
+    const view = renderSnippet(variants);
     await user.click(screen.getByRole('button', { name: 'Percorrer o código' }));
     return { user, ...view };
   }
@@ -264,12 +266,55 @@ describe('CodeSnippetInteractive walkthrough', () => {
     await user.click(screen.getByRole('button', { name: 'Percorrer o código' }));
     await user.click(screen.getByRole('button', { name: 'Sair do passo a passo' }));
     expect(screen.queryByText('Passo 1 de 3')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Percorrer o código' })).toHaveFocus();
+  });
+
+  it('closes a pinned annotation when the walkthrough starts, so Escape only has the walkthrough to leave', async () => {
+    const user = userEvent.setup();
+    renderSnippet([python]);
+    await user.click(screen.getByRole('button', { name: 'Nota 1' }));
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Percorrer o código' }));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByText('Passo 1 de 3')).toBeNull();
+    // The pin did not come back with the markers.
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('keeps the gutter width while walking through, so the code does not shift', async () => {
+    const { container } = await startWalkthrough();
+    expect(screen.queryByRole('button', { name: 'Nota 1' })).toBeNull();
+    expect(container.querySelectorAll('[data-line] > span:first-child')).toHaveLength(4);
+    expect(container.querySelector('[data-line="1"] > span:first-child')?.className).toBe(
+      container.querySelector('[data-line="2"] > span:first-child')?.className,
+    );
+  });
+
+  it('has no gutter when the variant has no annotations', () => {
+    const { container } = renderSnippet([c]);
+    expect(container.querySelector('[data-line="1"] > span:first-child')?.hasAttribute('data-line-number')).toBe(true);
   });
 
   it('leaves walkthrough mode when another tab is chosen', async () => {
     const { user } = await startWalkthrough();
     await user.click(screen.getByRole('tab', { name: 'C' }));
     expect(screen.queryByText('Passo 1 de 3')).toBeNull();
+  });
+
+  it('keeps the focus on the tab when a tab switch ends the walkthrough', async () => {
+    const { user } = await startWalkthrough([python, cWithSteps]);
+    await user.click(screen.getByRole('tab', { name: 'C' }));
+    expect(screen.getByRole('tab', { name: 'C' })).toHaveFocus();
+  });
+
+  it('keeps the focus on the tab when an arrow key switches tabs during the walkthrough', async () => {
+    const { user } = await startWalkthrough([python, cWithSteps]);
+    screen.getByRole('tab', { name: 'Python' }).focus();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'C' })).toHaveFocus();
   });
 });
 
@@ -280,7 +325,7 @@ describe('CodeSnippetInteractive run', () => {
     renderSnippet([python], runner);
 
     expect(screen.queryByRole('button', { name: 'Executar' })).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Executar o código' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir execução' }));
 
     const runButton = await screen.findByRole('button', { name: 'Executar' });
     expect(screen.getByLabelText('Entrada')).toHaveValue('5\n');
@@ -293,7 +338,7 @@ describe('CodeSnippetInteractive run', () => {
   it('hides the panel again from the same button', async () => {
     const user = userEvent.setup();
     renderSnippet([python]);
-    await user.click(screen.getByRole('button', { name: 'Executar o código' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir execução' }));
     await screen.findByRole('button', { name: 'Executar' });
     await user.click(screen.getByRole('button', { name: 'Ocultar execução' }));
     expect(screen.queryByRole('button', { name: 'Executar' })).toBeNull();
@@ -307,7 +352,7 @@ describe('CodeSnippetInteractive run', () => {
 
   it('has no run button for a variant that is not runnable', () => {
     renderSnippet([variant({ language: 'python', code: 'x = 1\n', runnable: false })]);
-    expect(screen.queryByRole('button', { name: 'Executar o código' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Abrir execução' })).toBeNull();
   });
 
   it('offers OneCompiler for MySQL: copies the code and opens the site in a new tab', async () => {
@@ -317,7 +362,7 @@ describe('CodeSnippetInteractive run', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     renderSnippet([mysql]);
 
-    expect(screen.queryByRole('button', { name: 'Executar o código' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Abrir execução' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Copiar e abrir no OneCompiler' }));
 
     expect(writeText).toHaveBeenCalledWith('SELECT 1;\n');
@@ -372,7 +417,7 @@ describe('CodeSnippetInteractive copy and lab', () => {
   it('carries an edited stdin to the lab', async () => {
     const user = userEvent.setup();
     renderSnippet([python]);
-    await user.click(screen.getByRole('button', { name: 'Executar o código' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir execução' }));
     const stdin = await screen.findByLabelText('Entrada');
     fireEvent.change(stdin, { target: { value: '9\n' } });
     await user.click(screen.getByRole('button', { name: 'Abrir no laboratório' }));

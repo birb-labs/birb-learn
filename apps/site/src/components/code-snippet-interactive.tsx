@@ -124,13 +124,29 @@ export function CodeSnippetInteractive({ variants, runner: injectedRunner }: Cod
   }, [annotationOpen]);
 
   // Keyboard users keep their place: the narration takes focus on entering the walkthrough,
-  // and the start button gets it back on leaving.
+  // and the start button gets it back when the student leaves it (Escape or the exit button).
+  // Other exits, such as switching tab, keep the focus where the student put it.
   const wasWalkingRef = useRef(false);
+  const restoreFocusRef = useRef(false);
   useEffect(() => {
     if (walking) narrationRef.current?.focus();
-    else if (wasWalkingRef.current) walkStartRef.current?.focus();
+    else if (wasWalkingRef.current && restoreFocusRef.current) walkStartRef.current?.focus();
+    if (!walking) restoreFocusRef.current = false;
     wasWalkingRef.current = walking;
   }, [walking]);
+
+  function startWalkthrough() {
+    // A pinned or hovered note would otherwise come back, unclosable, once the walkthrough ends.
+    setHovered(null);
+    setFocused(null);
+    setPinned(null);
+    setWalkStep(0);
+  }
+
+  function exitWalkthrough() {
+    restoreFocusRef.current = true;
+    setWalkStep(null);
+  }
 
   function resetTransientState() {
     setHovered(null);
@@ -175,7 +191,7 @@ export function CodeSnippetInteractive({ variants, runner: injectedRunner }: Cod
       setWalkStep((step) => Math.max((step ?? 0) - 1, 0));
     } else if (event.key === 'Escape') {
       event.stopPropagation();
-      setWalkStep(null);
+      exitWalkthrough();
     }
   }
 
@@ -241,9 +257,34 @@ export function CodeSnippetInteractive({ variants, runner: injectedRunner }: Cod
   const tabId = (index: number) => `${baseId}-tab-${index}`;
   const panelId = `${baseId}-panel`;
   const popoverId = `${baseId}-note`;
-  const annotation = shownAnnotation === null ? undefined : variant.annotations[shownAnnotation];
+  const annotation = walking || shownAnnotation === null ? undefined : variant.annotations[shownAnnotation];
   const step = walkStep === null ? undefined : variant.walkthrough[walkStep];
   const isMysql = variant.language === 'mysql';
+
+  function renderMarkers(lineNumber: number): ReactNode {
+    // Empty while walking through: the gutter stays, so the code does not shift.
+    if (walking) return null;
+    return variant.annotations.map((note, index) =>
+      note.start === lineNumber ? (
+        <button
+          key={index}
+          type="button"
+          className={styles.marker}
+          aria-label={t('annotation', { number: index + 1 })}
+          aria-describedby={shownAnnotation === index ? popoverId : undefined}
+          aria-expanded={shownAnnotation === index}
+          data-pinned={pinned === index ? '' : undefined}
+          onMouseEnter={() => setHovered(index)}
+          onMouseLeave={() => setHovered(null)}
+          onFocus={() => setFocused(index)}
+          onBlur={() => setFocused(null)}
+          onClick={() => toggleAnnotationPin(index)}
+        >
+          {index + 1}
+        </button>
+      ) : null,
+    );
+  }
 
   const codeLines = (
     <CodeLines
@@ -252,31 +293,8 @@ export function CodeSnippetInteractive({ variants, runner: injectedRunner }: Cod
       ariaLabel={t('codeLabel', { language: languageLabel })}
       highlightedRange={step ?? annotation}
       dimOutside={walking}
-      lineAccessory={
-        walking
-          ? undefined
-          : (lineNumber) =>
-              variant.annotations.map((note, index) =>
-                note.start === lineNumber ? (
-                  <button
-                    key={index}
-                    type="button"
-                    className={styles.marker}
-                    aria-label={t('annotation', { number: index + 1 })}
-                    aria-describedby={shownAnnotation === index ? popoverId : undefined}
-                    aria-expanded={shownAnnotation === index}
-                    data-pinned={pinned === index ? '' : undefined}
-                    onMouseEnter={() => setHovered(index)}
-                    onMouseLeave={() => setHovered(null)}
-                    onFocus={() => setFocused(index)}
-                    onBlur={() => setFocused(null)}
-                    onClick={() => toggleAnnotationPin(index)}
-                  >
-                    {index + 1}
-                  </button>
-                ) : null,
-              )
-      }
+      // Only snippets with notes get a gutter.
+      lineAccessory={variant.annotations.length > 0 ? renderMarkers : undefined}
     />
   );
 
@@ -358,7 +376,7 @@ export function CodeSnippetInteractive({ variants, runner: injectedRunner }: Cod
               {t('walkthroughNext')}
               <Icon name="chevron-right" size={16} aria-hidden />
             </button>
-            <button type="button" className={styles.button} onClick={() => setWalkStep(null)}>
+            <button type="button" className={styles.button} onClick={exitWalkthrough}>
               <Icon name="x" size={16} aria-hidden />
               {t('walkthroughExit')}
             </button>
@@ -368,7 +386,7 @@ export function CodeSnippetInteractive({ variants, runner: injectedRunner }: Cod
 
       <div className={styles.toolbar} role="group" aria-label={t('actions')}>
         {variant.walkthrough.length > 0 && !walking && (
-          <button ref={walkStartRef} type="button" className={styles.button} onClick={() => setWalkStep(0)}>
+          <button ref={walkStartRef} type="button" className={styles.button} onClick={startWalkthrough}>
             <Icon name="route" size={16} aria-hidden />
             {t('walkthroughStart')}
           </button>
