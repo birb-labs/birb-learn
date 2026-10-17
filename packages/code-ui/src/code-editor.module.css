@@ -1,0 +1,11 @@
+.editor {
+  min-width: 0;
+}
+
+.editor :global(.cm-editor) {
+  max-height: 70vh;
+}
+
+.editor :global(.cm-scroller) {
+  overflow: auto;
+}
