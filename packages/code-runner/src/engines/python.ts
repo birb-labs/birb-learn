@@ -148,14 +148,41 @@ function lineReader(stdin: string): () => Uint8Array | null {
   };
 }
 
+/**
+ * Runs `load` while the worker hides `importScripts`, then restores it.
+ *
+ * Pyodide refuses to start in a classic Web Worker: it probes `importScripts`
+ * and throws "Classic web workers are not supported". Turbopack (the site
+ * bundler) only emits classic workers, whatever `type: 'module'` says, and
+ * loads their chunks with `importScripts`. Pyodide itself loads its runtime with
+ * `import()`, which classic workers support in every browser the site targets,
+ * so hiding the probe while Pyodide loads is enough. In Node there is nothing to hide.
+ */
+async function withoutImportScripts<T>(load: () => Promise<T>): Promise<T> {
+  const scope = globalThis as { importScripts?: unknown };
+  if (typeof scope.importScripts !== 'function') return load();
+  const original = scope.importScripts;
+  scope.importScripts = undefined;
+  try {
+    return await load();
+  } finally {
+    scope.importScripts = original;
+  }
+}
+
 export const createPythonEngine: EngineFactory = async (env) => {
-  const { loadPyodide } = await import('pyodide');
-  // Startup output is not the student's: keep it out of the way.
-  const pyodide = await loadPyodide({
-    // The package directory, with a trailing separator.
-    indexURL: env.assetLocation('pyodide', ''),
-    stdout: () => {},
-    stderr: () => {},
+  const pyodide = await withoutImportScripts(async () => {
+    // Imported unbundled (from the CDN in browsers): Pyodide runs its classic
+    // worker probe as soon as the module is evaluated, which in a bundle would
+    // happen inside the bundler's chunk loader, out of reach of the guard above.
+    const { loadPyodide } = (await env.importModule('pyodide', 'pyodide.mjs')) as typeof import('pyodide');
+    // Startup output is not the student's: keep it out of the way.
+    return loadPyodide({
+      // The package directory, with a trailing separator.
+      indexURL: env.assetLocation('pyodide', ''),
+      stdout: () => {},
+      stderr: () => {},
+    });
   });
   const support = loadSupport(pyodide);
 

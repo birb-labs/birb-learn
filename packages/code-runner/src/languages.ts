@@ -1,4 +1,5 @@
-import { LANGUAGES, type Language } from '@birb-learn/content-schema';
+// Deep import: the content-schema barrel would pull Drizzle into browser bundles.
+import { LANGUAGES, type Language } from '@birb-learn/content-schema/src/code-languages';
 
 export interface LanguageInfo {
   label: string;

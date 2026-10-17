@@ -47,6 +47,14 @@ describe('engine environments', () => {
     expect(JSON.parse(new TextDecoder().decode(bytes)).version).toBe(RUNTIME_PACKAGES.typescript);
   });
 
+  it('imports the runtime modules the engines load unbundled in Node', async () => {
+    // The same files the browser imports from the CDN.
+    const pyodide = (await nodeEngineEnv.importModule('pyodide', 'pyodide.mjs')) as { loadPyodide?: unknown };
+    expect(typeof pyodide.loadPyodide).toBe('function');
+    const pglite = (await nodeEngineEnv.importModule('@electric-sql/pglite', 'dist/index.js')) as { PGlite?: unknown };
+    expect(typeof pglite.PGlite).toBe('function');
+  });
+
   it('downloads a package file from the CDN in browsers and rejects an error status', async () => {
     const requested: string[] = [];
     vi.stubGlobal('fetch', async (url: string) => {

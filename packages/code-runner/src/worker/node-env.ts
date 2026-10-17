@@ -51,6 +51,7 @@ export const nodeEngineEnv: EngineEnv = {
     const bytes = await readFile(fileURLToPath(nodeAssetUrl(pkg, path)));
     return new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   },
+  importModule: (pkg, path) => import(nodeAssetUrl(pkg, path)),
   onUnhandledRejection(handler) {
     process.on('unhandledRejection', (reason) => handler(reason));
   },

@@ -180,6 +180,7 @@ describe('TypeScript engine (browser lib loading)', () => {
   const env: EngineEnv = {
     assetLocation: nodeAssetUrl,
     readAsset: (pkg, path) => fetchAsset(nodeAssetUrl(pkg, path)),
+    importModule: (pkg, path) => import(nodeAssetUrl(pkg, path)),
     onUnhandledRejection: () => {},
   };
 

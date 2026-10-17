@@ -83,6 +83,8 @@ if (scope && typeof scope.postMessage === 'function' && typeof scope.addEventLis
     {
       assetLocation: cdnAssetUrl,
       readAsset: cdnReadAsset,
+      // A CDN URL computed at run time, which bundlers must leave alone.
+      importModule: (pkg, path) => import(/* webpackIgnore: true */ /* @vite-ignore */ cdnAssetUrl(pkg, path)),
       onUnhandledRejection(handler) {
         browser.addEventListener('unhandledrejection', (event) => {
           event.preventDefault();

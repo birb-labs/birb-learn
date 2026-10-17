@@ -40,6 +40,12 @@ export interface EngineEnv {
   /** The contents of a file of a runtime package; rejects when it cannot be loaded. */
   readAsset(pkg: RuntimePackage, path: string): Promise<Uint8Array>;
   /**
+   * Imports an ES module file of a runtime package, unbundled: from
+   * `node_modules` in Node, from the CDN in browsers. For runtimes that cannot
+   * go through the site bundler (see the engines that use it).
+   */
+  importModule(pkg: RuntimePackage, path: string): Promise<unknown>;
+  /**
    * Makes `handler` receive the reason of every promise rejection of the worker
    * that nothing handles, instead of letting it crash the worker. Call once.
    */

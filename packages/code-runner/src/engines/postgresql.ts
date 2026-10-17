@@ -17,7 +17,14 @@ function databaseErrorMessage(error: Error & { detail?: string; hint?: string })
 }
 
 export const createPostgresqlEngine: EngineFactory = async (env) => {
-  const { PGlite, protocol, types } = await import('@electric-sql/pglite');
+  // Imported unbundled (from the CDN in browsers): in the site's production
+  // bundle (Turbopack, Next 16.3) a renamed binding of PGlite's initdb code
+  // collides with a local variable, so startup fails with
+  // "h.instantiateWasm is not a function".
+  const { PGlite, protocol, types } = (await env.importModule(
+    '@electric-sql/pglite',
+    'dist/index.js',
+  )) as typeof import('@electric-sql/pglite');
   // Download and compile the runtime once; every case then starts from these.
   const [pgliteWasmModule, initdbWasmModule, fsBundle] = await Promise.all([
     readAsset(env, 'pglite.wasm').then((bytes) => WebAssembly.compile(bytes)),

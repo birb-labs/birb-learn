@@ -1,11 +1,11 @@
+// Deep imports: the content-schema barrel also exports the Drizzle queries,
+// which would otherwise end up in every browser bundle that grades code.
+import { isSqlLanguage, type CodeKind, type Language } from '@birb-learn/content-schema/src/code-languages';
 import {
-  isSqlLanguage,
   parseLineRange,
-  type CodeKind,
   type CodeTaskPayloadData,
-  type Language,
   type SqlTestData,
-} from '@birb-learn/content-schema';
+} from '@birb-learn/content-schema/src/code-payloads';
 import { formatResultSets, normalizeOutput } from './output';
 import type { RunResult, RunStatus, Runner, SqlResultSet } from './protocol';
 

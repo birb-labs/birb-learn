@@ -12,6 +12,7 @@ function createEnv() {
   const env: EngineEnv = {
     assetLocation: noAssets,
     readAsset: noAssets,
+    importModule: noAssets,
     onUnhandledRejection: (h) => {
       handler = h;
     },
