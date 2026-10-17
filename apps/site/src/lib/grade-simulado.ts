@@ -4,12 +4,31 @@ import { isTrueFalseAnswerCorrect } from './true-false-answer';
 import { isAcceptedShortTextAnswer } from './short-text-answer';
 import { isOrderingAnswerCorrect } from './ordering-answer';
 import { isMatchingAnswerCorrect } from './matching-answer';
+// Deep imports: the code-runner barrel would pull the workers and engines into this graph.
+import { gradeCodeTask, type CodeGradeResult } from '@birb-learn/code-runner/src/grading';
+import type { Runner, UnavailableReason } from '@birb-learn/code-runner/src/protocol';
+import { readCodeAnswer } from './code-question-answer';
+import { lazySiteRunner } from './lazy-site-runner';
 import type { ExportedQuestion } from './simulado-selection';
+
+export type QuestionVerdict = 'correct' | 'incorrect' | 'not_graded';
 
 export interface GradedQuestionResult {
   question: ExportedQuestion;
   userAnswer: string | undefined;
+  /** Always `verdict === 'correct'`; a `not_graded` question counts as not correct. */
   isCorrect: boolean;
+  /** `not_graded` only for a code question whose tests could not run. */
+  verdict: QuestionVerdict;
+  /** Code questions only: the grader's details. Absent when the answer was empty (nothing was checked). */
+  code?: CodeGradeResult;
+  /** Why a `not_graded` question could not be graded, and how long to wait before a retry can succeed. */
+  notGraded?: { reason: UnavailableReason; retryAfterMs?: number };
+}
+
+/** The verdict of a graded question; attempts stored before verdicts existed only have `isCorrect`. */
+export function verdictOf(entry: GradedQuestionResult): QuestionVerdict {
+  return entry.verdict ?? (entry.isCorrect ? 'correct' : 'incorrect');
 }
 
 export interface GradedResult {
@@ -24,6 +43,10 @@ async function isAnswerCorrect(
   locale: string,
 ): Promise<boolean> {
   if (userAnswer === undefined) return false;
+
+  if (question.type === 'code') {
+    throw new Error('Code questions are graded by gradeCodeQuestion');
+  }
 
   if (question.type === 'multiple_choice') {
     const selected = question.options.find((option) => String(option.id) === userAnswer);
@@ -93,25 +116,129 @@ async function isAnswerCorrect(
   throw new Error(`Unhandled question type in isAnswerCorrect: ${exhaustiveCheck}`);
 }
 
+export interface GradeOptions {
+  /** Runs the code questions' tests; defaults to the shared site runner, found on first run. */
+  runner?: Runner;
+  /** Reports how many code questions are graded so far, out of how many. */
+  onProgress?: (done: number, total: number) => void;
+  /** Aborts the runs in flight; grading then rejects. */
+  signal?: AbortSignal;
+}
+
+function verdictResult(question: ExportedQuestion, userAnswer: string | undefined, verdict: QuestionVerdict): GradedQuestionResult {
+  return { question, userAnswer, isCorrect: verdict === 'correct', verdict };
+}
+
+async function gradeCodeQuestion(
+  question: ExportedQuestion,
+  userAnswer: string | undefined,
+  runner: Runner,
+  signal: AbortSignal | undefined,
+): Promise<GradedQuestionResult> {
+  const task = question.code;
+  if (!task) throw new Error(`Question ${question.id}: a code question needs its code task`);
+  const answer = readCodeAnswer(task, userAnswer);
+  if (answer === undefined) return verdictResult(question, userAnswer, 'incorrect');
+
+  // The grader reports only that the tests could not run; the reason is read off the runner's own results.
+  let unavailable: { reason: UnavailableReason; retryAfterMs?: number } | undefined;
+  const observingRunner: Runner = {
+    async runCode(request, options) {
+      const run = await runner.runCode(request, options);
+      if (run.status === 'unavailable' && unavailable === undefined) {
+        unavailable = { reason: run.reason ?? 'service_error' };
+        if (run.retryAfterMs !== undefined) unavailable.retryAfterMs = run.retryAfterMs;
+      }
+      return run;
+    },
+  };
+
+  let code: CodeGradeResult;
+  try {
+    code = await gradeCodeTask(task.kind, task.language, task.payload, answer, observingRunner, { signal });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    // The runner contract is to resolve; a rejection is a bug on its side, shown as a failed service.
+    code = { verdict: 'not_graded', tests: [] };
+    unavailable = { reason: 'service_error' };
+  }
+  signal?.throwIfAborted();
+
+  const graded: GradedQuestionResult = { ...verdictResult(question, userAnswer, code.verdict), code };
+  if (code.verdict === 'not_graded') graded.notGraded = unavailable ?? { reason: 'service_error' };
+  return graded;
+}
+
+/**
+ * Grades the code questions at `indexes`, one at a time (they share one runner,
+ * and a remote one is rate-limited), writing each result back into `perQuestion`.
+ */
+async function gradeCodeQuestionsInOrder(
+  perQuestion: GradedQuestionResult[],
+  indexes: number[],
+  answers: Record<number, string>,
+  options: GradeOptions,
+): Promise<void> {
+  if (indexes.length === 0) return;
+  const runner = options.runner ?? lazySiteRunner;
+  options.onProgress?.(0, indexes.length);
+  for (const [done, index] of indexes.entries()) {
+    options.signal?.throwIfAborted();
+    const question = perQuestion[index].question;
+    perQuestion[index] = await gradeCodeQuestion(question, answers[question.id], runner, options.signal);
+    options.onProgress?.(done + 1, indexes.length);
+  }
+}
+
+function summarize(perQuestion: GradedQuestionResult[]): GradedResult {
+  return {
+    correctCount: perQuestion.filter((result) => result.isCorrect).length,
+    total: perQuestion.length,
+    perQuestion,
+  };
+}
+
+/**
+ * Grades a finished simulado. Every non-code question is graded first; then the
+ * code questions run their tests sequentially. A code question whose tests could
+ * not run is `not_graded`, not wrong (see `regradeNotGraded`).
+ */
 export async function gradeSimulado(
   questions: ExportedQuestion[],
   answers: Record<number, string>,
   locale: string,
+  options: GradeOptions = {},
 ): Promise<GradedResult> {
   const perQuestion = await Promise.all(
-    questions.map(async (question) => {
+    questions.map(async (question): Promise<GradedQuestionResult> => {
       const userAnswer = answers[question.id];
-      return {
-        question,
-        userAnswer,
-        isCorrect: await isAnswerCorrect(question, userAnswer, locale),
-      };
+      // Placeholder until the code pass below grades it.
+      if (question.type === 'code') return verdictResult(question, userAnswer, 'incorrect');
+      return verdictResult(question, userAnswer, (await isAnswerCorrect(question, userAnswer, locale)) ? 'correct' : 'incorrect');
     }),
   );
 
-  return {
-    correctCount: perQuestion.filter((result) => result.isCorrect).length,
-    total: questions.length,
-    perQuestion,
-  };
+  const codeIndexes = questions.flatMap((question, index) => (question.type === 'code' ? [index] : []));
+  await gradeCodeQuestionsInOrder(perQuestion, codeIndexes, answers, options);
+  return summarize(perQuestion);
+}
+
+/**
+ * Grades again only the `not_graded` questions of `result` (sequentially, like
+ * `gradeSimulado`) and recomputes `correctCount`. `result` itself is left unchanged.
+ * Only code questions are ever not_graded, so the locale (which only the other
+ * types need) goes unused; it keeps the signature in line with `gradeSimulado`.
+ */
+export async function regradeNotGraded(
+  result: GradedResult,
+  answers: Record<number, string>,
+  _locale: string,
+  options: GradeOptions = {},
+): Promise<GradedResult> {
+  const perQuestion = [...result.perQuestion];
+  const notGradedIndexes = perQuestion.flatMap((entry, index) =>
+    verdictOf(entry) === 'not_graded' && entry.question.type === 'code' ? [index] : [],
+  );
+  await gradeCodeQuestionsInOrder(perQuestion, notGradedIndexes, answers, options);
+  return summarize(perQuestion);
 }

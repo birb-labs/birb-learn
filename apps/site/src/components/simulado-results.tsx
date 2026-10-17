@@ -1,15 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Icon } from '@birb-learn/theme';
-import type { GradedQuestionResult, GradedResult } from '@/lib/grade-simulado';
+// Type-only deep import: the code-runner barrel would pull the workers and engines into this graph.
+import type { Runner } from '@birb-learn/code-runner/src/protocol';
+import {
+  regradeNotGraded,
+  verdictOf,
+  type GradedQuestionResult,
+  type GradedResult,
+  type QuestionVerdict,
+} from '@/lib/grade-simulado';
+import { buildCodeTaskLabels } from '@/lib/code-labels';
+import { lazySiteRunner } from '@/lib/lazy-site-runner';
 import { formatNumericAnswerForDisplay } from '@/lib/numeric-answer';
 import { parseSelectedOptionIds } from '@/lib/multi-response-answer';
 import { parseOrderingAnswer } from '@/lib/ordering-answer';
 import { parseMatchingAnswer } from '@/lib/matching-answer';
 import { renderMathAnswer } from '@/lib/render-math-answer';
 import { FallbackNotice } from './fallback-notice';
+import { SimuladoCodeReview } from './simulado-code-review';
 import styles from './simulado-results.module.css';
 
 // Question types whose "your answer"/"correct answer" value is pre-compiled,
@@ -106,25 +117,163 @@ function describeAnswers(
   };
 }
 
+/** "Your answer" and, when wrong, "Correct answer" for every type except `code`. */
+function AnswerReview({ entry, locale }: { entry: GradedQuestionResult; locale: string }) {
+  const t = useTranslations('simulado.results');
+  const tTaking = useTranslations('simulado.taking');
+  const { yourAnswer, correctAnswer } = describeAnswers(entry, locale, tTaking);
+  const renderAsHtml = isHtmlAnswer(entry.question);
+
+  return (
+    <>
+      <p className={styles.answers}>
+        <strong>{t('yourAnswer')}:</strong>{' '}
+        {renderAsHtml ? (
+          // eslint-disable-next-line react/no-danger -- pre-rendered at build time from our own MDX
+          <span dangerouslySetInnerHTML={{ __html: yourAnswer }} />
+        ) : (
+          yourAnswer
+        )}
+      </p>
+      {!entry.isCorrect && (
+        <p className={styles.answers}>
+          <strong>{t('correctAnswer')}:</strong>{' '}
+          {renderAsHtml ? (
+            // eslint-disable-next-line react/no-danger -- pre-rendered at build time from our own MDX
+            <span dangerouslySetInnerHTML={{ __html: correctAnswer }} />
+          ) : (
+            correctAnswer
+          )}
+        </p>
+      )}
+    </>
+  );
+}
+
+const STATUS_ICONS: Record<QuestionVerdict, 'check-circle' | 'x-circle' | 'clock'> = {
+  correct: 'check-circle',
+  incorrect: 'x-circle',
+  not_graded: 'clock',
+};
+
+const STATUS_CLASSES: Record<QuestionVerdict, string> = {
+  correct: styles.statusCorrect,
+  incorrect: styles.statusIncorrect,
+  not_graded: styles.statusNotGraded,
+};
+
+/** The earliest time a retry can succeed: the longest `retryAfterMs` among the not-graded questions, from now. */
+function retryReadyAt(result: GradedResult): number {
+  const waits = result.perQuestion.map((entry) =>
+    verdictOf(entry) === 'not_graded' ? (entry.notGraded?.retryAfterMs ?? 0) : 0,
+  );
+  return Date.now() + Math.max(0, ...waits);
+}
+
+/** The answers map the result was graded from (it also serves attempts reopened from the history). */
+function answersOf(result: GradedResult): Record<number, string> {
+  const answers: Record<number, string> = {};
+  for (const entry of result.perQuestion) {
+    if (entry.userAnswer !== undefined) answers[entry.question.id] = entry.userAnswer;
+  }
+  return answers;
+}
+
 export function SimuladoResults({
   result,
   locale,
   onBackToSetup,
+  onResultChange,
+  runner = lazySiteRunner,
 }: {
   result: GradedResult;
   locale: string;
   onBackToSetup: () => void;
+  /** Called with the new result once a retry has graded the not-graded questions again. */
+  onResultChange?: (result: GradedResult) => void;
+  /** Tests inject a fake; by default the shared site runner is found when a retry first runs code. */
+  runner?: Runner;
 }) {
   const t = useTranslations('simulado.results');
   const tTaking = useTranslations('simulado.taking');
+  const tCode = useTranslations('code');
+  const codeLabels = useMemo(() => buildCodeTaskLabels(tCode), [tCode]);
   const [onlyWrong, setOnlyWrong] = useState(false);
 
-  const percent = result.total > 0 ? Math.round((result.correctCount / result.total) * 100) : 0;
+  // The shown result starts as the prop and is replaced by a retry; a new prop replaces it again.
+  const [shown, setShown] = useState(() => ({ result, readyAt: retryReadyAt(result) }));
+  const [seenResult, setSeenResult] = useState(result);
+  if (result !== seenResult) {
+    setSeenResult(result);
+    if (result !== shown.result) setShown({ result, readyAt: retryReadyAt(result) });
+  }
+  const current = shown.result;
+  const { readyAt } = shown;
+
+  const [now, setNow] = useState(() => Date.now());
+  const [retrying, setRetrying] = useState(false);
+  const [retryFailed, setRetryFailed] = useState(false);
+  // The in-flight retry's controller; aborted on unmount.
+  const controllerRef = useRef<AbortController | null>(null);
+
+  useEffect(
+    () => () => {
+      controllerRef.current?.abort();
+      controllerRef.current = null;
+    },
+    [],
+  );
+
+  // Ticks the retry countdown until a retry is allowed.
+  useEffect(() => {
+    if (readyAt <= Date.now()) return;
+    const timer = setInterval(() => {
+      const time = Date.now();
+      setNow(time);
+      if (time >= readyAt) clearInterval(timer);
+    }, 250);
+    return () => clearInterval(timer);
+  }, [readyAt]);
+
+  async function retry() {
+    if (controllerRef.current) return;
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    setRetrying(true);
+    setRetryFailed(false);
+
+    let next: GradedResult | undefined;
+    try {
+      next = await regradeNotGraded(current, answersOf(current), locale, { runner, signal: controller.signal });
+    } catch {
+      next = undefined;
+    }
+
+    // An unmounted view no longer owns the state.
+    if (controller.signal.aborted) return;
+    controllerRef.current = null;
+    setRetrying(false);
+    if (!next) {
+      setRetryFailed(true);
+      return;
+    }
+    setShown({ result: next, readyAt: retryReadyAt(next) });
+    setNow(Date.now());
+    onResultChange?.(next);
+  }
+
+  const notGradedCount = current.perQuestion.filter((entry) => verdictOf(entry) === 'not_graded').length;
+  const waitSeconds = Math.ceil(Math.max(0, readyAt - now) / 1000);
+  const percent = current.total > 0 ? Math.round((current.correctCount / current.total) * 100) : 0;
   const level = percent >= 80 ? 'high' : percent >= 50 ? 'mid' : 'low';
   const message = level === 'high' ? t('excellent') : level === 'mid' ? t('good') : t('keepGoing');
-  const visible = result.perQuestion
+  const visible = current.perQuestion
     .map((entry, index) => ({ entry, index }))
     .filter(({ entry }) => !onlyWrong || !entry.isCorrect);
+
+  let retryLabel = t('retry');
+  if (retrying) retryLabel = t('retrying');
+  else if (waitSeconds > 0) retryLabel = t('retryIn', { seconds: waitSeconds });
 
   return (
     <div className={styles.wrapper}>
@@ -139,12 +288,34 @@ export function SimuladoResults({
         </div>
         <div className={styles.heroText}>
           <p className={styles.message}>{message}</p>
-          <p className={styles.score}>{t('score', { correct: result.correctCount, total: result.total })}</p>
+          <p className={styles.score}>
+            {notGradedCount > 0
+              ? t('scoreWithNotGraded', { correct: current.correctCount, notGraded: notGradedCount, total: current.total })
+              : t('score', { correct: current.correctCount, total: current.total })}
+          </p>
+          {retryFailed && (
+            <p className={styles.retryError} role="alert">
+              {t('retryError')}
+            </p>
+          )}
         </div>
-        <button type="button" className={styles.retryButton} onClick={onBackToSetup}>
-          <Icon name="rotate-ccw" size={16} aria-hidden />
-          {t('backToSetup')}
-        </button>
+        <div className={styles.heroActions}>
+          {notGradedCount > 0 && (
+            <button
+              type="button"
+              className={styles.retryButton}
+              disabled={retrying || waitSeconds > 0}
+              onClick={() => void retry()}
+            >
+              <Icon name={retrying ? 'timer' : 'rotate-ccw'} size={16} aria-hidden />
+              {retryLabel}
+            </button>
+          )}
+          <button type="button" className={styles.retryButton} onClick={onBackToSetup}>
+            <Icon name="rotate-ccw" size={16} aria-hidden />
+            {t('backToSetup')}
+          </button>
+        </div>
       </section>
 
       <div className={styles.reviewHeader}>
@@ -162,39 +333,24 @@ export function SimuladoResults({
       <div className={styles.list}>
         {visible.map(({ entry, index }) => {
           const { question, isCorrect } = entry;
-          const { yourAnswer, correctAnswer } = describeAnswers(entry, locale, tTaking);
-          const renderAsHtml = isHtmlAnswer(question);
+          const verdict = verdictOf(entry);
+          const statusLabel = { correct: t('correct'), incorrect: t('incorrect'), not_graded: t('notGraded') }[verdict];
 
           return (
-            <div key={question.id} className={styles.question} data-correct={isCorrect}>
-              <p className={isCorrect ? `${styles.status} ${styles.statusCorrect}` : `${styles.status} ${styles.statusIncorrect}`}>
-                <Icon name={isCorrect ? 'check-circle' : 'x-circle'} size={16} aria-hidden />
-                {isCorrect ? t('correct') : t('incorrect')}
+            <div key={question.id} className={styles.question} data-correct={isCorrect} data-verdict={verdict}>
+              <p className={`${styles.status} ${STATUS_CLASSES[verdict]}`}>
+                <Icon name={STATUS_ICONS[verdict]} size={16} aria-hidden />
+                {statusLabel}
                 <span className={styles.questionLabel}>{tTaking('question', { number: index + 1 })}</span>
               </p>
               {question.isFallback && <FallbackNotice />}
               {/* eslint-disable-next-line react/no-danger -- pre-rendered at build time from our own MDX */}
               <div dangerouslySetInnerHTML={{ __html: question.promptHtml }} />
 
-              <p className={styles.answers}>
-                <strong>{t('yourAnswer')}:</strong>{' '}
-                {renderAsHtml ? (
-                  // eslint-disable-next-line react/no-danger -- pre-rendered at build time from our own MDX
-                  <span dangerouslySetInnerHTML={{ __html: yourAnswer }} />
-                ) : (
-                  yourAnswer
-                )}
-              </p>
-              {!isCorrect && (
-                <p className={styles.answers}>
-                  <strong>{t('correctAnswer')}:</strong>{' '}
-                  {renderAsHtml ? (
-                    // eslint-disable-next-line react/no-danger -- pre-rendered at build time from our own MDX
-                    <span dangerouslySetInnerHTML={{ __html: correctAnswer }} />
-                  ) : (
-                    correctAnswer
-                  )}
-                </p>
+              {question.code ? (
+                <SimuladoCodeReview entry={entry} task={question.code} labels={codeLabels} />
+              ) : (
+                <AnswerReview entry={entry} locale={locale} />
               )}
 
               <div className={styles.resolutionBox}>

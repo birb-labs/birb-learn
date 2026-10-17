@@ -11,6 +11,17 @@
   font-size: var(--font-size-sm);
 }
 
+.progress {
+  margin: var(--space-md) 0 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.progress:empty {
+  display: none;
+}
+
 .stack {
   display: flex;
   flex-direction: column;

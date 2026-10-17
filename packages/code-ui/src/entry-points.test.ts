@@ -68,9 +68,15 @@ describe('code-ui entry points', () => {
     ]);
   });
 
-  it('declares the two entries and keeps only CSS as a side effect', () => {
+  it('keeps React and CSS out of the highlight entry, so plain Node scripts can import it', () => {
+    const { files, bare } = walk(join(PACKAGE_ROOT, 'highlight.ts'));
+    expect(files).toEqual(['highlight.ts', join('src', 'highlight.ts')]);
+    expect(bare.filter((specifier) => specifier === 'react' || specifier.endsWith('.css'))).toEqual([]);
+  });
+
+  it('declares the three entries and keeps only CSS as a side effect', () => {
     const pkg = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8'));
-    expect(pkg.exports).toEqual({ '.': './index.ts', './editor': './editor.ts' });
+    expect(pkg.exports).toEqual({ '.': './index.ts', './editor': './editor.ts', './highlight': './highlight.ts' });
     expect(pkg.sideEffects).toEqual(['*.css']);
   });
 });

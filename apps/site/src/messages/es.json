@@ -223,7 +223,8 @@
       "progress": "{answered} de {total} respondidas",
       "question": "Pregunta {number}",
       "answered": "Respondida",
-      "unanswered": "En blanco"
+      "unanswered": "En blanco",
+      "gradingCode": "Corrigiendo las preguntas de código… ({done}/{total})"
     },
     "results": {
       "score": "Acertaste {correct} de {total} preguntas",
@@ -239,7 +240,16 @@
       "reviewTitle": "Revisión de las preguntas",
       "resolution": "Resolución comentada",
       "filterAll": "Todas",
-      "filterWrong": "Solo las erróneas"
+      "filterWrong": "Solo las erróneas",
+      "scoreWithNotGraded": "{correct} de {total} correctas, {notGraded} sin corregir",
+      "notGraded": "Sin corregir — vuelve a intentarlo",
+      "retry": "Volver a corregir",
+      "retryIn": "Volver a corregir en {seconds} s",
+      "retrying": "Corrigiendo de nuevo…",
+      "retryError": "No se pudo volver a corregir. Inténtalo más tarde.",
+      "chosenLine": "Línea elegida: {line}",
+      "noLineChosen": "Ninguna línea elegida",
+      "bugLines": "El error está en la línea {lines}"
     },
     "history": {
       "title": "Simulacros anteriores",

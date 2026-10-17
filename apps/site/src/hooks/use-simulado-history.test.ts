@@ -73,4 +73,41 @@ describe('useSimuladoHistory', () => {
     expect(result.current.history).toHaveLength(1);
     expect(result.current.history[0].completedAt).toBe('2026-09-01T12:00:00.000Z');
   });
+
+  it('returns the new attempt id and replaces that attempt in place when it is updated', () => {
+    const { result } = renderHook(() => useSimuladoHistory());
+
+    let firstId = '';
+    act(() => {
+      firstId = result.current.addAttempt(fixtureResult);
+    });
+    act(() => {
+      result.current.addAttempt({ correctCount: 0, total: 1, perQuestion: [] });
+    });
+    expect(firstId).toBe(result.current.history[0].completedAt);
+
+    const updated: GradedResult = { correctCount: 2, total: 2, perQuestion: [] };
+    act(() => {
+      result.current.updateAttempt(firstId, updated);
+    });
+
+    expect(result.current.history).toHaveLength(2);
+    expect(result.current.history[0]).toEqual({ completedAt: firstId, result: updated });
+    expect(result.current.history[1].result.correctCount).toBe(0);
+    const stored = JSON.parse(window.localStorage.getItem(SIMULADO_HISTORY_STORAGE_KEY) ?? '[]');
+    expect(stored[0].result.correctCount).toBe(2);
+  });
+
+  it('gives each attempt a distinct id even when two are added in the same millisecond', () => {
+    const { result } = renderHook(() => useSimuladoHistory());
+    const ids: string[] = [];
+
+    act(() => {
+      ids.push(result.current.addAttempt(fixtureResult));
+      ids.push(result.current.addAttempt(fixtureResult));
+    });
+
+    expect(new Set(ids).size).toBe(2);
+    expect(result.current.history.map((attempt) => attempt.completedAt)).toEqual(ids);
+  });
 });

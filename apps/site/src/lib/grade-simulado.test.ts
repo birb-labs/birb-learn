@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { gradeSimulado } from './grade-simulado';
+import { describe, expect, it, vi } from 'vitest';
+import type { RunRequest, RunResult, Runner } from '@birb-learn/code-runner/src/protocol';
+import { serializeCodeAnswer } from '@birb-learn/code-ui';
+import { gradeSimulado, regradeNotGraded } from './grade-simulado';
 import type { ExportedQuestion } from './simulado-selection';
 
 const mcQuestion: ExportedQuestion = {
@@ -18,6 +20,7 @@ const mcQuestion: ExportedQuestion = {
   answerFormat: 'text',
   isFallback: false,
   tagIds: [],
+  code: null,
 };
 
 const multiResponseQuestion: ExportedQuestion = {
@@ -37,6 +40,7 @@ const multiResponseQuestion: ExportedQuestion = {
   answerFormat: 'text',
   isFallback: false,
   tagIds: [],
+  code: null,
 };
 
 const numericQuestion: ExportedQuestion = {
@@ -52,6 +56,7 @@ const numericQuestion: ExportedQuestion = {
   answerFormat: 'text',
   isFallback: false,
   tagIds: [],
+  code: null,
 };
 
 describe('gradeSimulado', () => {
@@ -136,6 +141,7 @@ describe('gradeSimulado', () => {
       answerFormat: 'text',
       isFallback: false,
       tagIds: [],
+      code: null,
     };
 
     const result = await gradeSimulado([question], { 10: 'true' }, 'pt-BR');
@@ -162,6 +168,7 @@ describe('gradeSimulado', () => {
       answerFormat: 'text',
       isFallback: false,
       tagIds: [],
+      code: null,
     };
 
     expect((await gradeSimulado([question], { 11: 'tvi' }, 'pt-BR')).perQuestion[0].isCorrect).toBe(true);
@@ -185,6 +192,7 @@ describe('gradeSimulado', () => {
       resolutionHtml: '<p>R.</p>',
       isFallback: false,
       tagIds: [],
+      code: null,
     };
 
     const result = await gradeSimulado([question], { 20: '3x + 1' }, 'pt-BR');
@@ -208,6 +216,7 @@ describe('gradeSimulado', () => {
       resolutionHtml: '<p>R.</p>',
       isFallback: false,
       tagIds: [],
+      code: null,
     };
 
     const result = await gradeSimulado([question], { 21: '1+3x' }, 'pt-BR');
@@ -232,6 +241,7 @@ describe('gradeSimulado', () => {
       answerFormat: 'text',
       isFallback: false,
       tagIds: [],
+      code: null,
     };
 
     expect((await gradeSimulado([question], { 12: '100,101,102' }, 'pt-BR')).perQuestion[0].isCorrect).toBe(true);
@@ -255,6 +265,7 @@ describe('gradeSimulado', () => {
       answerFormat: 'text',
       isFallback: false,
       tagIds: [],
+      code: null,
     };
 
     expect((await gradeSimulado([question], { 13: '1:1,2:2' }, 'pt-BR')).perQuestion[0].isCorrect).toBe(true);
@@ -276,5 +287,203 @@ describe('gradeSimulado', () => {
     // would flag at compile time for a real new union member.
     const unknownQuestion = { ...numericQuestion, type: 'essay' } as unknown as ExportedQuestion;
     await expect(gradeSimulado([unknownQuestion], { 2: 'anything' }, 'pt-BR')).rejects.toThrow(/essay/);
+  });
+});
+
+function makeCodeQuestion(id: number, overrides: Partial<NonNullable<ExportedQuestion['code']>> = {}): ExportedQuestion {
+  return {
+    ...mcQuestion,
+    id,
+    type: 'code',
+    options: [],
+    code: {
+      kind: 'write',
+      language: 'python',
+      payload: {
+        starterCode: 'n = int(input())\n',
+        solution: 'n = int(input())\nprint(n * 2)\n',
+        tests: [{ stdin: '4\n', expectedStdout: '8\n' }],
+        blanks: [],
+        hints: [],
+      },
+      starterTokens: [[{ text: 'n = int(input())' }]],
+      solutionTokens: [],
+      ...overrides,
+    },
+  };
+}
+
+const writeAnswer = (code: string) => serializeCodeAnswer({ kind: 'write', code });
+
+function okRun(stdout: string): RunResult {
+  return { status: 'ok', cases: [{ status: 'ok', stdout, stderr: '', exitCode: 0, durationMs: 1 }] };
+}
+
+/** A runner that answers every run with `stdout`, recording the requests. */
+function fakeRunner(stdout = '8\n'): Runner & { requests: RunRequest[] } {
+  const requests: RunRequest[] = [];
+  return {
+    requests,
+    async runCode(request) {
+      requests.push(request);
+      return okRun(stdout);
+    },
+  };
+}
+
+describe('gradeSimulado with code questions', () => {
+  it('grades a correct write answer as correct', async () => {
+    const runner = fakeRunner();
+    const result = await gradeSimulado([makeCodeQuestion(40)], { 40: writeAnswer('n = int(input())\nprint(n * 2)\n') }, 'pt-BR', {
+      runner,
+    });
+
+    expect(result.perQuestion[0].verdict).toBe('correct');
+    expect(result.perQuestion[0].isCorrect).toBe(true);
+    expect(result.perQuestion[0].code?.tests[0].passed).toBe(true);
+    expect(result.correctCount).toBe(1);
+    expect(runner.requests).toHaveLength(1);
+  });
+
+  it('grades a write answer whose tests fail as incorrect', async () => {
+    const result = await gradeSimulado([makeCodeQuestion(40)], { 40: writeAnswer('print(0)\n') }, 'pt-BR', {
+      runner: fakeRunner('0\n'),
+    });
+
+    expect(result.perQuestion[0].verdict).toBe('incorrect');
+    expect(result.perQuestion[0].isCorrect).toBe(false);
+    expect(result.perQuestion[0].code?.tests[0]).toMatchObject({ passed: false, expected: '8', actual: '0' });
+  });
+
+  it('grades a missing, malformed or untouched answer as incorrect without running anything', async () => {
+    const runner = fakeRunner();
+    const questions = [makeCodeQuestion(40), makeCodeQuestion(41), makeCodeQuestion(42)];
+    const result = await gradeSimulado(questions, { 41: 'not json', 42: writeAnswer('n = int(input())\n') }, 'pt-BR', { runner });
+
+    expect(result.perQuestion.map((entry) => entry.verdict)).toEqual(['incorrect', 'incorrect', 'incorrect']);
+    expect(result.perQuestion.every((entry) => entry.code === undefined)).toBe(true);
+    expect(runner.requests).toHaveLength(0);
+  });
+
+  it('marks a code question not_graded, with the reason, when the runner is unavailable', async () => {
+    const runner: Runner = {
+      runCode: async () => ({ status: 'unavailable', reason: 'rate_limited', retryAfterMs: 3000, cases: [] }),
+    };
+    const result = await gradeSimulado([makeCodeQuestion(40), mcQuestion], { 40: writeAnswer('print(8)\n'), 1: '11' }, 'pt-BR', {
+      runner,
+    });
+
+    expect(result.perQuestion[0].verdict).toBe('not_graded');
+    expect(result.perQuestion[0].isCorrect).toBe(false);
+    expect(result.perQuestion[0].notGraded).toEqual({ reason: 'rate_limited', retryAfterMs: 3000 });
+    expect(result.correctCount).toBe(1);
+  });
+
+  it('marks a code question not_graded when the runner rejects', async () => {
+    const runner: Runner = { runCode: () => Promise.reject(new Error('boom')) };
+    const result = await gradeSimulado([makeCodeQuestion(40)], { 40: writeAnswer('print(8)\n') }, 'pt-BR', { runner });
+
+    expect(result.perQuestion[0].verdict).toBe('not_graded');
+    expect(result.perQuestion[0].notGraded).toEqual({ reason: 'service_error' });
+  });
+
+  it('gives every non-code question a verdict that matches isCorrect', async () => {
+    const result = await gradeSimulado([mcQuestion, numericQuestion], { 1: '11', 2: '5' }, 'pt-BR');
+
+    expect(result.perQuestion.map((entry) => entry.verdict)).toEqual(['correct', 'incorrect']);
+  });
+
+  it('grades code questions one at a time, after the others, keeping the question order', async () => {
+    const events: string[] = [];
+    let running = 0;
+    let overlapped = false;
+    const runner: Runner = {
+      async runCode(request) {
+        running += 1;
+        if (running > 1) overlapped = true;
+        events.push(`start ${request.source.trim()}`);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        events.push(`end ${request.source.trim()}`);
+        running -= 1;
+        return okRun('8\n');
+      },
+    };
+    const onProgress = vi.fn();
+    const questions = [makeCodeQuestion(40), mcQuestion, makeCodeQuestion(41)];
+
+    const result = await gradeSimulado(questions, { 40: writeAnswer('print(8) # a'), 41: writeAnswer('print(8) # b'), 1: '11' }, 'pt-BR', {
+      runner,
+      onProgress,
+    });
+
+    expect(overlapped).toBe(false);
+    expect(events).toEqual(['start print(8) # a', 'end print(8) # a', 'start print(8) # b', 'end print(8) # b']);
+    expect(result.perQuestion.map((entry) => entry.question.id)).toEqual([40, 1, 41]);
+    expect(onProgress).toHaveBeenNthCalledWith(1, 0, 2);
+    expect(onProgress).toHaveBeenLastCalledWith(2, 2);
+    expect(result.correctCount).toBe(3);
+  });
+
+  it('passes the signal to the runner and rejects once it is aborted', async () => {
+    const controller = new AbortController();
+    const signals: (AbortSignal | undefined)[] = [];
+    const runner: Runner = {
+      async runCode(_request, options) {
+        signals.push(options?.signal);
+        controller.abort();
+        return { status: 'unavailable', reason: 'service_error', cases: [] };
+      },
+    };
+
+    await expect(
+      gradeSimulado([makeCodeQuestion(40), makeCodeQuestion(41)], { 40: writeAnswer('print(8)'), 41: writeAnswer('print(8)') }, 'pt-BR', {
+        runner,
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow();
+    expect(signals).toEqual([controller.signal]);
+  });
+});
+
+describe('regradeNotGraded', () => {
+  it('re-runs only the not_graded questions and recomputes correctCount', async () => {
+    const questions = [makeCodeQuestion(40), makeCodeQuestion(41), mcQuestion];
+    const answers = { 40: writeAnswer('print(8) # a'), 41: writeAnswer('print(0) # b'), 1: '11' };
+    let available = false;
+    const requests: RunRequest[] = [];
+    const runner: Runner = {
+      async runCode(request) {
+        requests.push(request);
+        if (request.source.includes('# a') && !available) return { status: 'unavailable', reason: 'offline', cases: [] };
+        return okRun(request.source.includes('# a') ? '8\n' : '0\n');
+      },
+    };
+
+    const first = await gradeSimulado(questions, answers, 'pt-BR', { runner });
+    expect(first.perQuestion.map((entry) => entry.verdict)).toEqual(['not_graded', 'incorrect', 'correct']);
+    expect(first.correctCount).toBe(1);
+
+    available = true;
+    requests.length = 0;
+    const onProgress = vi.fn();
+    const second = await regradeNotGraded(first, answers, 'pt-BR', { runner, onProgress });
+
+    expect(requests.map((request) => request.source)).toEqual(['print(8) # a']);
+    expect(second.perQuestion.map((entry) => entry.verdict)).toEqual(['correct', 'incorrect', 'correct']);
+    expect(second.perQuestion[0].notGraded).toBeUndefined();
+    expect(second.correctCount).toBe(2);
+    expect(second.total).toBe(3);
+    expect(onProgress).toHaveBeenLastCalledWith(1, 1);
+    // The earlier result is left as it was.
+    expect(first.correctCount).toBe(1);
+  });
+
+  it('returns an equal result without running anything when nothing is not_graded', async () => {
+    const runner = fakeRunner();
+    const first = await gradeSimulado([mcQuestion], { 1: '11' }, 'pt-BR', { runner });
+    const second = await regradeNotGraded(first, { 1: '11' }, 'pt-BR', { runner });
+
+    expect(second).toEqual(first);
+    expect(runner.requests).toHaveLength(0);
   });
 });

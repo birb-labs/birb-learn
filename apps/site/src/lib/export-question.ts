@@ -1,5 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { QuestionExport } from '@birb-learn/content-schema';
+import {
+  CodeTaskPayload,
+  validateCodeTask,
+  type CodeKind,
+  type CodeTaskPayloadData,
+  type Language,
+  type QuestionExport,
+} from '@birb-learn/content-schema';
+// The highlight entry, not the root: the root also carries React components that import CSS, which the export script cannot load.
+import { highlightCode, type HighlightedLine } from '@birb-learn/code-ui/highlight';
 import { compileLessonMdx } from './compile-lesson-mdx';
 
 export interface ExportedOption {
@@ -19,6 +28,17 @@ export interface ExportedMatchingPair {
   rightHtml: string;
 }
 
+/** What a `code` question ships to the client. The tests ship too: grading runs in the browser (spec §9.3). */
+export interface ExportedCodeTask {
+  kind: CodeKind;
+  language: Language;
+  payload: CodeTaskPayloadData;
+  /** `payload.starterCode`, highlighted at build time. */
+  starterTokens: HighlightedLine[];
+  /** `payload.solution`, highlighted at build time; empty when the task has no solution (predict_output). */
+  solutionTokens: HighlightedLine[];
+}
+
 export interface ExportedQuestion {
   id: number;
   type:
@@ -28,7 +48,8 @@ export interface ExportedQuestion {
     | 'true_false'
     | 'short_text'
     | 'ordering'
-    | 'matching';
+    | 'matching'
+    | 'code';
   difficulty: 'easy' | 'medium' | 'hard';
   promptHtml: string;
   options: ExportedOption[];
@@ -39,10 +60,9 @@ export interface ExportedQuestion {
   isFallback: boolean;
   resolutionHtml: string;
   tagIds: number[];
+  /** Set for `code` questions only. */
+  code: ExportedCodeTask | null;
 }
-
-/** A question the simulado export can compile: every type except `code`, which needs the code-task export. */
-export type ExportableQuestion = QuestionExport & { type: ExportedQuestion['type'] };
 
 async function compileToHtml(source: string): Promise<string> {
   const element = await compileLessonMdx(source);
@@ -79,7 +99,49 @@ export function assertValidMatchingPairs(question: { id: number; matchingPairs: 
   }
 }
 
-export async function compileQuestionForExport(question: ExportableQuestion): Promise<ExportedQuestion> {
+/**
+ * Reads the code task of a `code` question: its kind, language and payload,
+ * parsed with the schema's defaults and checked by `validateCodeTask`. Throws
+ * `Question <id>: <first error>`, so a build fails loudly instead of shipping
+ * a task that cannot be answered or graded.
+ */
+export function parseCodeQuestion(
+  question: Pick<QuestionExport, 'id' | 'codeKind' | 'codeLanguage' | 'codeJson'>,
+): { kind: CodeKind; language: Language; payload: CodeTaskPayloadData } {
+  const fail = (reason: string): never => {
+    throw new Error(`Question ${question.id}: ${reason}`);
+  };
+
+  const { codeKind: kind, codeLanguage: language, codeJson } = question;
+  if (kind === null || language === null) return fail('codeKind and codeLanguage are required for a code question');
+  if (codeJson === null) return fail('codeJson is required for a code question');
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(codeJson);
+  } catch (error) {
+    return fail(`malformed codeJson (${error instanceof Error ? error.message : String(error)})`);
+  }
+  const parsed = CodeTaskPayload.safeParse(raw);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return fail(issue ? `${issue.path.join('.') || 'codeJson'}: ${issue.message}` : 'codeJson: schema validation failed');
+  }
+  const [firstError] = validateCodeTask(kind, language, parsed.data);
+  if (firstError) return fail(firstError);
+  return { kind, language, payload: parsed.data };
+}
+
+async function exportCodeTask(question: QuestionExport): Promise<ExportedCodeTask> {
+  const { kind, language, payload } = parseCodeQuestion(question);
+  const [starterTokens, solutionTokens] = await Promise.all([
+    highlightCode(payload.starterCode, language),
+    payload.solution === undefined ? [] : highlightCode(payload.solution, language),
+  ]);
+  return { kind, language, payload, starterTokens, solutionTokens };
+}
+
+export async function compileQuestionForExport(question: QuestionExport): Promise<ExportedQuestion> {
   const promptHtml = await compileToHtml(question.promptMdx);
   const resolutionHtml = await compileToHtml(question.resolutionMdx);
 
@@ -125,5 +187,6 @@ export async function compileQuestionForExport(question: ExportableQuestion): Pr
     isFallback: question.isFallback,
     resolutionHtml,
     tagIds: question.tagIds,
+    code: question.type === 'code' ? await exportCodeTask(question) : null,
   };
 }

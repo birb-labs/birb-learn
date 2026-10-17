@@ -223,7 +223,8 @@
       "progress": "{answered} of {total} answered",
       "question": "Question {number}",
       "answered": "Answered",
-      "unanswered": "Blank"
+      "unanswered": "Blank",
+      "gradingCode": "Grading code questions… ({done}/{total})"
     },
     "results": {
       "score": "You got {correct} of {total} questions right",
@@ -239,7 +240,16 @@
       "reviewTitle": "Question review",
       "resolution": "Annotated solution",
       "filterAll": "All",
-      "filterWrong": "Wrong only"
+      "filterWrong": "Wrong only",
+      "scoreWithNotGraded": "{correct} of {total} correct, {notGraded} not graded",
+      "notGraded": "Not graded — retry",
+      "retry": "Retry",
+      "retryIn": "Retry in {seconds}s",
+      "retrying": "Grading again…",
+      "retryError": "Could not grade again. Please try later.",
+      "chosenLine": "Line you chose: {line}",
+      "noLineChosen": "No line chosen",
+      "bugLines": "The bug is on line {lines}"
     },
     "history": {
       "title": "Previous practice tests",

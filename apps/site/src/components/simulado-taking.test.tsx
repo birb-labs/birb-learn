@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { serializeCodeAnswer } from '@birb-learn/code-ui';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import ptBR from '@/messages/pt-BR.json';
@@ -23,6 +24,7 @@ const fixtureQuestions: ExportedQuestion[] = [
     answerFormat: 'text',
     isFallback: false,
     tagIds: [],
+    code: null,
   },
   {
     id: 2,
@@ -37,6 +39,7 @@ const fixtureQuestions: ExportedQuestion[] = [
     answerFormat: 'text',
     isFallback: false,
     tagIds: [],
+    code: null,
   },
   {
     id: 3,
@@ -55,6 +58,7 @@ const fixtureQuestions: ExportedQuestion[] = [
     answerFormat: 'text',
     isFallback: false,
     tagIds: [],
+    code: null,
   },
   {
     id: 4,
@@ -69,6 +73,7 @@ const fixtureQuestions: ExportedQuestion[] = [
     answerFormat: 'text',
     isFallback: false,
     tagIds: [],
+    code: null,
   },
   {
     id: 5,
@@ -86,6 +91,7 @@ const fixtureQuestions: ExportedQuestion[] = [
     answerFormat: 'text',
     isFallback: false,
     tagIds: [],
+    code: null,
   },
   {
     id: 6,
@@ -104,6 +110,7 @@ const fixtureQuestions: ExportedQuestion[] = [
     answerFormat: 'text',
     isFallback: false,
     tagIds: [],
+    code: null,
   },
   {
     id: 7,
@@ -121,6 +128,7 @@ const fixtureQuestions: ExportedQuestion[] = [
     answerFormat: 'text',
     isFallback: false,
     tagIds: [],
+    code: null,
   },
 ];
 
@@ -290,5 +298,122 @@ describe('SimuladoTaking', () => {
     resolveFinish!();
 
     expect(await screen.findByRole('button', { name: 'Finalizar simulado' })).not.toBeDisabled();
+  });
+});
+
+const codeBase = fixtureQuestions[0];
+
+const writeQuestion: ExportedQuestion = {
+  ...codeBase,
+  id: 20,
+  type: 'code',
+  options: [],
+  promptHtml: '<p>Leia n e imprima o dobro.</p>',
+  resolutionHtml: '<p>Resolução secreta.</p>',
+  code: {
+    kind: 'write',
+    language: 'python',
+    payload: {
+      starterCode: 'n = int(input())\n',
+      solution: 'n = int(input())\nprint(n * 2)\n',
+      tests: [{ stdin: '4\n', expectedStdout: '8\n' }],
+      blanks: [],
+      hints: ['Dica secreta.'],
+    },
+    starterTokens: [[{ text: 'n = int(input())' }]],
+    solutionTokens: [[{ text: 'n = int(input())' }], [{ text: 'print(n * 2) # solução secreta' }]],
+  },
+};
+
+const predictQuestion: ExportedQuestion = {
+  ...codeBase,
+  id: 21,
+  type: 'code',
+  options: [],
+  promptHtml: '<p>O que o programa imprime?</p>',
+  resolutionHtml: '<p>Outra resolução.</p>',
+  code: {
+    kind: 'predict_output',
+    language: 'javascript',
+    payload: { starterCode: 'console.log(2 + 3);\n', expectedOutput: '5', tests: [], blanks: [], hints: [] },
+    starterTokens: [[{ text: 'console.log(2 + 3);' }]],
+    solutionTokens: [],
+  },
+};
+
+function renderTaking(answers: Record<number, string>, onAnswerChange: (id: number, value: string) => void = () => {}) {
+  return render(
+    <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
+      <SimuladoTaking questions={[writeQuestion, predictQuestion]} answers={answers} onAnswerChange={onAnswerChange} onFinish={() => {}} />
+    </NextIntlClientProvider>,
+  );
+}
+
+describe('SimuladoTaking with code questions', () => {
+  it('renders code questions in exam mode: prompt and editor, no check, hints, solution or resolution', async () => {
+    renderTaking({});
+
+    expect(await screen.findByLabelText('Seu código')).toBeInTheDocument();
+    expect(await screen.findByLabelText('A saída que você prevê')).toBeInTheDocument();
+    expect(screen.getByText('Leia n e imprima o dobro.')).toBeInTheDocument();
+    expect(screen.getByText('O que o programa imprime?')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Verificar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Mostrar dica/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mostrar solução' })).toBeNull();
+    expect(document.body.textContent).not.toContain('secreta');
+    expect(document.body.textContent).not.toContain('resolução');
+  });
+
+  it('stores the serialized code answer under the question id', async () => {
+    const onAnswerChange = vi.fn();
+    renderTaking({}, onAnswerChange);
+
+    fireEvent.change(await screen.findByLabelText('A saída que você prevê'), { target: { value: '5' } });
+
+    expect(onAnswerChange).toHaveBeenCalledWith(21, serializeCodeAnswer({ kind: 'predict_output', output: '5' }));
+  });
+
+  it('shows a stored code answer', async () => {
+    renderTaking({ 21: serializeCodeAnswer({ kind: 'predict_output', output: '42' }) });
+
+    expect(await screen.findByLabelText('A saída que você prevê')).toHaveValue('42');
+  });
+
+  it('does not count an untouched write answer, or one equal to the starter code, as answered', async () => {
+    const { rerender } = renderTaking({});
+    expect(screen.getAllByText('0 de 2 respondidas').length).toBeGreaterThan(0);
+
+    rerender(
+      <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
+        <SimuladoTaking
+          questions={[writeQuestion, predictQuestion]}
+          answers={{
+            20: serializeCodeAnswer({ kind: 'write', code: 'n = int(input())\n' }),
+            21: serializeCodeAnswer({ kind: 'predict_output', output: '5' }),
+          }}
+          onAnswerChange={() => {}}
+          onFinish={() => {}}
+        />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getAllByText('1 de 2 respondidas').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Respondida')).toHaveLength(1);
+
+    rerender(
+      <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
+        <SimuladoTaking
+          questions={[writeQuestion, predictQuestion]}
+          answers={{
+            20: serializeCodeAnswer({ kind: 'write', code: 'n = int(input())\nprint(n * 2)\n' }),
+            21: serializeCodeAnswer({ kind: 'predict_output', output: '5' }),
+          }}
+          onAnswerChange={() => {}}
+          onFinish={() => {}}
+        />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getAllByText('2 de 2 respondidas').length).toBeGreaterThan(0);
+    // Let the lazily loaded views settle before the test ends.
+    expect(await screen.findByLabelText('Seu código')).toBeInTheDocument();
   });
 });

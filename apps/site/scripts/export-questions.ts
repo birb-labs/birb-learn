@@ -4,11 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { getQuestionsForExport, LOCALES } from '@birb-learn/content-schema';
 import { getDb } from '@birb-learn/content-schema/src/client';
 import {
-  type ExportableQuestion,
   compileQuestionForExport,
   assertValidNumericCorrectAnswer,
   assertValidShortTextAnswer,
   assertValidMatchingPairs,
+  parseCodeQuestion,
 } from '../src/lib/export-question';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -18,10 +18,7 @@ async function main() {
   const db = getDb();
 
   for (const locale of LOCALES) {
-    // Code questions need the code-task export (a later task); skip them for now.
-    const questions = (await getQuestionsForExport(db, locale)).filter(
-      (question): question is ExportableQuestion => question.type !== 'code',
-    );
+    const questions = await getQuestionsForExport(db, locale);
 
     for (const question of questions) {
       if (question.type === 'numeric') {
@@ -32,6 +29,10 @@ async function main() {
       }
       if (question.type === 'matching') {
         assertValidMatchingPairs(question);
+      }
+      if (question.type === 'code') {
+        // Throws `Question <id>: <first error>` for a payload that fails `validateCodeTask`.
+        parseCodeQuestion(question);
       }
     }
 

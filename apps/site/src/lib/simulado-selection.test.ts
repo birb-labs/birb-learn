@@ -18,6 +18,7 @@ function makeQuestion(overrides: Partial<ExportedQuestion>): ExportedQuestion {
     answerFormat: 'text',
     isFallback: false,
     tagIds: [],
+    code: null,
     ...overrides,
   };
 }

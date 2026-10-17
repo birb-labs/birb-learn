@@ -1,11 +1,15 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { RunOptions, RunRequest, RunResult, Runner } from '@birb-learn/code-runner/src/protocol';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import ptBR from '@/messages/pt-BR.json';
 import { SimuladoPageClient } from './simulado-page-client';
 import type { SubjectSummary, TopicNode } from '@birb-learn/content-schema';
 import type { ExportedQuestion } from '@/lib/export-question';
+
+const getSiteRunner = vi.fn<() => Runner>();
+vi.mock('@/lib/site-runner', () => ({ getSiteRunner: () => getSiteRunner() }));
 
 const fixtureSubjects: SubjectSummary[] = [{ id: 1, slug: 'matematica', name: 'Matemática' }];
 const fixtureTagTreesBySubject: Record<number, TopicNode[]> = {
@@ -29,6 +33,7 @@ const fixtureQuestions: ExportedQuestion[] = [
     answerFormat: 'text',
     isFallback: false,
     tagIds: [1],
+    code: null,
   },
 ];
 
@@ -51,6 +56,7 @@ const mathModeFixtureQuestions: ExportedQuestion[] = [
     answerFormat: 'math',
     isFallback: false,
     tagIds: [1],
+    code: null,
   },
 ];
 
@@ -224,5 +230,131 @@ describe('SimuladoPageClient', () => {
 
     vi.doUnmock('@/lib/grade-simulado');
     vi.resetModules();
+  });
+});
+
+const fillBlankQuestion: ExportedQuestion = {
+  id: 50,
+  type: 'code',
+  difficulty: 'easy',
+  promptHtml: '<p>Complete o fatorial.</p>',
+  options: [],
+  acceptedAnswers: [],
+  matchingPairs: [],
+  correctAnswer: null,
+  resolutionHtml: '<p>O caso base é 1.</p>',
+  answerFormat: 'text',
+  isFallback: false,
+  tagIds: [1],
+  code: {
+    kind: 'fill_blank',
+    language: 'python',
+    payload: {
+      starterCode: 'print(___1___)\n',
+      solution: 'print(120)\n',
+      tests: [{ stdin: '', expectedStdout: '120\n' }],
+      blanks: [{ id: 1, accepted: ['120'] }],
+      hints: [],
+    },
+    starterTokens: [[{ text: 'print(' }, { text: '___1___' }, { text: ')' }]],
+    solutionTokens: [[{ text: 'print(120)' }]],
+  },
+};
+
+describe('SimuladoPageClient with code questions', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    getSiteRunner.mockReset();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([fillBlankQuestion]) }));
+  });
+
+  async function answerAndFinish() {
+    fireEvent.click(screen.getByRole('button', { name: 'Gerar simulado' }));
+    fireEvent.change(await screen.findByLabelText('Lacuna 1'), { target: { value: '120' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Finalizar simulado' }));
+  }
+
+  function renderPage() {
+    return render(
+      <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
+        <SimuladoPageClient subjects={fixtureSubjects} tagTreesBySubject={fixtureTagTreesBySubject} locale="pt-BR" />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it('shows the code grading progress, then the results, using the site runner', async () => {
+    let finishRun: (result: RunResult) => void = () => {};
+    const requests: RunRequest[] = [];
+    getSiteRunner.mockReturnValue({
+      runCode(request) {
+        requests.push(request);
+        return new Promise((resolve) => {
+          finishRun = resolve;
+        });
+      },
+    });
+    renderPage();
+
+    await answerAndFinish();
+
+    expect(await screen.findByText('Corrigindo as questões de código… (0/1)')).toBeInTheDocument();
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].source).toBe('print(120)\n');
+
+    finishRun({ status: 'ok', cases: [{ status: 'ok', stdout: '120\n', stderr: '', exitCode: 0, durationMs: 1 }] });
+
+    expect(await screen.findByText('Você acertou 1 de 1 questões')).toBeInTheDocument();
+    expect(screen.queryByText(/Corrigindo as questões de código/)).toBeNull();
+    const stored = JSON.parse(window.localStorage.getItem('birb-learn-simulado-history') ?? '[]');
+    expect(stored).toHaveLength(1);
+    expect(stored[0].result.correctCount).toBe(1);
+  });
+
+  it('aborts the grading when the page unmounts, and records no attempt', async () => {
+    const signals: (AbortSignal | undefined)[] = [];
+    getSiteRunner.mockReturnValue({
+      runCode(_request: RunRequest, options?: RunOptions) {
+        signals.push(options?.signal);
+        return new Promise<RunResult>((resolve) => {
+          options?.signal?.addEventListener('abort', () => resolve({ status: 'unavailable', reason: 'service_error', cases: [] }));
+        });
+      },
+    });
+    const { unmount } = renderPage();
+
+    await answerAndFinish();
+    await waitFor(() => expect(signals).toHaveLength(1));
+
+    unmount();
+
+    expect(signals[0]?.aborted).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(window.localStorage.getItem('birb-learn-simulado-history')).toBeNull();
+  });
+
+  it('updates the stored attempt after a successful retry', async () => {
+    let available = false;
+    getSiteRunner.mockReturnValue({
+      async runCode() {
+        if (!available) return { status: 'unavailable', reason: 'offline', cases: [] };
+        return { status: 'ok', cases: [{ status: 'ok', stdout: '120\n', stderr: '', exitCode: 0, durationMs: 1 }] };
+      },
+    });
+    renderPage();
+
+    await answerAndFinish();
+
+    expect(await screen.findByText('0 de 1 certas, 1 sem correção')).toBeInTheDocument();
+    let stored = JSON.parse(window.localStorage.getItem('birb-learn-simulado-history') ?? '[]');
+    expect(stored).toHaveLength(1);
+    expect(stored[0].result.correctCount).toBe(0);
+
+    available = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Corrigir de novo' }));
+
+    expect(await screen.findByText('Você acertou 1 de 1 questões')).toBeInTheDocument();
+    stored = JSON.parse(window.localStorage.getItem('birb-learn-simulado-history') ?? '[]');
+    expect(stored).toHaveLength(1);
+    expect(stored[0].result.correctCount).toBe(1);
   });
 });

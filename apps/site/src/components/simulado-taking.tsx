@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { Icon } from '@birb-learn/theme';
 import type { ExportedQuestion } from '@/lib/simulado-selection';
 import { parseSelectedOptionIds, toggleOptionId } from '@/lib/multi-response-answer';
+import { readCodeAnswer } from '@/lib/code-question-answer';
 import { FallbackNotice } from './fallback-notice';
 import { ProgressBar } from './progress-bar';
 import { NumericAnswerInput } from './numeric-answer-input';
@@ -12,7 +13,14 @@ import { TrueFalseInput } from './true-false-input';
 import { ShortTextAnswerInput } from './short-text-answer-input';
 import { OrderingInput } from './ordering-input';
 import { MatchingInput } from './matching-input';
+import { SimuladoCodeQuestion } from './simulado-code-question';
 import styles from './simulado-taking.module.css';
+
+/** Whether a question has a real answer; an untouched or emptied code answer does not count. */
+function isAnswered(question: ExportedQuestion, answer: string | undefined): boolean {
+  if (question.code) return readCodeAnswer(question.code, answer) !== undefined;
+  return (answer ?? '') !== '';
+}
 
 export function SimuladoTaking({
   questions,
@@ -37,7 +45,7 @@ export function SimuladoTaking({
     }
   }
 
-  const answeredCount = questions.filter((question) => (answers[question.id] ?? '') !== '').length;
+  const answeredCount = questions.filter((question) => isAnswered(question, answers[question.id])).length;
 
   return (
     <div className={styles.list}>
@@ -61,7 +69,7 @@ export function SimuladoTaking({
               {index + 1}
             </span>
             {t('question', { number: index + 1 })}
-            {(answers[question.id] ?? '') !== '' && (
+            {isAnswered(question, answers[question.id]) && (
               <span className={styles.answered}>
                 <Icon name="check" size={12} aria-hidden />
                 {t('answered')}
@@ -69,8 +77,18 @@ export function SimuladoTaking({
             )}
           </p>
           {question.isFallback && <FallbackNotice />}
-          {/* eslint-disable-next-line react/no-danger -- pre-rendered at build time from our own MDX, not user input */}
-          <div dangerouslySetInnerHTML={{ __html: question.promptHtml }} />
+          {question.code ? (
+            // The code task view places the prompt itself.
+            <SimuladoCodeQuestion
+              task={question.code}
+              promptHtml={question.promptHtml}
+              answer={answers[question.id]}
+              onAnswerChange={(value) => onAnswerChange(question.id, value)}
+            />
+          ) : (
+            // eslint-disable-next-line react/no-danger -- pre-rendered at build time from our own MDX, not user input
+            <div dangerouslySetInnerHTML={{ __html: question.promptHtml }} />
+          )}
 
           {question.type === 'multiple_choice' &&
             question.options.map((option) => (

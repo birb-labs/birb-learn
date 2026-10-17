@@ -86,9 +86,27 @@
     color var(--duration-fast) var(--ease-out);
 }
 
-.retryButton:hover {
+.retryButton:hover:not(:disabled) {
   border-color: var(--color-accent);
   color: var(--color-accent);
+}
+
+.retryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.heroActions {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.retryError {
+  margin: var(--space-xs) 0 0;
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
 }
 
 .reviewHeader {
@@ -160,6 +178,10 @@
   background: var(--color-success);
 }
 
+.question[data-verdict='not_graded']::before {
+  background: var(--color-warning);
+}
+
 .status {
   display: flex;
   align-items: center;
@@ -174,6 +196,10 @@
 
 .statusIncorrect {
   color: var(--color-danger);
+}
+
+.statusNotGraded {
+  color: var(--color-warning);
 }
 
 .questionLabel {

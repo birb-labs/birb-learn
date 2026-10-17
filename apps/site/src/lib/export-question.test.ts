@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import type { QuestionExport } from '@birb-learn/content-schema';
 import {
-  type ExportableQuestion,
   compileQuestionForExport,
   isValidNumericCorrectAnswer,
   assertValidNumericCorrectAnswer,
   assertValidShortTextAnswer,
   assertValidMatchingPairs,
+  parseCodeQuestion,
 } from './export-question';
 
-const mcQuestion: ExportableQuestion = {
+const mcQuestion: QuestionExport = {
   id: 1,
   type: 'multiple_choice',
   codeKind: null,
@@ -29,7 +30,7 @@ const mcQuestion: ExportableQuestion = {
   tagIds: [5],
 };
 
-const numericQuestion: ExportableQuestion = {
+const numericQuestion: QuestionExport = {
   id: 2,
   type: 'numeric',
   codeKind: null,
@@ -47,7 +48,7 @@ const numericQuestion: ExportableQuestion = {
   tagIds: [5, 6],
 };
 
-const multiResponseQuestion: ExportableQuestion = {
+const multiResponseQuestion: QuestionExport = {
   id: 3,
   type: 'multiple_response',
   codeKind: null,
@@ -69,7 +70,7 @@ const multiResponseQuestion: ExportableQuestion = {
   tagIds: [7],
 };
 
-const trueFalseQuestion: ExportableQuestion = {
+const trueFalseQuestion: QuestionExport = {
   id: 3,
   type: 'true_false',
   codeKind: null,
@@ -87,7 +88,7 @@ const trueFalseQuestion: ExportableQuestion = {
   tagIds: [],
 };
 
-const shortTextQuestion: ExportableQuestion = {
+const shortTextQuestion: QuestionExport = {
   id: 4,
   type: 'short_text',
   codeKind: null,
@@ -108,7 +109,7 @@ const shortTextQuestion: ExportableQuestion = {
   tagIds: [],
 };
 
-const mathShortTextQuestion: ExportableQuestion = {
+const mathShortTextQuestion: QuestionExport = {
   id: 7,
   type: 'short_text',
   codeKind: null,
@@ -126,7 +127,7 @@ const mathShortTextQuestion: ExportableQuestion = {
   tagIds: [],
 };
 
-const orderingQuestion: ExportableQuestion = {
+const orderingQuestion: QuestionExport = {
   id: 5,
   type: 'ordering',
   codeKind: null,
@@ -147,7 +148,7 @@ const orderingQuestion: ExportableQuestion = {
   tagIds: [],
 };
 
-const matchingQuestion: ExportableQuestion = {
+const matchingQuestion: QuestionExport = {
   id: 6,
   type: 'matching',
   codeKind: null,
@@ -168,7 +169,102 @@ const matchingQuestion: ExportableQuestion = {
   tagIds: [],
 };
 
+const codeQuestion: QuestionExport = {
+  id: 8,
+  type: 'code',
+  codeKind: 'write',
+  codeLanguage: 'python',
+  codeJson: JSON.stringify({
+    starterCode: 'n = int(input())\n',
+    solution: 'n = int(input())\nprint(n * 2)\n',
+    tests: [{ stdin: '4\n', expectedStdout: '8\n' }],
+  }),
+  difficulty: 'easy',
+  promptMdx: 'Imprima o **dobro** de `n`.',
+  resolutionMdx: 'Multiplique por $2$.',
+  correctAnswer: null,
+  options: [],
+  acceptedAnswers: [],
+  matchingPairs: [],
+  answerFormat: 'text',
+  isFallback: false,
+  tagIds: [9],
+};
+
 describe('compileQuestionForExport', () => {
+  it('exports a code question with its payload and the highlighted starter and solution', async () => {
+    const exported = await compileQuestionForExport(codeQuestion);
+
+    expect(exported.type).toBe('code');
+    expect(exported.promptHtml).toContain('<strong>dobro</strong>');
+    expect(exported.resolutionHtml).toContain('class="katex"');
+    expect(exported.code).not.toBeNull();
+    const code = exported.code!;
+    expect(code.kind).toBe('write');
+    expect(code.language).toBe('python');
+    // The payload is parsed, so the schema's defaults are filled in.
+    expect(code.payload.tests).toEqual([{ stdin: '4\n', expectedStdout: '8\n' }]);
+    expect(code.payload.blanks).toEqual([]);
+    expect(code.starterTokens).toHaveLength(1);
+    expect(code.starterTokens[0].map((token) => token.text).join('')).toBe('n = int(input())');
+    expect(code.solutionTokens).toHaveLength(2);
+    expect(code.solutionTokens[1].map((token) => token.text).join('')).toBe('print(n * 2)');
+    expect(code.solutionTokens.flat().some((token) => token.color?.startsWith('var(--code-'))).toBe(true);
+  });
+
+  it('gives a code question with no solution empty solution tokens', async () => {
+    const exported = await compileQuestionForExport({
+      ...codeQuestion,
+      codeKind: 'predict_output',
+      codeJson: JSON.stringify({ starterCode: 'print(1)\n', expectedOutput: '1' }),
+    });
+
+    expect(exported.code!.solutionTokens).toEqual([]);
+    expect(exported.code!.payload.expectedOutput).toBe('1');
+  });
+
+  it('exports code: null for a question of another type', async () => {
+    const exported = await compileQuestionForExport(mcQuestion);
+
+    expect(exported.code).toBeNull();
+  });
+
+  it('throws naming the question when a code payload fails the cross-field checks', async () => {
+    const invalid = { ...codeQuestion, codeJson: JSON.stringify({ starterCode: 'x = 1\n', tests: [] }) };
+
+    await expect(compileQuestionForExport(invalid)).rejects.toThrow(/^Question 8: solution: required for a write task$/);
+  });
+});
+
+describe('parseCodeQuestion', () => {
+  it('returns the kind, language and parsed payload of a valid code question', () => {
+    const parsed = parseCodeQuestion(codeQuestion);
+
+    expect(parsed.kind).toBe('write');
+    expect(parsed.language).toBe('python');
+    expect(parsed.payload.solution).toBe('n = int(input())\nprint(n * 2)\n');
+  });
+
+  it('throws "Question <id>: <first error>" for a payload that fails validateCodeTask', () => {
+    const invalid = { ...codeQuestion, codeJson: JSON.stringify({ starterCode: 'x = 1\n', tests: [] }) };
+
+    expect(() => parseCodeQuestion(invalid)).toThrow('Question 8: solution: required for a write task');
+  });
+
+  it('throws naming the question for a payload that does not match the schema', () => {
+    const invalid = { ...codeQuestion, codeJson: JSON.stringify({ tests: 'none' }) };
+
+    expect(() => parseCodeQuestion(invalid)).toThrow(/^Question 8: /);
+  });
+
+  it('throws naming the question for malformed JSON or missing code columns', () => {
+    expect(() => parseCodeQuestion({ ...codeQuestion, codeJson: '{' })).toThrow(/^Question 8: /);
+    expect(() => parseCodeQuestion({ ...codeQuestion, codeJson: null })).toThrow(/^Question 8: /);
+    expect(() => parseCodeQuestion({ ...codeQuestion, codeKind: null })).toThrow(/^Question 8: /);
+  });
+});
+
+describe('compileQuestionForExport (non-code types)', () => {
   it('compiles a multiple-choice question, including all of its options, to HTML', async () => {
     const exported = await compileQuestionForExport(mcQuestion);
 
