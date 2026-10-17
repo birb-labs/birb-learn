@@ -1,12 +1,18 @@
 import { render, waitFor } from '@testing-library/react';
 import { language as languageFacet } from '@codemirror/language';
-import { indentMore } from '@codemirror/commands';
+import { indentMore, undo } from '@codemirror/commands';
 import { EditorView } from '@codemirror/view';
 import { describe, expect, it, vi } from 'vitest';
 import { LANGUAGES } from '@birb-learn/content-schema/src/code-languages';
 import { CodeEditor } from './code-editor';
 import { editorLanguageExtension } from './editor-languages';
 import { editorHighlightSpec, editorThemeSpec } from './editor-theme';
+
+// Passes through to the real loaders; a test can make the next load fail.
+vi.mock('./editor-languages', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./editor-languages')>();
+  return { ...actual, editorLanguageExtension: vi.fn(actual.editorLanguageExtension) };
+});
 
 function viewOf(container: HTMLElement): EditorView {
   const dom = container.querySelector<HTMLElement>('.cm-editor');
@@ -44,15 +50,51 @@ describe('CodeEditor', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('blocks editing when readOnly', () => {
+  it('blocks editing when readOnly but stays focusable and selectable', async () => {
     const onChange = vi.fn();
     const { container } = render(<CodeEditor value="ab" onChange={onChange} language="python" ariaLabel="Code" readOnly />);
     const view = viewOf(container);
-    expect(container.querySelector('.cm-content')?.getAttribute('contenteditable')).toBe('false');
-    view.dispatch({ selection: { anchor: 0 } });
+    const content = container.querySelector<HTMLElement>('.cm-content')!;
+    // Not `contenteditable=false`: that would take the editor out of the tab order and selection.
+    expect(content.getAttribute('contenteditable')).not.toBe('false');
+    content.focus();
+    expect(document.activeElement).toBe(content);
+    view.dispatch({ selection: { anchor: 0, head: 2 } });
+    expect(view.state.selection.main.empty).toBe(false);
+
     expect(indentMore(view)).toBe(false);
+    // A browser-style DOM edit is reverted instead of reaching the document.
+    const text = content.querySelector('.cm-line')!.firstChild as Text;
+    text.data = 'abc';
+    document.getSelection()!.collapse(text, 3);
+    await waitFor(() => expect(content.querySelector('.cm-line')?.textContent).toBe('ab'));
     expect(view.state.doc.toString()).toBe('ab');
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps external value changes out of the undo history', () => {
+    const { container, rerender } = render(<CodeEditor value="old" onChange={() => {}} language="python" ariaLabel="Code" />);
+    rerender(<CodeEditor value="new" onChange={() => {}} language="python" ariaLabel="Code" />);
+    const view = viewOf(container);
+    expect(view.state.doc.toString()).toBe('new');
+    expect(undo(view)).toBe(false);
+    expect(view.state.doc.toString()).toBe('new');
+  });
+
+  it('does not dispatch a replacement for a CRLF value that already matches the document', () => {
+    const dispatch = vi.spyOn(EditorView.prototype, 'dispatch');
+    const onChange = vi.fn();
+    const replacements = () => dispatch.mock.calls.filter(([spec]) => typeof spec === 'object' && spec !== null && 'changes' in spec).length;
+    const { container, rerender } = render(<CodeEditor value={'a\r\nb'} onChange={onChange} language="python" ariaLabel="Code" />);
+    expect(viewOf(container).state.doc.toString()).toBe('a\nb');
+    expect(replacements()).toBe(0);
+    rerender(<CodeEditor value={'a\r\nb'} onChange={onChange} language="python" ariaLabel="Code" />);
+    expect(replacements()).toBe(0);
+    rerender(<CodeEditor value={'x\r\ny'} onChange={onChange} language="python" ariaLabel="Code" />);
+    expect(replacements()).toBe(1);
+    expect(viewOf(container).state.doc.toString()).toBe('x\ny');
+    expect(onChange).not.toHaveBeenCalled();
+    dispatch.mockRestore();
   });
 
   it('indents with Tab', () => {
@@ -69,6 +111,15 @@ describe('CodeEditor', () => {
     rerender(<CodeEditor value="x" onChange={() => {}} language="javascript" ariaLabel="Code" />);
     await waitFor(() => expect(viewOf(container).state.facet(languageFacet)?.name).toBe('javascript'));
     expect(container.querySelector('.cm-editor')).toBe(editor);
+  });
+
+  it('drops the previous grammar when the new one fails to load', async () => {
+    const { container, rerender } = render(<CodeEditor value="x" onChange={() => {}} language="python" ariaLabel="Code" />);
+    await waitFor(() => expect(viewOf(container).state.facet(languageFacet)?.name).toBe('python'));
+    vi.mocked(editorLanguageExtension).mockRejectedValueOnce(new Error('chunk failed'));
+    rerender(<CodeEditor value="x" onChange={() => {}} language="javascript" ariaLabel="Code" />);
+    await waitFor(() => expect(viewOf(container).state.facet(languageFacet)).toBeNull());
+    expect(viewOf(container).state.doc.toString()).toBe('x');
   });
 
   it('destroys the view on unmount', () => {

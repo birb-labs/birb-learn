@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { Annotation, Compartment, EditorState } from '@codemirror/state';
+import { Annotation, Compartment, EditorState, Transaction } from '@codemirror/state';
 import { EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { bracketMatching, indentOnInput } from '@codemirror/language';
@@ -30,8 +30,14 @@ const languageSlot = new Compartment();
 const readOnlySlot = new Compartment();
 const labelSlot = new Compartment();
 
+// Only `readOnly`, never `editable: false`: a read-only editor must stay focusable and selectable (copying, screen readers).
 function readOnlyExtension(readOnly: boolean) {
-  return [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
+  return EditorState.readOnly.of(readOnly);
+}
+
+/** CodeMirror stores line breaks as `\n`, so compare and insert values in that form. */
+function normalizeLineBreaks(text: string): string {
+  return text.replace(/\r\n?/g, '\n');
 }
 
 function labelExtension(ariaLabel: string) {
@@ -83,8 +89,13 @@ export function CodeEditor({ value, onChange, language, readOnly = false, ariaLa
 
   useEffect(() => {
     const view = viewRef.current;
-    if (view && view.state.doc.toString() !== value) {
-      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value }, annotations: FromProps.of(true) });
+    const text = normalizeLineBreaks(value);
+    if (view && view.state.doc.toString() !== text) {
+      // An external replacement is not the student's edit: keep it out of the undo history.
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: text },
+        annotations: [FromProps.of(true), Transaction.addToHistory.of(false)],
+      });
     }
   }, [value]);
 
@@ -104,7 +115,8 @@ export function CodeEditor({ value, onChange, language, readOnly = false, ariaLa
         if (!cancelled) viewRef.current?.dispatch({ effects: languageSlot.reconfigure(extension) });
       },
       () => {
-        // Without a grammar the code is still editable, just not coloured.
+        // Without a grammar the code is still editable, just not coloured: drop the previous language's.
+        if (!cancelled) viewRef.current?.dispatch({ effects: languageSlot.reconfigure([]) });
       },
     );
     return () => {

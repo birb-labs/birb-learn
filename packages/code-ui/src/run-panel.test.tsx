@@ -37,8 +37,12 @@ class FakeRunner implements Runner {
   }
 
   async settle(result: RunResult): Promise<void> {
+    await this.settleAt(this.settlers.length - 1, result);
+  }
+
+  async settleAt(index: number, result: RunResult): Promise<void> {
     await act(async () => {
-      this.settlers.at(-1)?.resolve(result);
+      this.settlers[index]?.resolve(result);
     });
   }
 
@@ -98,6 +102,47 @@ describe('RunPanel run flow', () => {
     // A late settlement of the stopped run is ignored.
     await runner.settle(okResult({ stdout: 'late' }));
     expect(screen.queryByText('late')).toBeNull();
+  });
+
+  it('runs again after Stop with a fresh signal and ignores the stopped run settling later', async () => {
+    const { runner } = setup();
+    click('Run');
+    click('Stop');
+    click('Run');
+    expect(runner.requests).toHaveLength(2);
+    expect(runner.options[0]?.signal?.aborted).toBe(true);
+    expect(runner.options[1]?.signal?.aborted).toBe(false);
+    // The first run settles after Stop: it must neither show output nor end the second run.
+    await runner.settleAt(0, okResult({ stdout: 'stale' }));
+    expect(screen.queryByText('stale')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
+    await runner.settleAt(1, okResult({ stdout: 'fresh' }));
+    expect(screen.getByText('fresh')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Run' })).toBeTruthy();
+  });
+
+  it('aborts the run and clears the result when the language changes', async () => {
+    const { runner, rerender } = setup();
+    click('Run');
+    await runner.settle(okResult({ stdout: 'python output' }));
+    expect(screen.getByText('python output')).toBeTruthy();
+    click('Run');
+    const { signal } = runner.options[1]!;
+    rerender(<RunPanel runner={runner} language="lua" source="print(1)" labels={TEST_LABELS} />);
+    expect(signal?.aborted).toBe(true);
+    expect(screen.queryByText('python output')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Run' })).toBeTruthy();
+    await runner.settleAt(1, okResult({ stdout: 'late output' }));
+    expect(screen.queryByText('late output')).toBeNull();
+  });
+
+  it('clears a finished result when the language changes', async () => {
+    const { runner, rerender } = setup();
+    click('Run');
+    await runner.settle(okResult({ stdout: 'python output' }));
+    rerender(<RunPanel runner={runner} language="lua" source="print(1)" labels={TEST_LABELS} />);
+    expect(screen.queryByText('python output')).toBeNull();
+    expect(screen.queryByText(TEST_LABELS.status.ok)).toBeNull();
   });
 
   it('aborts the in-flight run on unmount without updating state afterwards', async () => {
@@ -244,6 +289,19 @@ describe('RunPanel hostile output', () => {
     await runner.settle(okResult({ sql: { resultSets: [{ columns: [HOSTILE], rows: [[HOSTILE]] }] } }));
     expect(container.querySelector('img')).toBeNull();
     expect(screen.getAllByText(HOSTILE)).toHaveLength(2);
+  });
+});
+
+describe('RunPanel scrollable output', () => {
+  it('makes each output block keyboard focusable and named by its heading', async () => {
+    const { runner } = setup();
+    click('Run');
+    await runner.settle(okResult({ stdout: 'out', stderr: 'err' }));
+    for (const [text, heading] of [['out', 'Standard output'], ['err', 'Standard error']]) {
+      const block = screen.getByText(text);
+      expect(block.getAttribute('tabindex')).toBe('0');
+      expect(screen.getByRole('region', { name: heading })).toBe(block);
+    }
   });
 });
 

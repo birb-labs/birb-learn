@@ -120,6 +120,20 @@ export function RunPanel({ runner, language, source, stdin, onStdinChange, sqlSe
     setProgress(null);
   }
 
+  // A result belongs to the language it ran in: switching language drops it and aborts a run in flight.
+  const previousLanguageRef = useRef(language);
+  useEffect(() => {
+    if (previousLanguageRef.current === language) return;
+    previousLanguageRef.current = language;
+    controllerRef.current?.abort();
+    controllerRef.current = null;
+    setRunning(false);
+    setProgress(null);
+    setResult(null);
+    setRetryUntil(null);
+    setRetryRemainingMs(0);
+  }, [language]);
+
   const waiting = retryRemainingMs > 0;
   const status = running ? progressText(progress, language, labels) : result && result.status !== 'unavailable' ? labels.status[finalStatus(result)] : '';
   const statusKind = running ? 'running' : result ? finalStatus(result) : undefined;

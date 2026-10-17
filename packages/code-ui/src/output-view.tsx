@@ -1,3 +1,4 @@
+import { useId } from 'react';
 // Type-only deep import: the code-runner barrel would pull the workers and engines into this graph.
 import type { RunResult } from '@birb-learn/code-runner/src/protocol';
 import type { RunPanelLabels } from './labels';
@@ -18,10 +19,16 @@ interface StreamProps {
 // Everything the program or the runner produced is untrusted: it is only ever
 // a React text child, never markup.
 function Stream({ heading, text, tone }: StreamProps) {
+  const headingId = useId();
   return (
     <section className={styles.section}>
-      <h4 className={styles.heading}>{heading}</h4>
-      <pre className={`${styles.stream} ${tone === 'error' ? styles.error : ''}`}>{text}</pre>
+      <h4 id={headingId} className={styles.heading}>
+        {heading}
+      </h4>
+      {/* Scrollable, so it must be reachable by keyboard and have a name. */}
+      <pre className={`${styles.stream} ${tone === 'error' ? styles.error : ''}`} role="region" aria-labelledby={headingId} tabIndex={0}>
+        {text}
+      </pre>
     </section>
   );
 }
