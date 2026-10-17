@@ -4,20 +4,23 @@ import '@testing-library/jest-dom/vitest';
 
 afterEach(cleanup);
 
-// Mock window.matchMedia for ThemeProvider
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation((query) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-});
+// Mock window.matchMedia for ThemeProvider. Files under
+// `// @vitest-environment node` have no `window`.
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
 
 // @dnd-kit/core (used by OrderingInput/MatchingInput) calls ResizeObserver,
 // which jsdom does not implement. A minimal no-op stub is enough — these

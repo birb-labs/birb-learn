@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { READ_ONLY_CODE_LANGUAGES } from '@birb-learn/content-schema';
 import { READ_ONLY_LANGUAGES } from '../languages';
 import { gradeCodeTask } from '../grading';
-import { OUTPUT_LIMIT_BYTES, type RunRequest, type RunResult } from '../protocol';
+import { OUTPUT_LIMIT_BYTES, type RunProgress, type RunRequest, type RunResult } from '../protocol';
 import { createRunner, createSiteRunner } from '../run-code';
 import { createCompilerExplorerRunner } from './compiler-explorer';
 import { buildCompileRequest } from './map-response';
@@ -747,6 +747,59 @@ describe('createCompilerExplorerRunner', () => {
       await runner.runCode({ language: 'cpp', source: 'one' });
 
       expect(fake.calls).toHaveLength(3);
+    });
+  });
+
+  describe('progress events', () => {
+    it('reports every case, cached ones included', async () => {
+      const fake = recordingFetch(echo);
+      const runner = createCompilerExplorerRunner({ fetch: fake.fetch });
+      await runner.runCode({ ...RUST, cases: [{ stdin: 'a' }] });
+
+      const events: RunProgress[] = [];
+      const result = await runner.runCode(
+        { ...RUST, cases: [{ stdin: 'a' }, { stdin: 'b' }] },
+        { onProgress: (p) => events.push(p) },
+      );
+
+      expect(fake.calls.map((c) => c.stdin)).toEqual(['a', 'b']);
+      expect(result.cases.map((c) => c.stdout)).toEqual(['got a\n', 'got b\n']);
+      expect(events).toEqual([
+        { phase: 'case_started', caseIndex: 0, caseCount: 2 },
+        { phase: 'case_done', caseIndex: 0, caseCount: 2 },
+        { phase: 'case_started', caseIndex: 1, caseCount: 2 },
+        { phase: 'case_done', caseIndex: 1, caseCount: 2 },
+      ]);
+    });
+
+    it('ignores an onProgress callback that throws', async () => {
+      const fake = recordingFetch(echo);
+      const runner = createCompilerExplorerRunner({ fetch: fake.fetch });
+
+      const result = await runner.runCode(
+        { ...RUST, cases: [{ stdin: 'a' }, { stdin: 'b' }] },
+        {
+          onProgress: () => {
+            throw new Error('broken listener');
+          },
+        },
+      );
+
+      expect(result.status).toBe('ok');
+      expect(result.cases.map((c) => c.stdout)).toEqual(['got a\n', 'got b\n']);
+    });
+
+    it('passes onProgress through createRunner', async () => {
+      const fake = recordingFetch(echo);
+      const runner = createRunner({
+        browser: { runCode: () => Promise.reject(new Error('browser runner must not be used')) },
+        remote: createCompilerExplorerRunner({ fetch: fake.fetch }),
+      });
+      const events: RunProgress[] = [];
+
+      await runner.runCode(RUST, { onProgress: (p) => events.push(p) });
+
+      expect(events.map((p) => p.phase)).toEqual(['case_started', 'case_done']);
     });
   });
 

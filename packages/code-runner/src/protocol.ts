@@ -55,8 +55,26 @@ export interface RunResult {
   cases: CaseResult[];
 }
 
+/**
+ * Progress of a run, for the UI. `loading_engine` is reported at most once per
+ * run, when the run has to wait for a worker to load its engine (not when the
+ * engine is already loaded). Every case reports `case_started` then, when it
+ * finishes, `case_done` (cached remote cases included); a run that stops early
+ * (compile error, `unavailable`, abort) reports no more events.
+ */
+export type RunProgress =
+  | { phase: 'loading_engine' }
+  | { phase: 'case_started'; caseIndex: number; caseCount: number }
+  | { phase: 'case_done'; caseIndex: number; caseCount: number };
+
+export interface RunOptions {
+  signal?: AbortSignal;
+  /** Called synchronously by the runner; an exception it throws is ignored. */
+  onProgress?: (progress: RunProgress) => void;
+}
+
 export interface Runner {
-  runCode(req: RunRequest, opts?: { signal?: AbortSignal }): Promise<RunResult>;
+  runCode(req: RunRequest, opts?: RunOptions): Promise<RunResult>;
 }
 
 export const DEFAULT_TIMEOUT_MS = 5000;
@@ -72,4 +90,13 @@ export const OUTPUT_LIMIT_BYTES = 65536;
 export function clampTimeout(ms?: number): number {
   if (ms === undefined || !Number.isFinite(ms) || ms <= 0) return DEFAULT_TIMEOUT_MS;
   return Math.min(ms, MAX_TIMEOUT_MS);
+}
+
+/** Reports `progress` to `onProgress`, ignoring a missing or throwing callback: progress must never break a run. */
+export function reportProgress(onProgress: RunOptions['onProgress'], progress: RunProgress): void {
+  try {
+    onProgress?.(progress);
+  } catch {
+    // A broken progress listener is the UI's bug, not the run's.
+  }
 }

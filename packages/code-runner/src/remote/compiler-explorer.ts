@@ -1,5 +1,13 @@
 import { OutputCollector } from '../output';
-import type { CaseResult, RunRequest, RunResult, Runner, UnavailableReason } from '../protocol';
+import {
+  reportProgress,
+  type CaseResult,
+  type RunOptions,
+  type RunRequest,
+  type RunResult,
+  type Runner,
+  type UnavailableReason,
+} from '../protocol';
 import { COMPILER_EXPLORER_COMPILERS, type RemoteLanguage } from './compilers';
 import { buildCompileRequest, mapCompilerExplorerResponse } from './map-response';
 
@@ -216,7 +224,11 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
     }
   }
 
-  async function runCases(req: RunRequest, language: RemoteLanguage, signal: AbortSignal | undefined): Promise<RunResult> {
+  async function runCases(
+    req: RunRequest,
+    language: RemoteLanguage,
+    { signal, onProgress }: RunOptions,
+  ): Promise<RunResult> {
     const { id, flags } = COMPILER_EXPLORER_COMPILERS[language];
     const cases: CaseResult[] = [];
 
@@ -244,13 +256,16 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
       }
     }
 
-    for (const testCase of testCases) {
+    const caseCount = testCases.length;
+    for (const [caseIndex, testCase] of testCases.entries()) {
       if (signal?.aborted) throw abortError();
+      reportProgress(onProgress, { phase: 'case_started', caseIndex, caseCount });
       const stdin = testCase.stdin ?? '';
       const key = keyOf(stdin);
       const cached = cache.get(key);
       if (cached) {
         cases.push({ ...cached });
+        reportProgress(onProgress, { phase: 'case_done', caseIndex, caseCount });
         continue;
       }
       if (remainingBudget() <= 0) {
@@ -266,6 +281,7 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
       }
       if (outcome.cacheable) remember(cache, key, outcome.result);
       cases.push(outcome.result);
+      reportProgress(onProgress, { phase: 'case_done', caseIndex, caseCount });
     }
     return { status: 'ok', cases };
   }
@@ -299,7 +315,7 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
       }
 
       try {
-        return await runCases(req, req.language as RemoteLanguage, signal);
+        return await runCases(req, req.language as RemoteLanguage, { signal, onProgress: opts?.onProgress });
       } finally {
         release();
       }

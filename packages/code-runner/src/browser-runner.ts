@@ -5,7 +5,9 @@ import {
   COMPILE_TIMEOUT_MS,
   ENGINE_LOAD_TIMEOUT_MS,
   clampTimeout,
+  reportProgress,
   type CaseResult,
+  type RunOptions,
   type RunRequest,
   type RunResult,
   type Runner,
@@ -30,6 +32,8 @@ interface WorkerSlot {
   language: Language;
   worker: WorkerLike;
   dead: boolean;
+  /** Set once the worker has answered `engine_ready`: its engine is loaded. */
+  engineLoaded: boolean;
   /** The request in flight, which receives the worker's messages. */
   pending?: PendingRequest;
 }
@@ -70,9 +74,9 @@ export class BrowserRunner implements Runner {
 
   constructor(private readonly spawn: (language: Language) => WorkerLike) {}
 
-  runCode(req: RunRequest, opts: { signal?: AbortSignal } = {}): Promise<RunResult> {
+  runCode(req: RunRequest, opts: RunOptions = {}): Promise<RunResult> {
     const previous = this.queues.get(req.language) ?? Promise.resolve();
-    const run = previous.then(() => this.execute(req, opts.signal));
+    const run = previous.then(() => this.execute(req, opts));
     const settled = run.catch(() => undefined);
     this.queues.set(req.language, settled);
     void settled.then(() => {
@@ -91,9 +95,18 @@ export class BrowserRunner implements Runner {
     }
   }
 
-  private async execute(req: RunRequest, signal: AbortSignal | undefined): Promise<RunResult> {
+  private async execute(req: RunRequest, { signal, onProgress }: RunOptions): Promise<RunResult> {
     if (signal?.aborted) throw abortError();
+    let reportedLoad = false;
+    // Reports `loading_engine` (once per run) when `slot` still has to load its engine.
+    const noteEngineLoad = (slot: WorkerSlot) => {
+      if (reportedLoad || slot.engineLoaded) return;
+      reportedLoad = true;
+      reportProgress(onProgress, { phase: 'loading_engine' });
+    };
+
     const slot = this.slotFor(req.language);
+    noteEngineLoad(slot);
 
     const compiled = await this.request(
       slot,
@@ -113,9 +126,13 @@ export class BrowserRunner implements Runner {
 
     const timeoutMs = clampTimeout(req.timeoutMs);
     const cases: CaseResult[] = [];
-    for (const testCase of req.cases ?? [{}]) {
+    const testCases = req.cases ?? [{}];
+    const caseCount = testCases.length;
+    for (const [caseIndex, testCase] of testCases.entries()) {
       // A previous case may have killed the worker; respawn it.
       const caseSlot = this.slotFor(req.language);
+      noteEngineLoad(caseSlot);
+      reportProgress(onProgress, { phase: 'case_started', caseIndex, caseCount });
       const collector = new OutputCollector();
       const { outcome, durationMs } = await this.request(
         caseSlot,
@@ -158,6 +175,7 @@ export class BrowserRunner implements Runner {
           break;
         }
       }
+      reportProgress(onProgress, { phase: 'case_done', caseIndex, caseCount });
     }
     return { status: 'ok', cases };
   }
@@ -166,7 +184,7 @@ export class BrowserRunner implements Runner {
     if (this.disposed) throw disposedError();
     let slot = this.slots.get(language);
     if (!slot) {
-      const created: WorkerSlot = { language, worker: this.spawn(language), dead: false };
+      const created: WorkerSlot = { language, worker: this.spawn(language), dead: false, engineLoaded: false };
       created.worker.onMessage((msg) => {
         if (created.dead) return;
         const pending = created.pending;
@@ -238,6 +256,7 @@ export class BrowserRunner implements Runner {
             case 'engine_ready':
               if (ready) break;
               ready = true;
+              slot.engineLoaded = true;
               startedAt = performance.now();
               clearTimeout(timer);
               timer = setTimeout(() => finish({ kind: 'timeout' }, true), timeoutMs);

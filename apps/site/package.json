@@ -9,9 +9,11 @@
     "typecheck": "tsc --noEmit",
     "build:from-admin": "pnpm --filter @birb-learn/content-schema run db:migrate && tsx scripts/hydrate-from-admin.ts && tsx scripts/export-questions.ts && next build",
     "test": "vitest run",
+    "e2e": "playwright test",
     "export-questions": "tsx scripts/export-questions.ts"
   },
   "dependencies": {
+    "@birb-learn/code-runner": "workspace:*",
     "@birb-learn/content-schema": "workspace:*",
     "@birb-learn/math-input": "workspace:*",
     "@birb-learn/theme": "workspace:*",
@@ -30,6 +32,7 @@
     "remark-math": "6.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.5.1",
@@ -37,6 +40,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "jsdom": "^30.0.1",
+    "serve": "14.2.6",
     "tsx": "4.19.2",
     "typescript": "^6.0.2",
     "vitest": "^4.1.11"

@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import type { Language } from '@birb-learn/content-schema';
 import { BrowserRunner, type WorkerLike } from './browser-runner';
 import { createNodeRunner, spawnNodeWorker } from './node';
-import { OUTPUT_LIMIT_BYTES } from './protocol';
+import { OUTPUT_LIMIT_BYTES, type RunProgress, type RunRequest } from './protocol';
 import type { HostMessage, WorkerMessage } from './worker/messages';
 
 const runner = createNodeRunner();
@@ -308,6 +308,85 @@ describe('BrowserRunner with a fake worker', () => {
       ['runtime_error', 'engine broke\n', null],
     ]);
     expect(stats).toEqual({ spawned: 2, terminated: 2 });
+    fake.dispose();
+  });
+});
+
+describe('BrowserRunner progress events', () => {
+  const TWO_CASES: RunRequest = {
+    language: 'javascript',
+    source: 'console.log(Number(input())*2)',
+    cases: [{ stdin: '2' }, { stdin: '3' }],
+  };
+
+  it('reports the engine load and every case of a cold run, then no engine load on a warm worker', async () => {
+    const own = createNodeRunner();
+    try {
+      const cold: RunProgress[] = [];
+      const first = await own.runCode(TWO_CASES, { onProgress: (p) => cold.push(p) });
+      expect(first.cases.map((c) => c.stdout)).toEqual(['4\n', '6\n']);
+      expect(cold).toEqual([
+        { phase: 'loading_engine' },
+        { phase: 'case_started', caseIndex: 0, caseCount: 2 },
+        { phase: 'case_done', caseIndex: 0, caseCount: 2 },
+        { phase: 'case_started', caseIndex: 1, caseCount: 2 },
+        { phase: 'case_done', caseIndex: 1, caseCount: 2 },
+      ]);
+
+      const warm: RunProgress[] = [];
+      await own.runCode(TWO_CASES, { onProgress: (p) => warm.push(p) });
+      expect(warm).toEqual([
+        { phase: 'case_started', caseIndex: 0, caseCount: 2 },
+        { phase: 'case_done', caseIndex: 0, caseCount: 2 },
+        { phase: 'case_started', caseIndex: 1, caseCount: 2 },
+        { phase: 'case_done', caseIndex: 1, caseCount: 2 },
+      ]);
+    } finally {
+      own.dispose();
+    }
+  });
+
+  it('ignores an onProgress callback that throws', async () => {
+    const own = createNodeRunner();
+    try {
+      const result = await own.runCode(TWO_CASES, {
+        onProgress: () => {
+          throw new Error('broken listener');
+        },
+      });
+      expect(result.status).toBe('ok');
+      expect(result.cases.map((c) => [c.status, c.stdout])).toEqual([
+        ['ok', '4\n'],
+        ['ok', '6\n'],
+      ]);
+    } finally {
+      own.dispose();
+    }
+  });
+
+  it('reports the engine load again once a respawned worker has to load it', async () => {
+    // A warm-up run loads worker 1; the next run hangs it on its first case, so
+    // its second case runs on a respawned worker that loads the engine again.
+    let runs = 0;
+    const { runner: fake } = scriptedRunner((msg, send) => {
+      send({ id: msg.id, type: 'engine_ready' });
+      if (msg.type === 'compile') send({ id: msg.id, type: 'done', result: { compileOutput: null } });
+      else if (++runs !== 2) send({ id: msg.id, type: 'done', result: { exitCode: 0 } });
+    });
+    const events: RunProgress[] = [];
+    await fake.runCode({ language: 'python', source: 'x' });
+    const result = await fake.runCode(
+      { language: 'python', source: 'x', cases: [{}, {}], timeoutMs: 200 },
+      { onProgress: (p) => events.push(p) },
+    );
+    expect(result.cases.map((c) => c.status)).toEqual(['timeout', 'ok']);
+    expect(events.map((p) => p.phase)).toEqual([
+      'case_started',
+      'case_done',
+      'loading_engine',
+      'case_started',
+      'case_done',
+    ]);
     fake.dispose();
   });
 });
