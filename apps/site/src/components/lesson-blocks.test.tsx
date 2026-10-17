@@ -1,9 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import ptBR from '@/messages/pt-BR.json';
 import { LessonBlocks } from './lesson-blocks';
 import type { LessonBlockContent } from '@birb-learn/content-schema';
+
+// next/navigation's router (used by the code snippet island) throws outside an app router tree.
+vi.mock('next/navigation', async () => {
+  const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
+  return { ...actual, useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }) };
+});
 
 const labels = {
   blockTypes: {
@@ -82,5 +89,75 @@ describe('LessonBlocks', () => {
     const details = container.querySelector('details');
     expect(details).not.toHaveAttribute('open');
     expect(screen.getByText('Resolução do exercício.')).toBeInTheDocument();
+  });
+});
+
+function codeSnippetBlock(payload: unknown): LessonBlockContent {
+  return {
+    id: 20,
+    order: 1,
+    type: 'code_snippet',
+    title: 'Olá, Ana',
+    bodyMdx: null,
+    promptMdx: null,
+    resolutionMdx: null,
+    caption: 'O mesmo programa em duas linguagens.',
+    simulatorKey: null,
+    simulatorParams: null,
+    codeKind: null,
+    codeLanguage: null,
+    payloadJson: typeof payload === 'string' ? payload : JSON.stringify(payload),
+  };
+}
+
+const snippetPayload = {
+  variants: [
+    {
+      language: 'python',
+      code: 'nome = "Ana"\nprint(nome)\n',
+      runnable: true,
+      annotations: [{ lines: '1', mdx: 'Guarda o **texto** na variável.' }],
+      walkthrough: [{ lines: '1-2', mdx: 'O programa inteiro.' }],
+    },
+    { language: 'c', code: 'int main(void) { return 0; }\n', runnable: true },
+  ],
+};
+
+describe('LessonBlocks code_snippet', () => {
+  async function renderSnippetBlock(payload: unknown) {
+    const jsx = await LessonBlocks({ blocks: [codeSnippetBlock(payload)], labels });
+    return render(<NextIntlClientProvider locale="pt-BR" messages={ptBR}>{jsx}</NextIntlClientProvider>);
+  }
+
+  it('renders the framed, highlighted code with its title and caption', async () => {
+    const { container } = await renderSnippetBlock(snippetPayload);
+
+    expect(screen.getByText('Código')).toBeInTheDocument();
+    expect(screen.getByText('Olá, Ana')).toBeInTheDocument();
+    expect(screen.getByText('O mesmo programa em duas linguagens.')).toBeInTheDocument();
+    expect(container.querySelector('[data-block-type="code_snippet"]')).not.toBeNull();
+    const firstLine = container.querySelector('[data-line="1"]');
+    expect(firstLine?.textContent).toContain('nome = "Ana"');
+    // Highlighted at build time: tokens carry theme variables, not hex colours.
+    expect(container.querySelector('[data-line="1"] [style*="var(--code-"]')).not.toBeNull();
+  });
+
+  it('passes the annotation and walkthrough MDX to the island as compiled HTML', async () => {
+    const user = userEvent.setup();
+    await renderSnippetBlock(snippetPayload);
+
+    await user.click(screen.getByRole('button', { name: 'Nota 1' }));
+    expect(screen.getByRole('tooltip').querySelector('strong')?.textContent).toBe('texto');
+
+    await user.click(screen.getByRole('button', { name: 'Percorrer o código' }));
+    expect(screen.getByText('O programa inteiro.')).toBeInTheDocument();
+  });
+
+  it('fails loudly on a malformed payload', async () => {
+    await expect(LessonBlocks({ blocks: [codeSnippetBlock('{not json')], labels })).rejects.toThrow(/Invalid code_snippet payload in block 20/);
+    await expect(LessonBlocks({ blocks: [codeSnippetBlock({ variants: [] })], labels })).rejects.toThrow(/Invalid code_snippet payload/);
+    await expect(
+      LessonBlocks({ blocks: [codeSnippetBlock({ variants: [{ language: 'python', code: 'x = 1\n', annotations: [{ lines: '5', mdx: 'x' }] }] })], labels }),
+    ).rejects.toThrow(/past the end of the code/);
   });
 });

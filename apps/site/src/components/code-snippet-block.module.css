@@ -1,0 +1,11 @@
+.figure {
+  margin: 0;
+  min-width: 0;
+}
+
+.caption {
+  margin-top: var(--space-md);
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}

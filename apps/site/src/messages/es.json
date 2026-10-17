@@ -268,6 +268,58 @@
     "graphAriaLabel": "Gráfico de función interactivo",
     "undefinedValue": "indefinido"
   },
+  "code": {
+    "tabsLabel": "Lenguaje del código",
+    "codeLabel": "Código en {language}",
+    "annotation": "Nota {number}",
+    "walkthroughStart": "Recorrer el código",
+    "walkthroughExit": "Salir del paso a paso",
+    "walkthroughPrevious": "Paso anterior",
+    "walkthroughNext": "Siguiente paso",
+    "walkthroughStep": "Paso {current} de {total}",
+    "walkthroughNarration": "Explicación del paso actual",
+    "openRunner": "Ejecutar el código",
+    "closeRunner": "Ocultar ejecución",
+    "openInLab": "Abrir en el laboratorio",
+    "copy": "Copiar",
+    "copied": "¡Copiado!",
+    "copyFailed": "No se pudo copiar",
+    "oneCompiler": "Copiar y abrir en OneCompiler",
+    "actions": "Acciones del código",
+    "run": {
+      "run": "Ejecutar",
+      "stop": "Detener",
+      "stdin": "Entrada",
+      "sqlSetup": "Preparación de la base (SQL)",
+      "output": "Salida",
+      "stdout": "Salida estándar",
+      "stderr": "Errores",
+      "compileError": "Error de compilación",
+      "running": "Ejecutando...",
+      "loadingEngine": "Cargando {language}...",
+      "caseProgress": "Caso {done} de {total}",
+      "status": {
+        "ok": "Terminado",
+        "compile_error": "No compiló",
+        "runtime_error": "Falló durante la ejecución",
+        "timeout": "Tiempo agotado",
+        "output_limit": "Demasiada salida",
+        "unavailable": "No disponible"
+      },
+      "unavailable": {
+        "read_only": "Este lenguaje solo se puede leer, no ejecutar.",
+        "rate_limited": "Demasiadas ejecuciones seguidas. Espera un momento.",
+        "offline": "No tienes conexión a internet.",
+        "service_error": "El servicio de ejecución falló. Inténtalo de nuevo.",
+        "engine_load": "No se pudo cargar el entorno de ejecución."
+      },
+      "retryIn": "Inténtalo de nuevo en {seconds}s",
+      "retry": "Intentar de nuevo",
+      "rowsShown": "Mostrando {shown} de {total} filas",
+      "remoteNotice": "Este código se ejecuta en un servidor externo. No envíes datos personales.",
+      "noOutput": "Sin salida"
+    }
+  },
   "notFound": {
     "title": "Página no encontrada",
     "text": "La página que buscas no existe o ha cambiado de lugar.",

@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
     '@birb-learn/content-schema',
     '@birb-learn/math-input',
     '@birb-learn/code-runner',
+    '@birb-learn/code-ui',
   ],
   turbopack: {
     resolveAlias: {

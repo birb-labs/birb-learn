@@ -75,6 +75,29 @@ describe('CodeLines', () => {
     expect(container.querySelector('[aria-pressed]')).toBeNull();
   });
 
+  it('makes the scrollable code reachable by keyboard', () => {
+    const { container } = render(<CodeLines lines={LINES} />);
+    expect(container.querySelector('pre')?.getAttribute('tabindex')).toBe('0');
+  });
+
+  it('names the code region with ariaLabel and leaves it unnamed otherwise', () => {
+    const { container, rerender } = render(<CodeLines lines={LINES} />);
+    expect(container.querySelector('pre')?.hasAttribute('aria-label')).toBe(false);
+    expect(container.querySelector('pre')?.hasAttribute('role')).toBe(false);
+    rerender(<CodeLines lines={LINES} ariaLabel="Example code" />);
+    expect(screen.getByRole('region', { name: 'Example code' }).tagName).toBe('PRE');
+  });
+
+  it('renders the lineAccessory of a line inside that line, but not on clickable lines', () => {
+    const lineAccessory = (n: number) => (n === 2 ? <button type="button">Note</button> : null);
+    const { container, rerender } = render(<CodeLines lines={LINES} lineAccessory={lineAccessory} />);
+    expect(container.querySelector('[data-line="2"] button')?.textContent).toBe('Note');
+    expect(container.querySelectorAll('button')).toHaveLength(1);
+    rerender(<CodeLines lines={LINES} lineAccessory={lineAccessory} onLineClick={() => {}} />);
+    // Interactive elements cannot nest inside a line button.
+    expect(container.querySelectorAll('button button')).toHaveLength(0);
+  });
+
   it('renders token text as text, never as HTML', () => {
     const { container } = render(<CodeLines lines={[[{ text: '<b>x</b>' }]]} />);
     expect(container.querySelector('b')).toBeNull();

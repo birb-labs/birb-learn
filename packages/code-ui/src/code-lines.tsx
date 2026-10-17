@@ -16,6 +16,13 @@ export interface CodeLinesProps {
   selectedLine?: number;
   /** Accessible name of each line button (only used with `onLineClick`); the caller supplies the translated text. */
   lineLabel?: (lineNumber: number) => string;
+  /** Accessible name of the code region. The code scrolls, so it is keyboard-focusable and, once named, a labelled region. */
+  ariaLabel?: string;
+  /**
+   * Content in a fixed-width gutter before each line number (e.g. annotation markers).
+   * Ignored with `onLineClick`: interactive content cannot nest inside a line button.
+   */
+  lineAccessory?: (lineNumber: number) => ReactNode;
 }
 
 export function CodeLines({
@@ -27,9 +34,12 @@ export function CodeLines({
   onLineClick,
   selectedLine,
   lineLabel,
+  ariaLabel,
+  lineAccessory,
 }: CodeLinesProps) {
+  const showAccessory = lineAccessory !== undefined && !onLineClick;
   return (
-    <pre className={styles.code}>
+    <pre className={styles.code} tabIndex={0} role={ariaLabel ? 'region' : undefined} aria-label={ariaLabel}>
       <code>
         {lines.map((line, lineIndex) => {
           const lineNumber = lineIndex + 1;
@@ -37,6 +47,7 @@ export function CodeLines({
           const dimmed = dimOutside && highlightedRange !== undefined && !highlighted;
           const content = (
             <>
+              {showAccessory && <span className={styles.accessory}>{lineAccessory(lineNumber)}</span>}
               {lineNumbers && (
                 <span className={styles.number} data-line-number aria-hidden="true">
                   {lineNumber}

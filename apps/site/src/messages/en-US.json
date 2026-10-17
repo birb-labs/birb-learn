@@ -268,6 +268,58 @@
     "graphAriaLabel": "Interactive function graph",
     "undefinedValue": "undefined"
   },
+  "code": {
+    "tabsLabel": "Code language",
+    "codeLabel": "{language} code",
+    "annotation": "Note {number}",
+    "walkthroughStart": "Walk through the code",
+    "walkthroughExit": "Exit walkthrough",
+    "walkthroughPrevious": "Previous step",
+    "walkthroughNext": "Next step",
+    "walkthroughStep": "Step {current} of {total}",
+    "walkthroughNarration": "Explanation of the current step",
+    "openRunner": "Run the code",
+    "closeRunner": "Hide runner",
+    "openInLab": "Open in the lab",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "copyFailed": "Could not copy",
+    "oneCompiler": "Copy and open in OneCompiler",
+    "actions": "Code actions",
+    "run": {
+      "run": "Run",
+      "stop": "Stop",
+      "stdin": "Input",
+      "sqlSetup": "Database setup (SQL)",
+      "output": "Output",
+      "stdout": "Standard output",
+      "stderr": "Errors",
+      "compileError": "Compile error",
+      "running": "Running...",
+      "loadingEngine": "Loading {language}...",
+      "caseProgress": "Case {done} of {total}",
+      "status": {
+        "ok": "Finished",
+        "compile_error": "Did not compile",
+        "runtime_error": "Crashed while running",
+        "timeout": "Timed out",
+        "output_limit": "Too much output",
+        "unavailable": "Unavailable"
+      },
+      "unavailable": {
+        "read_only": "This language can be read but not run.",
+        "rate_limited": "Too many runs in a row. Please wait a moment.",
+        "offline": "You are offline.",
+        "service_error": "The run service failed. Please try again.",
+        "engine_load": "The runtime could not be loaded."
+      },
+      "retryIn": "Try again in {seconds}s",
+      "retry": "Try again",
+      "rowsShown": "Showing {shown} of {total} rows",
+      "remoteNotice": "This code runs on an external server. Do not send personal data.",
+      "noOutput": "No output"
+    }
+  },
   "notFound": {
     "title": "Page not found",
     "text": "The page you are looking for does not exist or has moved.",
