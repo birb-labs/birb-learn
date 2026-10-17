@@ -10,6 +10,7 @@
   "nav": {
     "home": "Home",
     "content": "Content",
+    "lab": "Lab",
     "simulado": "Practice test",
     "primaryLabel": "Main navigation",
     "openMenu": "Open menu",
@@ -362,6 +363,22 @@
       "solution": "Solution",
       "explanation": "Explanation"
     }
+  },
+  "lab": {
+    "title": "Code lab",
+    "intro": "Write and run code in any of the languages from the lessons. JavaScript, TypeScript, Python, Lua, Ruby, SQLite and PostgreSQL run right in your browser. C, C++, Java, Go and Rust run on Compiler Explorer, an external service. MySQL cannot run here, so use OneCompiler.",
+    "languageLabel": "Language",
+    "groups": {
+      "browser": "In your browser",
+      "remote": "On Compiler Explorer",
+      "readOnly": "Read-only"
+    },
+    "editorLabel": "{language} code",
+    "setupLabel": "Database setup (SQL)",
+    "reset": "Reset to template",
+    "resetConfirm": "Replace your {language} code with the template? Your changes will be lost.",
+    "mysqlNote": "MySQL code cannot run here. Copy it and run it on OneCompiler.",
+    "loading": "Loading the editor..."
   },
   "notFound": {
     "title": "Page not found",

@@ -10,6 +10,7 @@
   "nav": {
     "home": "Início",
     "content": "Conteúdo",
+    "lab": "Laboratório",
     "simulado": "Simulado",
     "primaryLabel": "Navegação principal",
     "openMenu": "Abrir menu",
@@ -362,6 +363,22 @@
       "solution": "Solução",
       "explanation": "Explicação"
     }
+  },
+  "lab": {
+    "title": "Laboratório de código",
+    "intro": "Escreva e rode código em qualquer linguagem das lições. JavaScript, TypeScript, Python, Lua, Ruby, SQLite e PostgreSQL rodam direto no seu navegador. C, C++, Java, Go e Rust rodam no Compiler Explorer, um serviço externo. O MySQL não roda aqui: use o OneCompiler.",
+    "languageLabel": "Linguagem",
+    "groups": {
+      "browser": "No seu navegador",
+      "remote": "No Compiler Explorer",
+      "readOnly": "Somente leitura"
+    },
+    "editorLabel": "Código em {language}",
+    "setupLabel": "Preparação do banco (SQL)",
+    "reset": "Restaurar o modelo",
+    "resetConfirm": "Substituir o seu código em {language} pelo modelo? As suas alterações serão perdidas.",
+    "mysqlNote": "O código MySQL não roda aqui. Copie-o e rode no OneCompiler.",
+    "loading": "Carregando o editor..."
   },
   "notFound": {
     "title": "Página não encontrada",

@@ -10,6 +10,7 @@
   "nav": {
     "home": "Inicio",
     "content": "Contenido",
+    "lab": "Laboratorio",
     "simulado": "Simulacro",
     "primaryLabel": "Navegación principal",
     "openMenu": "Abrir menú",
@@ -362,6 +363,22 @@
       "solution": "Solución",
       "explanation": "Explicación"
     }
+  },
+  "lab": {
+    "title": "Laboratorio de código",
+    "intro": "Escribe y ejecuta código en cualquiera de los lenguajes de las lecciones. JavaScript, TypeScript, Python, Lua, Ruby, SQLite y PostgreSQL se ejecutan directamente en tu navegador. C, C++, Java, Go y Rust se ejecutan en Compiler Explorer, un servicio externo. MySQL no se puede ejecutar aquí: usa OneCompiler.",
+    "languageLabel": "Lenguaje",
+    "groups": {
+      "browser": "En tu navegador",
+      "remote": "En Compiler Explorer",
+      "readOnly": "Solo lectura"
+    },
+    "editorLabel": "Código en {language}",
+    "setupLabel": "Preparación de la base de datos (SQL)",
+    "reset": "Restaurar la plantilla",
+    "resetConfirm": "¿Reemplazar tu código en {language} por la plantilla? Perderás tus cambios.",
+    "mysqlNote": "El código MySQL no se puede ejecutar aquí. Cópialo y ejecútalo en OneCompiler.",
+    "loading": "Cargando el editor..."
   },
   "notFound": {
     "title": "Página no encontrada",

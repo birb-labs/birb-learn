@@ -18,6 +18,8 @@ export interface RunPanelProps {
   /** SQL only: statements run before `source` in the same fresh database. */
   sqlSetup?: string;
   showStdin?: boolean;
+  /** Lists the SQL setup above the toolbar (default); turn it off when the caller already shows it, e.g. in an editor. */
+  showSqlSetup?: boolean;
   labels: RunPanelLabels;
 }
 
@@ -38,7 +40,7 @@ function finalStatus(result: RunResult): RunStatus {
   return result.cases.find((c) => c.status !== 'ok')?.status ?? 'ok';
 }
 
-export function RunPanel({ runner, language, source, stdin, onStdinChange, sqlSetup, showStdin = false, labels }: RunPanelProps) {
+export function RunPanel({ runner, language, source, stdin, onStdinChange, sqlSetup, showStdin = false, showSqlSetup = true, labels }: RunPanelProps) {
   const info = LANGUAGE_INFO[language];
   const [localStdin, setLocalStdin] = useState(stdin ?? '');
   const [running, setRunning] = useState(false);
@@ -141,7 +143,7 @@ export function RunPanel({ runner, language, source, stdin, onStdinChange, sqlSe
   return (
     <div className={styles.panel}>
       {info.engine === 'remote' && <p className={styles.notice}>{labels.remoteNotice}</p>}
-      {info.isSql && sqlSetup && (
+      {showSqlSetup && info.isSql && sqlSetup && (
         <details className={styles.setup}>
           <summary>{labels.sqlSetup}</summary>
           <pre className={styles.setupCode}>{sqlSetup}</pre>

@@ -3,6 +3,8 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { ThemeProvider } from '@birb-learn/theme';
+import enUS from '@/messages/en-US.json';
+import es from '@/messages/es.json';
 import ptBR from '@/messages/pt-BR.json';
 import { Header } from './header';
 
@@ -22,9 +24,9 @@ vi.mock('next/navigation', async () => {
   };
 });
 
-function renderHeader() {
+function renderHeader(locale = 'pt-BR', messages: typeof ptBR = ptBR) {
   return render(
-    <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
+    <NextIntlClientProvider locale={locale} messages={messages}>
       <ThemeProvider>
         <Header />
       </ThemeProvider>
@@ -39,7 +41,25 @@ describe('Header', () => {
     expect(screen.getByRole('link', { name: 'Birb Learn' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: ptBR.nav.home })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: ptBR.nav.content })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: ptBR.nav.lab })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: ptBR.nav.simulado })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['pt-BR', ptBR, 'Laboratório'],
+    ['en-US', enUS, 'Lab'],
+    ['es', es, 'Laboratorio'],
+  ])('links to the lab, between content and the practice test, in %s', (locale, messages, label) => {
+    renderHeader(locale, messages);
+
+    const links = within(screen.getByRole('navigation', { name: messages.nav.primaryLabel })).getAllByRole('link');
+    expect(links.map((link) => link.textContent)).toEqual([
+      messages.nav.home,
+      messages.nav.content,
+      label,
+      messages.nav.simulado,
+    ]);
+    expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', `/${locale}/lab`);
   });
 
   it('marks the section containing the current page as active', () => {

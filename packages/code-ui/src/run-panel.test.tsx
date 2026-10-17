@@ -81,6 +81,17 @@ describe('RunPanel run flow', () => {
     expect(runner.requests[0].cases?.[0]?.stdin).toBeUndefined();
   });
 
+  it('lists the SQL setup unless the caller edits it elsewhere, and still sends it', () => {
+    const { runner, container, rerender } = setup({ language: 'sqlite', source: 'SELECT 1', sqlSetup: 'CREATE TABLE t(a)' });
+    expect(container.querySelector('details')).not.toBeNull();
+    rerender(
+      <RunPanel runner={runner} language="sqlite" source="SELECT 1" sqlSetup="CREATE TABLE t(a)" showSqlSetup={false} labels={TEST_LABELS} />,
+    );
+    expect(container.querySelector('details')).toBeNull();
+    click('Run');
+    expect(runner.requests[0]).toMatchObject({ sqlSetup: 'CREATE TABLE t(a)' });
+  });
+
   it('shows the stdin textarea only when asked and reports edits', () => {
     const onStdinChange = vi.fn();
     const { rerender, runner } = setup();
