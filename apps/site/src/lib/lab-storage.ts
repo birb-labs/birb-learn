@@ -27,11 +27,47 @@ export function loadLabCode(language: Language): string {
   }
 }
 
+/** What the student saved for `language`, or null: unlike `loadLabCode` it never falls back to the template. */
+export function readSavedLabCode(language: Language): string | null {
+  try {
+    return localStorage.getItem(`${CODE_KEY_PREFIX}${language}`);
+  } catch {
+    return null;
+  }
+}
+
 export function saveLabCode(language: Language, code: string): void {
   try {
     localStorage.setItem(`${CODE_KEY_PREFIX}${language}`, code);
   } catch {
     // Saving is a convenience; storage may be blocked or full.
+  }
+}
+
+// The code a handed-over lesson snippet replaced, kept so the student can get it back.
+const previousKey = (language: Language) => `${CODE_KEY_PREFIX}${language}:previous`;
+
+export function loadPreviousLabCode(language: Language): string | null {
+  try {
+    return localStorage.getItem(previousKey(language));
+  } catch {
+    return null;
+  }
+}
+
+export function savePreviousLabCode(language: Language, code: string): void {
+  try {
+    localStorage.setItem(previousKey(language), code);
+  } catch {
+    // Keeping the old code is best effort; storage may be blocked or full.
+  }
+}
+
+export function clearPreviousLabCode(language: Language): void {
+  try {
+    localStorage.removeItem(previousKey(language));
+  } catch {
+    // Nothing to clean up when storage is unavailable.
   }
 }
 

@@ -11,11 +11,14 @@ interface LabCase {
   /** Part of the language's template: it proves the editor holds that language's starter code. */
   templateMarker: string;
   /**
-   * Prints `ran-<language>`, built by concatenation so the source never contains the output. It only
-   * runs in its own language (Python's `+` is not Lua's `..`), so it proves which engine ran.
+   * Prints something only its own engine can produce, and never the output text itself: Python's `+`
+   * is not Lua's `..`, `sqlite_version()` exists only in SQLite and `version()` only in PostgreSQL,
+   * and `__STDC_VERSION__` (plus an `#error` for C++) only compiles as C. So the output proves which
+   * engine ran.
    */
   program: string;
-  expectedOutput: string;
+  /** A fragment the source does not contain; a pattern when the output varies (versions). */
+  expectedOutput: string | RegExp;
 }
 
 const BROWSER_CASES: LabCase[] = [
@@ -58,15 +61,15 @@ const BROWSER_CASES: LabCase[] = [
     language: 'sqlite',
     label: 'SQLite',
     templateMarker: "SELECT 'Hello, world!' AS greeting;",
-    program: "SELECT 'ran-' || 'sqlite' AS greeting;",
-    expectedOutput: 'ran-sqlite',
+    program: "SELECT 'ran-' || sqlite_version() AS engine;",
+    expectedOutput: /ran-3\.\d+/,
   },
   {
     language: 'postgresql',
     label: 'PostgreSQL',
     templateMarker: "SELECT 'Hello, world!' AS greeting;",
-    program: "SELECT 'ran-' || 'postgresql' AS greeting;",
-    expectedOutput: 'ran-postgresql',
+    program: "SELECT split_part(version(), ' ', 1) AS engine;",
+    expectedOutput: 'PostgreSQL',
   },
 ];
 
@@ -74,8 +77,14 @@ const C_CASE: LabCase = {
   language: 'c',
   label: 'C',
   templateMarker: '#include <stdio.h>',
-  program: '#include <stdio.h>\nint main(void) { printf("ran-%s\\n", "c"); return 0; }',
-  expectedOutput: 'ran-c',
+  program: [
+    '#include <stdio.h>',
+    '#ifdef __cplusplus',
+    '#error compiled as C++',
+    '#endif',
+    'int main(void) { printf("ran-%ld\\n", (long)__STDC_VERSION__); return 0; }',
+  ].join('\n'),
+  expectedOutput: /ran-\d{6}/,
 };
 
 // The test timeout (120 s per language, see `playwright.config.ts`) bounds the whole test;
@@ -112,7 +121,7 @@ async function runInLab(page: Page, { language, label, templateMarker, program, 
   await expect(editor).toContainText(templateMarker);
 
   await replaceCode(editor, program);
-  await expect(editor).toContainText(program.split('\n')[0]);
+  await expect(editor).toContainText(program.split('\n').at(-1) ?? program);
   await runAndWait(page);
   await expect(page.getByRole('group', { name: 'Saída' })).toContainText(expectedOutput);
 }

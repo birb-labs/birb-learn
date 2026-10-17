@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LANGUAGE_INFO } from '@birb-learn/code-runner/src/languages';
-import { loadLabCode, saveLabCode, takeIncoming } from './lab-storage';
+import {
+  clearPreviousLabCode,
+  loadLabCode,
+  loadPreviousLabCode,
+  readSavedLabCode,
+  saveLabCode,
+  savePreviousLabCode,
+  takeIncoming,
+} from './lab-storage';
 
 const INCOMING_KEY = 'birb-learn:lab:incoming';
 
@@ -87,5 +95,46 @@ describe('takeIncoming', () => {
       throw new DOMException('denied', 'SecurityError');
     });
     expect(takeIncoming()).toBeNull();
+  });
+});
+
+describe('readSavedLabCode', () => {
+  it('is null until the student has saved something, and never the template', () => {
+    expect(readSavedLabCode('python')).toBeNull();
+    saveLabCode('python', 'print(1)');
+    expect(readSavedLabCode('python')).toBe('print(1)');
+  });
+
+  it('is null when reading throws', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    expect(readSavedLabCode('python')).toBeNull();
+  });
+});
+
+describe('previous lab code', () => {
+  it('round-trips under its own key and can be cleared', () => {
+    expect(loadPreviousLabCode('python')).toBeNull();
+    savePreviousLabCode('python', 'print("old")');
+    expect(localStorage.getItem('birb-learn:lab:python:previous')).toBe('print("old")');
+    expect(loadPreviousLabCode('python')).toBe('print("old")');
+    clearPreviousLabCode('python');
+    expect(loadPreviousLabCode('python')).toBeNull();
+  });
+
+  it('does not crash when storage throws', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    expect(loadPreviousLabCode('python')).toBeNull();
+    expect(() => savePreviousLabCode('python', 'x')).not.toThrow();
+    expect(() => clearPreviousLabCode('python')).not.toThrow();
   });
 });

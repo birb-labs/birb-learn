@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import { NextIntlClientProvider } from 'next-intl';
 import { LANGUAGE_INFO } from '@birb-learn/code-runner/src/languages';
 import type { Runner } from '@birb-learn/code-runner/src/protocol';
@@ -287,5 +288,124 @@ describe('LabClient engines', () => {
   it('offers the stdin input to the run panel for every runnable language', async () => {
     await renderLoadedLab();
     expect(screen.getByTestId('run-panel')).toHaveAttribute('data-show-stdin', 'true');
+  });
+});
+
+describe('LabClient before it is ready', () => {
+  it('renders the language picker disabled, so a choice cannot be overridden by the start-up', () => {
+    const html = renderToString(
+      <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
+        <LabClient runner={runner} />
+      </NextIntlClientProvider>,
+    );
+    expect(html).toMatch(/<select[^>]*disabled/);
+  });
+});
+
+describe('LabClient previous code', () => {
+  const restore = () => screen.queryByRole('button', { name: ptBR.lab.restorePrevious });
+
+  it('offers to restore the code a handed-over snippet replaced', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('birb-learn:lab:python', 'print("mine")');
+    sessionStorage.setItem('birb-learn:lab:incoming', JSON.stringify({ language: 'python', code: 'print("lesson")' }));
+    await renderLoadedLab();
+
+    expect(editor()).toHaveValue('print("lesson")');
+    // Nothing is written until the student edits.
+    expect(localStorage.getItem('birb-learn:lab:python')).toBe('print("mine")');
+
+    await user.click(restore()!);
+    expect(editor()).toHaveValue('print("mine")');
+    expect(localStorage.getItem('birb-learn:lab:python')).toBe('print("mine")');
+    expect(localStorage.getItem('birb-learn:lab:python:previous')).toBeNull();
+    expect(restore()).toBeNull();
+  });
+
+  it('stashes the saved code before the first save of the handed-over code', async () => {
+    localStorage.setItem('birb-learn:lab:python', 'print("mine")');
+    sessionStorage.setItem('birb-learn:lab:incoming', JSON.stringify({ language: 'python', code: 'print("lesson")' }));
+    await renderLoadedLab();
+    vi.useFakeTimers();
+    fireEvent.change(editor(), { target: { value: 'print("lesson 2")' } });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(localStorage.getItem('birb-learn:lab:python')).toBe('print("lesson 2")');
+    expect(localStorage.getItem('birb-learn:lab:python:previous')).toBe('print("mine")');
+    expect(restore()).not.toBeNull();
+  });
+
+  it('keeps the first stash when the student keeps editing', async () => {
+    localStorage.setItem('birb-learn:lab:python', 'print("mine")');
+    sessionStorage.setItem('birb-learn:lab:incoming', JSON.stringify({ language: 'python', code: 'print("lesson")' }));
+    await renderLoadedLab();
+    vi.useFakeTimers();
+    fireEvent.change(editor(), { target: { value: 'a' } });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    fireEvent.change(editor(), { target: { value: 'ab' } });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    expect(localStorage.getItem('birb-learn:lab:python:previous')).toBe('print("mine")');
+  });
+
+  it('shows the button on a later visit while the stash exists', async () => {
+    localStorage.setItem('birb-learn:lab:python', 'print("lesson")');
+    localStorage.setItem('birb-learn:lab:python:previous', 'print("mine")');
+    await renderLoadedLab();
+    expect(restore()).not.toBeNull();
+  });
+
+  it('has no button when nothing was replaced', async () => {
+    sessionStorage.setItem('birb-learn:lab:incoming', JSON.stringify({ language: 'python', code: 'print("lesson")' }));
+    await renderLoadedLab();
+    expect(restore()).toBeNull();
+  });
+
+  it('has no button when the handed-over code is what was already saved', async () => {
+    localStorage.setItem('birb-learn:lab:python', 'print("lesson")');
+    sessionStorage.setItem('birb-learn:lab:incoming', JSON.stringify({ language: 'python', code: 'print("lesson")' }));
+    await renderLoadedLab();
+    expect(restore()).toBeNull();
+  });
+
+  it('follows the language: the button belongs to the language whose code was replaced', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('birb-learn:lab:python', 'print("mine")');
+    sessionStorage.setItem('birb-learn:lab:incoming', JSON.stringify({ language: 'python', code: 'print("lesson")' }));
+    await renderLoadedLab();
+    await user.selectOptions(picker(), 'lua');
+    expect(restore()).toBeNull();
+    await user.selectOptions(picker(), 'python');
+    expect(restore()).not.toBeNull();
+  });
+});
+
+describe('LabClient hash changes', () => {
+  it('switches language when #lang= is edited on a loaded lab, keeping the pending edit', async () => {
+    await renderLoadedLab();
+    fireEvent.change(editor(), { target: { value: 'print(5)' } });
+
+    act(() => {
+      window.history.replaceState(null, '', '/pt-BR/lab/#lang=lua');
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+
+    expect(picker()).toHaveValue('lua');
+    expect(editor()).toHaveValue(LANGUAGE_INFO.lua.template);
+    expect(localStorage.getItem('birb-learn:lab:python')).toBe('print(5)');
+  });
+
+  it('ignores a hash that names no language', async () => {
+    await renderLoadedLab();
+    act(() => {
+      window.history.replaceState(null, '', '/pt-BR/lab/#lang=cobol');
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+    expect(picker()).toHaveValue('python');
   });
 });

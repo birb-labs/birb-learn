@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
@@ -11,17 +11,23 @@ import { Header } from './header';
 // next-intl's `useRouter`/`usePathname` wrap `next/navigation`'s, which throw or
 // return null outside of an actual Next.js app router tree. Scope the mocks to
 // this test file rather than mocking `next/navigation` globally.
+let currentPathname = '/pt-BR/content/matematica/';
+
 vi.mock('next/navigation', async () => {
   const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
   return {
     ...actual,
-    usePathname: () => '/pt-BR/content/matematica/',
+    usePathname: () => currentPathname,
     useRouter: () => ({
       push: vi.fn(),
       replace: vi.fn(),
       prefetch: vi.fn(),
     }),
   };
+});
+
+beforeEach(() => {
+  currentPathname = '/pt-BR/content/matematica/';
 });
 
 function renderHeader(locale = 'pt-BR', messages: typeof ptBR = ptBR) {
@@ -67,6 +73,15 @@ describe('Header', () => {
 
     expect(screen.getByRole('link', { name: ptBR.nav.content })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: ptBR.nav.home })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: ptBR.nav.simulado })).not.toHaveAttribute('aria-current');
+  });
+
+  it('marks the lab as the current page on /lab', () => {
+    currentPathname = '/pt-BR/lab/';
+    renderHeader();
+
+    expect(screen.getByRole('link', { name: ptBR.nav.lab })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: ptBR.nav.content })).not.toHaveAttribute('aria-current');
     expect(screen.getByRole('link', { name: ptBR.nav.simulado })).not.toHaveAttribute('aria-current');
   });
 

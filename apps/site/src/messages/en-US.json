@@ -376,6 +376,7 @@
     "editorLabel": "{language} code",
     "setupLabel": "Database setup (SQL)",
     "reset": "Reset to template",
+    "restorePrevious": "Restore my previous code",
     "resetConfirm": "Replace your {language} code with the template? Your changes will be lost.",
     "mysqlNote": "MySQL code cannot run here. Copy it and run it on OneCompiler.",
     "loading": "Loading the editor..."

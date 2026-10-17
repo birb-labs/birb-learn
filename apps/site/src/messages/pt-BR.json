@@ -376,6 +376,7 @@
     "editorLabel": "Código em {language}",
     "setupLabel": "Preparação do banco (SQL)",
     "reset": "Restaurar o modelo",
+    "restorePrevious": "Restaurar meu código anterior",
     "resetConfirm": "Substituir o seu código em {language} pelo modelo? As suas alterações serão perdidas.",
     "mysqlNote": "O código MySQL não roda aqui. Copie-o e rode no OneCompiler.",
     "loading": "Carregando o editor..."

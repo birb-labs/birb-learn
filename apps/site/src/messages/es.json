@@ -376,6 +376,7 @@
     "editorLabel": "Código en {language}",
     "setupLabel": "Preparación de la base de datos (SQL)",
     "reset": "Restaurar la plantilla",
+    "restorePrevious": "Restaurar mi código anterior",
     "resetConfirm": "¿Reemplazar tu código en {language} por la plantilla? Perderás tus cambios.",
     "mysqlNote": "El código MySQL no se puede ejecutar aquí. Cópialo y ejecútalo en OneCompiler.",
     "loading": "Cargando el editor..."
