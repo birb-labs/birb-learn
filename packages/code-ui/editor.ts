@@ -5,3 +5,4 @@ export * from './src/editor-languages';
 export * from './src/run-panel';
 export * from './src/output-view';
 export * from './src/sql-grid';
+export * from './src/code-task-view';

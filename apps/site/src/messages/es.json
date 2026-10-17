@@ -318,6 +318,38 @@
       "rowsShown": "Mostrando {shown} de {total} filas",
       "remoteNotice": "Este código se ejecuta en un servidor externo. No envíes datos personales.",
       "noOutput": "Sin salida"
+    },
+    "task": {
+      "writeEditor": "Tu código",
+      "fixEditor": "Código corregido",
+      "predictAnswer": "La salida que predices",
+      "chooseBugLine": "Haz clic en la línea que contiene el error.",
+      "fixTheCode": "Ahora corrige el código:",
+      "blank": "Hueco {n}",
+      "line": "Línea {number}: {text}",
+      "check": "Comprobar",
+      "checking": "Comprobando...",
+      "verdict": {
+        "correct": "¡Correcto!",
+        "incorrect": "Todavía no",
+        "not_graded": "No se pudo corregir"
+      },
+      "tests": "Pruebas",
+      "testName": "Prueba {n}",
+      "testPassed": "superada",
+      "testFailed": "fallida",
+      "expected": "Esperado",
+      "actual": "Obtenido",
+      "blankCorrect": "Hueco {n}: correcto",
+      "blankIncorrect": "Hueco {n}: incorrecto",
+      "lineCorrect": "La línea elegida contiene el error.",
+      "lineIncorrect": "El error no está en la línea elegida.",
+      "hintTitle": "Pista {n}",
+      "showHint": "Mostrar pista {n} de {total}",
+      "showSolution": "Mostrar solución",
+      "hideSolution": "Ocultar solución",
+      "solution": "Solución",
+      "explanation": "Explicación"
     }
   },
   "notFound": {

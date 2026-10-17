@@ -318,6 +318,38 @@
       "rowsShown": "Mostrando {shown} de {total} linhas",
       "remoteNotice": "Este código é executado em um servidor externo. Não envie dados pessoais.",
       "noOutput": "Sem saída"
+    },
+    "task": {
+      "writeEditor": "Seu código",
+      "fixEditor": "Código corrigido",
+      "predictAnswer": "A saída que você prevê",
+      "chooseBugLine": "Clique na linha que contém o erro.",
+      "fixTheCode": "Agora corrija o código:",
+      "blank": "Lacuna {n}",
+      "line": "Linha {number}: {text}",
+      "check": "Verificar",
+      "checking": "Verificando...",
+      "verdict": {
+        "correct": "Correto!",
+        "incorrect": "Ainda não",
+        "not_graded": "Não foi possível corrigir"
+      },
+      "tests": "Testes",
+      "testName": "Teste {n}",
+      "testPassed": "passou",
+      "testFailed": "falhou",
+      "expected": "Esperado",
+      "actual": "Obtido",
+      "blankCorrect": "Lacuna {n}: correta",
+      "blankIncorrect": "Lacuna {n}: incorreta",
+      "lineCorrect": "A linha escolhida contém o erro.",
+      "lineIncorrect": "O erro não está na linha escolhida.",
+      "hintTitle": "Dica {n}",
+      "showHint": "Mostrar dica {n} de {total}",
+      "showSolution": "Mostrar solução",
+      "hideSolution": "Ocultar solução",
+      "solution": "Solução",
+      "explanation": "Explicação"
     }
   },
   "notFound": {

@@ -161,3 +161,79 @@ describe('LessonBlocks code_snippet', () => {
     ).rejects.toThrow(/past the end of the code/);
   });
 });
+
+function codeExerciseBlock(overrides: Partial<LessonBlockContent>): LessonBlockContent {
+  return {
+    id: 30,
+    order: 1,
+    type: 'code_exercise',
+    title: 'Complete a consulta',
+    bodyMdx: null,
+    promptMdx: 'Complete a consulta com **dois** operadores.',
+    resolutionMdx: 'Maior ou igual é `>=`.',
+    caption: null,
+    simulatorKey: null,
+    simulatorParams: null,
+    codeKind: 'fill_blank',
+    codeLanguage: 'sqlite',
+    payloadJson: JSON.stringify(fillBlankPayload),
+    ...overrides,
+  };
+}
+
+const fillBlankPayload = {
+  starterCode: 'SELECT nome FROM alunos WHERE idade ___1___ 18 ORDER BY ___2___;',
+  solution: 'SELECT nome FROM alunos WHERE idade >= 18 ORDER BY nome;',
+  blanks: [
+    { id: 1, accepted: ['>='] },
+    { id: 2, accepted: ['nome'] },
+  ],
+  hints: ['Pense em uma **comparação**.'],
+};
+
+describe('LessonBlocks code_exercise', () => {
+  async function renderExerciseBlock(block: LessonBlockContent) {
+    const jsx = await LessonBlocks({ blocks: [block], labels });
+    return render(<NextIntlClientProvider locale="pt-BR" messages={ptBR}>{jsx}</NextIntlClientProvider>);
+  }
+
+  it('renders the framed exercise with its compiled prompt and an input per blank', async () => {
+    const { container } = await renderExerciseBlock(codeExerciseBlock({}));
+
+    expect(screen.getByText('Exercício de código')).toBeInTheDocument();
+    expect(screen.getByText('Complete a consulta')).toBeInTheDocument();
+    expect(container.querySelector('[data-block-type="code_exercise"]')).not.toBeNull();
+    expect((await screen.findByText('dois')).tagName).toBe('STRONG');
+    expect(await screen.findByLabelText('Lacuna 1')).toBeInstanceOf(HTMLInputElement);
+    expect(screen.getByLabelText('Lacuna 2')).toBeInstanceOf(HTMLInputElement);
+    // Highlighted at build time: tokens carry theme variables, not hex colours.
+    expect(container.querySelector('[data-line="1"] [style*="var(--code-"]')).not.toBeNull();
+  });
+
+  it('grades the blanks in the page without a runner', async () => {
+    const user = userEvent.setup();
+    await renderExerciseBlock(codeExerciseBlock({}));
+
+    await user.type(await screen.findByLabelText('Lacuna 1'), '>=');
+    await user.type(screen.getByLabelText('Lacuna 2'), 'nome');
+    await user.click(screen.getByRole('button', { name: 'Verificar' }));
+    expect(await screen.findByText('Correto!')).toBeInTheDocument();
+  });
+
+  it('compiles the hints and the resolution, revealed on request', async () => {
+    const user = userEvent.setup();
+    await renderExerciseBlock(codeExerciseBlock({}));
+
+    await user.click(await screen.findByRole('button', { name: 'Mostrar dica 1 de 1' }));
+    expect(screen.getByText('comparação', { selector: 'strong' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Mostrar solução' }));
+    expect(screen.getByText('>=', { selector: 'code' })).toBeInTheDocument();
+  });
+
+  it('fails loudly on a malformed payload', async () => {
+    await expect(LessonBlocks({ blocks: [codeExerciseBlock({ payloadJson: '{not json' })], labels })).rejects.toThrow(/Invalid code_exercise payload in block 30/);
+    await expect(
+      LessonBlocks({ blocks: [codeExerciseBlock({ payloadJson: JSON.stringify({ ...fillBlankPayload, blanks: [] }) })], labels }),
+    ).rejects.toThrow(/Invalid code_exercise payload/);
+  });
+});

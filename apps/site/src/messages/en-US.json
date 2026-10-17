@@ -318,6 +318,38 @@
       "rowsShown": "Showing {shown} of {total} rows",
       "remoteNotice": "This code runs on an external server. Do not send personal data.",
       "noOutput": "No output"
+    },
+    "task": {
+      "writeEditor": "Your code",
+      "fixEditor": "Fixed code",
+      "predictAnswer": "The output you predict",
+      "chooseBugLine": "Click the line that contains the bug.",
+      "fixTheCode": "Now fix the code:",
+      "blank": "Blank {n}",
+      "line": "Line {number}: {text}",
+      "check": "Check",
+      "checking": "Checking...",
+      "verdict": {
+        "correct": "Correct!",
+        "incorrect": "Not yet",
+        "not_graded": "Could not be graded"
+      },
+      "tests": "Tests",
+      "testName": "Test {n}",
+      "testPassed": "passed",
+      "testFailed": "failed",
+      "expected": "Expected",
+      "actual": "Got",
+      "blankCorrect": "Blank {n}: correct",
+      "blankIncorrect": "Blank {n}: incorrect",
+      "lineCorrect": "The line you chose has the bug.",
+      "lineIncorrect": "The bug is not on the line you chose.",
+      "hintTitle": "Hint {n}",
+      "showHint": "Show hint {n} of {total}",
+      "showSolution": "Show solution",
+      "hideSolution": "Hide solution",
+      "solution": "Solution",
+      "explanation": "Explanation"
     }
   },
   "notFound": {

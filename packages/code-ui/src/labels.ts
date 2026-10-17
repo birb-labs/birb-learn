@@ -22,3 +22,46 @@ export interface RunPanelLabels {
   remoteNotice: string;
   noOutput: string;
 }
+
+/** Every string the code task view shows, on top of the run panel's; the caller supplies the translated text. */
+export interface CodeTaskLabels {
+  run: RunPanelLabels;
+  /** Accessible name of a code region (read-only code); receives the language's display name. */
+  codeRegion: (language: string) => string;
+  /** Accessible name of the editor in a `write` task. */
+  writeEditor: string;
+  /** Accessible name of the editor in a `find_bug` task, where the student fixes the code. */
+  fixEditor: string;
+  /** Accessible name of the `predict_output` answer box. */
+  predictAnswer: string;
+  /** Instruction above the buggy code in a `find_bug` task. */
+  chooseBugLine: string;
+  /** Heading above the fix editor in a `find_bug` task. */
+  fixTheCode: string;
+  /** Accessible name of the gap numbered `n` in a `fill_blank` task. */
+  blank: (n: number) => string;
+  /** Accessible name of a line button: the line number and the line's own text. */
+  line: (lineNumber: number, text: string) => string;
+  check: string;
+  checking: string;
+  verdict: { correct: string; incorrect: string; not_graded: string };
+  tests: string;
+  /** Fallback name of an unnamed test; `n` is 1-based. */
+  testName: (n: number) => string;
+  testPassed: string;
+  testFailed: string;
+  expected: string;
+  actual: string;
+  blankCorrect: (n: number) => string;
+  blankIncorrect: (n: number) => string;
+  lineCorrect: string;
+  lineIncorrect: string;
+  /** Title of hint number `n`, once revealed. */
+  hintTitle: (n: number) => string;
+  /** The button that reveals hint `n` of `total`. */
+  showHint: (n: number, total: number) => string;
+  showSolution: string;
+  hideSolution: string;
+  solution: string;
+  explanation: string;
+}

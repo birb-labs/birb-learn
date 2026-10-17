@@ -1,4 +1,4 @@
-import type { RunPanelLabels } from './labels';
+import type { CodeTaskLabels, RunPanelLabels } from './labels';
 
 /** Distinct English labels for the component tests. */
 export const TEST_LABELS: RunPanelLabels = {
@@ -33,4 +33,36 @@ export const TEST_LABELS: RunPanelLabels = {
   rowsShown: (shown, total) => `Showing ${shown} of ${total} rows`,
   remoteNotice: 'Runs on a remote server',
   noOutput: 'No output',
+};
+
+/** Distinct English labels for the code task view tests. */
+export const TEST_TASK_LABELS: CodeTaskLabels = {
+  run: TEST_LABELS,
+  codeRegion: (language) => `Code in ${language}`,
+  writeEditor: 'Your code',
+  fixEditor: 'Fixed code',
+  predictAnswer: 'Predicted output',
+  chooseBugLine: 'Click the line with the bug',
+  fixTheCode: 'Fix the code',
+  blank: (n) => `Blank ${n}`,
+  line: (lineNumber, text) => `Line ${lineNumber}: ${text}`,
+  check: 'Check',
+  checking: 'Checking...',
+  verdict: { correct: 'Correct!', incorrect: 'Not quite', not_graded: 'Not graded' },
+  tests: 'Tests',
+  testName: (n) => `Test ${n}`,
+  testPassed: 'passed',
+  testFailed: 'failed',
+  expected: 'Expected',
+  actual: 'Got',
+  blankCorrect: (n) => `Blank ${n} is right`,
+  blankIncorrect: (n) => `Blank ${n} is wrong`,
+  lineCorrect: 'That line has the bug',
+  lineIncorrect: 'The bug is not on that line',
+  hintTitle: (n) => `Hint ${n}`,
+  showHint: (n, total) => `Show hint ${n} of ${total}`,
+  showSolution: 'Show solution',
+  hideSolution: 'Hide solution',
+  solution: 'Solution',
+  explanation: 'Explanation',
 };

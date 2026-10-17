@@ -1,7 +1,49 @@
-import type { RunPanelLabels } from '@birb-learn/code-ui';
+import type { CodeTaskLabels, RunPanelLabels } from '@birb-learn/code-ui';
 
 /** The part of next-intl's translator the labels need; it keeps this file free of message-key typing. */
 export type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+/**
+ * Builds the code task view's labels from a translator scoped to the `code`
+ * namespace (it needs `code.task`, `code.run` and `code.codeLabel`). Functions
+ * included, so, like the run panel's, they are built where the view is rendered.
+ */
+export function buildCodeTaskLabels(t: Translate): CodeTaskLabels {
+  return {
+    run: buildRunPanelLabels((key, values) => t(`run.${key}`, values)),
+    codeRegion: (language) => t('codeLabel', { language }),
+    writeEditor: t('task.writeEditor'),
+    fixEditor: t('task.fixEditor'),
+    predictAnswer: t('task.predictAnswer'),
+    chooseBugLine: t('task.chooseBugLine'),
+    fixTheCode: t('task.fixTheCode'),
+    blank: (n) => t('task.blank', { n }),
+    line: (number, text) => t('task.line', { number, text }),
+    check: t('task.check'),
+    checking: t('task.checking'),
+    verdict: {
+      correct: t('task.verdict.correct'),
+      incorrect: t('task.verdict.incorrect'),
+      not_graded: t('task.verdict.not_graded'),
+    },
+    tests: t('task.tests'),
+    testName: (n) => t('task.testName', { n }),
+    testPassed: t('task.testPassed'),
+    testFailed: t('task.testFailed'),
+    expected: t('task.expected'),
+    actual: t('task.actual'),
+    blankCorrect: (n) => t('task.blankCorrect', { n }),
+    blankIncorrect: (n) => t('task.blankIncorrect', { n }),
+    lineCorrect: t('task.lineCorrect'),
+    lineIncorrect: t('task.lineIncorrect'),
+    hintTitle: (n) => t('task.hintTitle', { n }),
+    showHint: (n, total) => t('task.showHint', { n, total }),
+    showSolution: t('task.showSolution'),
+    hideSolution: t('task.hideSolution'),
+    solution: t('task.solution'),
+    explanation: t('task.explanation'),
+  };
+}
 
 /**
  * Builds the run panel's labels from a translator scoped to the `code.run`

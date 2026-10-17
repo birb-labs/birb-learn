@@ -4,6 +4,7 @@ import { Icon } from '@birb-learn/theme';
 import { compileLessonMdx } from '@/lib/compile-lesson-mdx';
 import { stepId } from '@/lib/lesson-steps';
 import { BlockFrame } from './block-frame';
+import { CodeExerciseBlock } from './code-exercise-block';
 import { CodeSnippetBlock } from './code-snippet-block';
 import { SimulatorBlock } from './simulators/simulator-block';
 import styles from './lesson-blocks.module.css';
@@ -76,11 +77,11 @@ async function renderBlock(
     );
   }
 
-  // Interim rendering: the real code exercise replaces this branch later.
   if (block.type === 'code_exercise') {
     return (
       <BlockFrame key={block.id} {...frame} title={block.title}>
-        <div className={styles.prompt}>{await compileLessonMdx(block.promptMdx ?? '')}</div>
+        {/* Awaited like the MDX compilation, so a malformed payload rejects here and fails the page build. */}
+        {await CodeExerciseBlock({ block })}
       </BlockFrame>
     );
   }

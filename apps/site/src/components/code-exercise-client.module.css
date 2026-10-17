@@ -1,0 +1,17 @@
+/* The prompt, shown while the editor code loads: the same look as the loaded view's prompt. */
+.fallback > :global(*:first-child) {
+  margin-top: 0;
+}
+
+.fallback > :global(*:last-child) {
+  margin-bottom: 0;
+}
+
+.fallback :global(code) {
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-sm);
+  background: var(--code-background);
+  color: var(--code-foreground);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
