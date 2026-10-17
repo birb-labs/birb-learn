@@ -19,6 +19,7 @@ export function buildCodeTaskLabels(t: Translate): CodeTaskLabels {
     fixTheCode: t('task.fixTheCode'),
     blank: (n) => t('task.blank', { n }),
     line: (number, text) => t('task.line', { number, text }),
+    emptyLine: (number) => t('task.emptyLine', { number }),
     check: t('task.check'),
     checking: t('task.checking'),
     verdict: {

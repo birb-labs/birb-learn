@@ -53,6 +53,7 @@ describe('buildCodeTaskLabels', () => {
     expect(labels.check).toBe('Verificar');
     expect(labels.blank(2)).toBe('Lacuna 2');
     expect(labels.line(3, 'total = total + i')).toBe('Linha 3: total = total + i');
+    expect(labels.emptyLine(2)).toBe('Linha 2');
     expect(labels.showHint(1, 2)).toBe('Mostrar dica 1 de 2');
     expect(labels.codeRegion('Python')).toBe('Código em Python');
     // The run panel's labels are nested, built from the same translator.
@@ -71,6 +72,7 @@ describe('buildCodeTaskLabels', () => {
       labels.codeRegion('X'),
       labels.blank(1),
       labels.line(1, 'x'),
+      labels.emptyLine(1),
       labels.testName(1),
       labels.blankCorrect(1),
       labels.blankIncorrect(1),

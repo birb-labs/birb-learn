@@ -18,6 +18,8 @@ export async function CodeExerciseBlock({ block }: { block: LessonBlockContent }
     throw new Error(`Block ${block.id} is not a code exercise`);
   }
   const { codeKind, language, payload } = parsed;
+  // Grading never reads the solution or the raw hints, and the client gets both rendered (tokens, nodes) anyway.
+  const { solution: _solution, hints: _hints, ...clientPayload } = payload;
 
   const [starterTokens, solutionTokens, prompt, resolution, hints] = await Promise.all([
     highlightCode(payload.starterCode, language),
@@ -32,7 +34,7 @@ export async function CodeExerciseBlock({ block }: { block: LessonBlockContent }
       kind={codeKind}
       language={language}
       starterTokens={starterTokens}
-      payload={payload}
+      payload={clientPayload}
       prompt={prompt}
       resolution={resolution}
       hints={hints}

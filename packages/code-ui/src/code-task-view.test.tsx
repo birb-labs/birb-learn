@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CodeAnswer } from '@birb-learn/code-runner/src/grading';
 import type { CaseResult, RunOptions, RunRequest, RunResult, Runner, UnavailableReason } from '@birb-learn/code-runner/src/protocol';
@@ -110,6 +110,19 @@ function click(name: string) {
   fireEvent.click(screen.getByRole('button', { name }));
 }
 
+/** The live region: it carries the announcement and nothing else. */
+function announcement(): HTMLElement {
+  const region = document.querySelector<HTMLElement>('[data-announcement]');
+  if (!region) throw new Error('no live region');
+  return region;
+}
+
+/** The announcement is exactly the verdict (plus the reason), and the visible card shows the verdict too. */
+async function expectVerdict(verdict: string, reason?: string) {
+  await waitFor(() => expect(announcement().textContent).toBe(reason ? `${verdict} ${reason}` : verdict));
+  expect(document.querySelector('[data-verdict]')?.textContent).toContain(verdict);
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -121,7 +134,7 @@ describe('CodeTaskView write', () => {
 
     expect(screen.getByText('The prompt')).toBeTruthy();
     click('Check');
-    expect(await screen.findByText('Not quite')).toBeTruthy();
+    await expectVerdict('Not quite');
 
     const items = within(screen.getByRole('list', { name: 'Tests' })).getAllByRole('listitem');
     expect(items).toHaveLength(2);
@@ -137,10 +150,28 @@ describe('CodeTaskView write', () => {
     expect(runner.requests[0].cases).toHaveLength(2);
   });
 
+  it('announces only the verdict, keeping the detail card out of the live region', async () => {
+    setup('write', 'python', DOUBLE_PAYLOAD, { runner: new FakeRunner(() => okRun('8\n', '5\n')) });
+    // The region exists before the check, so the verdict arrives as a change to it.
+    expect(announcement().getAttribute('role')).toBe('status');
+    expect(announcement().textContent).toBe('');
+
+    click('Check');
+    await expectVerdict('Not quite');
+
+    const card = document.querySelector('[data-verdict]') as HTMLElement;
+    // The card carries the details (tests, expected/actual) and is not itself live.
+    expect(card.textContent).toContain('double of 4');
+    expect(card.closest('[role="status"]')).toBeNull();
+    expect(card.querySelector('[role="status"]')).toBeNull();
+    expect(announcement().contains(card)).toBe(false);
+    expect(announcement().textContent).not.toContain('double of 4');
+  });
+
   it('reports a correct answer', async () => {
     setup('write', 'python', DOUBLE_PAYLOAD, { runner: new FakeRunner(() => okRun('8\n', '-6\n')) });
     click('Check');
-    expect(await screen.findByText('Correct!')).toBeTruthy();
+    await expectVerdict('Correct!');
   });
 
   it('shows the compile output of a program that did not compile', async () => {
@@ -149,14 +180,14 @@ describe('CodeTaskView write', () => {
     click('Check');
     expect(await screen.findByText('SyntaxError: nope')).toBeTruthy();
     expect(screen.getByText('Compile error')).toBeTruthy();
-    expect(screen.getByText('Not quite')).toBeTruthy();
+    await expectVerdict('Not quite');
   });
 
   it('wraps the answer in the harness when checking', async () => {
     const runner = new FakeRunner(() => okRun('8\n', '-6\n'));
     setup('write', 'python', { ...DOUBLE_PAYLOAD, harness: { prefix: 'import sys', suffix: 'print("end")' } }, { runner });
     click('Check');
-    await screen.findByText('Correct!');
+    await expectVerdict('Correct!');
     expect(runner.requests[0].source).toBe('import sys\nn = int(input())\n\nprint("end")');
   });
 
@@ -182,7 +213,7 @@ describe('CodeTaskView predict_output', () => {
     expect(screen.getByRole('region', { name: 'Code in JavaScript' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Predicted output'), { target: { value: '10\n' } });
     click('Check');
-    expect(await screen.findByText('Correct!')).toBeTruthy();
+    await expectVerdict('Correct!');
     expect(runner.requests).toHaveLength(0);
   });
 
@@ -190,13 +221,13 @@ describe('CodeTaskView predict_output', () => {
     setup('predict_output', 'javascript', PREDICT_PAYLOAD);
     fireEvent.change(screen.getByLabelText('Predicted output'), { target: { value: '5' } });
     click('Check');
-    expect(await screen.findByText('Not quite')).toBeTruthy();
+    await expectVerdict('Not quite');
   });
 
   it('clears the verdict once the answer changes', async () => {
     setup('predict_output', 'javascript', PREDICT_PAYLOAD);
     click('Check');
-    await screen.findByText('Not quite');
+    await expectVerdict('Not quite');
     fireEvent.change(screen.getByLabelText('Predicted output'), { target: { value: '1' } });
     expect(screen.queryByText('Not quite')).toBeNull();
   });
@@ -229,7 +260,7 @@ describe('CodeTaskView fill_blank', () => {
     const answer: CodeAnswer = { kind: 'fill_blank', blanks: { 1: '>=', 2: 'idade' } };
     setup('fill_blank', 'sqlite', FILL_PAYLOAD, { starterTokens: FILL_TOKENS, answer });
     click('Check');
-    expect(await screen.findByText('Not quite')).toBeTruthy();
+    await expectVerdict('Not quite');
     expect(screen.getByText('Blank 1 is right')).toBeTruthy();
     expect(screen.getByText('Blank 2 is wrong')).toBeTruthy();
     expect(screen.getByLabelText('Blank 2').getAttribute('aria-invalid')).toBe('true');
@@ -240,7 +271,7 @@ describe('CodeTaskView fill_blank', () => {
     const answer: CodeAnswer = { kind: 'fill_blank', blanks: { 1: ' >= ', 2: 'nome' } };
     setup('fill_blank', 'sqlite', FILL_PAYLOAD, { starterTokens: FILL_TOKENS, answer });
     click('Check');
-    expect(await screen.findByText('Correct!')).toBeTruthy();
+    await expectVerdict('Correct!');
   });
 });
 
@@ -261,7 +292,7 @@ describe('CodeTaskView find_bug', () => {
     setup('find_bug', 'python', BUG_PAYLOAD, { runner: rightRunner() });
     click('Line 3: total = i');
     click('Check');
-    expect(await screen.findByText('Correct!')).toBeTruthy();
+    await expectVerdict('Correct!');
     expect(screen.getByText('That line has the bug')).toBeTruthy();
   });
 
@@ -269,8 +300,15 @@ describe('CodeTaskView find_bug', () => {
     setup('find_bug', 'python', BUG_PAYLOAD, { runner: rightRunner() });
     click('Line 1: total = 0');
     click('Check');
-    expect(await screen.findByText('Not quite')).toBeTruthy();
+    await expectVerdict('Not quite');
     expect(screen.getByText('The bug is not on that line')).toBeTruthy();
+  });
+
+  it('names an empty line by its number alone', () => {
+    const payload = { ...BUG_PAYLOAD, starterCode: 'a = 1\n\nprint(a)\n' };
+    setup('find_bug', 'python', payload);
+    expect(screen.getByRole('button', { name: 'Line 1: a = 1' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Line 2' })).toBeTruthy();
   });
 
   it('offers a fix editor only when there are tests', () => {
@@ -283,7 +321,7 @@ describe('CodeTaskView find_bug', () => {
     expect(screen.queryByLabelText('Fixed code')).toBeNull();
     click('Line 3: total = i');
     click('Check');
-    expect(await screen.findByText('Correct!')).toBeTruthy();
+    await expectVerdict('Correct!');
   });
 });
 
@@ -299,6 +337,16 @@ describe('CodeTaskView practice extras', () => {
     click('Show hint 2 of 2');
     expect(screen.getByText('Second hint')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Show hint/ })).toBeNull();
+  });
+
+  it('moves the focus to the last hint when its button goes away', () => {
+    setup('predict_output', 'javascript', payload, { hints: [<p key="1">First hint</p>, <p key="2">Second hint</p>] });
+    click('Show hint 1 of 2');
+    // The button is still there for the next hint: the focus stays with the student's place.
+    expect(screen.getByRole('button', { name: 'Show hint 2 of 2' })).toBeTruthy();
+    click('Show hint 2 of 2');
+    expect(screen.queryByRole('button', { name: /Show hint/ })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('group', { name: 'Hint 2' }));
   });
 
   it('keeps the solution hidden until requested', () => {
@@ -350,23 +398,23 @@ describe('CodeTaskView runner trouble', () => {
   it('shows "not graded" with the reason when the runner is unavailable', async () => {
     setup('write', 'python', DOUBLE_PAYLOAD, { runner: new FakeRunner(() => unavailable('offline')) });
     click('Check');
-    expect(await screen.findByText('Not graded')).toBeTruthy();
-    expect(screen.getByText('You are offline')).toBeTruthy();
+    await expectVerdict('Not graded', 'You are offline');
+    // The visible card shows the reason as well.
+    expect(document.querySelector('[data-verdict]')?.textContent).toContain('You are offline');
   });
 
   it('treats a runner that rejects as a failed service', async () => {
     const runner: Runner = { runCode: () => Promise.reject(new Error('boom')) };
     setup('write', 'python', DOUBLE_PAYLOAD, { runner });
     click('Check');
-    expect(await screen.findByText('Not graded')).toBeTruthy();
-    expect(screen.getByText('The runner failed')).toBeTruthy();
+    await expectVerdict('Not graded', 'The runner failed');
   });
 
   it('disables Check while running and re-enables it afterwards', async () => {
     setup('write', 'python', DOUBLE_PAYLOAD, { runner: new FakeRunner(() => unavailable('offline')) });
     click('Check');
     expect((screen.getByRole('button', { name: 'Checking...' }) as HTMLButtonElement).disabled).toBe(true);
-    await screen.findByText('Not graded');
+    await expectVerdict('Not graded', 'You are offline');
     expect((screen.getByRole('button', { name: 'Check' }) as HTMLButtonElement).disabled).toBe(false);
   });
 

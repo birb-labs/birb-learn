@@ -46,6 +46,7 @@ export const TEST_TASK_LABELS: CodeTaskLabels = {
   fixTheCode: 'Fix the code',
   blank: (n) => `Blank ${n}`,
   line: (lineNumber, text) => `Line ${lineNumber}: ${text}`,
+  emptyLine: (lineNumber) => `Line ${lineNumber}`,
   check: 'Check',
   checking: 'Checking...',
   verdict: { correct: 'Correct!', incorrect: 'Not quite', not_graded: 'Not graded' },

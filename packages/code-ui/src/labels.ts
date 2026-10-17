@@ -42,6 +42,8 @@ export interface CodeTaskLabels {
   blank: (n: number) => string;
   /** Accessible name of a line button: the line number and the line's own text. */
   line: (lineNumber: number, text: string) => string;
+  /** Accessible name of the button of a line with no text. */
+  emptyLine: (lineNumber: number) => string;
   check: string;
   checking: string;
   verdict: { correct: string; incorrect: string; not_graded: string };

@@ -327,6 +327,7 @@
       "fixTheCode": "Ahora corrige el código:",
       "blank": "Hueco {n}",
       "line": "Línea {number}: {text}",
+      "emptyLine": "Línea {number}",
       "check": "Comprobar",
       "checking": "Comprobando...",
       "verdict": {

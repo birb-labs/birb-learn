@@ -14,6 +14,13 @@ import type { CodeTaskLabels } from './labels';
 import { RunPanel } from './run-panel';
 import styles from './code-task-view.module.css';
 
+/**
+ * What the view needs of a task payload. The solution and the raw hints are left out on purpose:
+ * grading never reads them, and a caller should not have to ship them (the solution arrives as
+ * `solutionTokens`, the hints as rendered nodes).
+ */
+export type CodeTaskViewPayload = Omit<CodeTaskPayloadData, 'solution' | 'hints'>;
+
 export interface CodeTaskViewProps {
   /** `practice` can check, hint and reveal the solution; `exam` only reports the answer. */
   mode: 'practice' | 'exam';
@@ -21,7 +28,7 @@ export interface CodeTaskViewProps {
   language: Language;
   /** `payload.starterCode`, highlighted. */
   starterTokens: HighlightedLine[];
-  payload: CodeTaskPayloadData;
+  payload: CodeTaskViewPayload;
   /** The prompt, rendered by the caller (it is rich MDX or HTML that this package knows nothing about). */
   prompt: ReactNode;
   /** The explanation shown with the solution (practice mode). */
@@ -47,7 +54,7 @@ const BLANK_MARKER_PATTERN = /___(\d+)___/g;
 const BLANK_SPLIT_PATTERN = /(___\d+___)/;
 const BLANK_EXACT_PATTERN = /^___(\d+)___$/;
 
-function defaultAnswer(kind: CodeKind, payload: CodeTaskPayloadData): CodeAnswer {
+function defaultAnswer(kind: CodeKind, payload: CodeTaskViewPayload): CodeAnswer {
   switch (kind) {
     case 'write':
       return { kind, code: payload.starterCode };
@@ -82,6 +89,12 @@ function lineText(line: HighlightedLine): string {
     .map((token) => token.text)
     .join('')
     .trim();
+}
+
+/** The accessible name of a find_bug line button: its number and its own text, or the number alone for a blank line. */
+function lineButtonLabel(labels: CodeTaskLabels, lineNumber: number, line: HighlightedLine): string {
+  const text = lineText(line);
+  return text === '' ? labels.emptyLine(lineNumber) : labels.line(lineNumber, text);
 }
 
 export function CodeTaskView({
@@ -127,6 +140,20 @@ export function CodeTaskView({
     [],
   );
 
+  // Revealing the last hint removes the button the student just pressed: the focus goes to that hint instead of the page.
+  const hintRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const focusLastHintRef = useRef(false);
+  useEffect(() => {
+    if (!focusLastHintRef.current) return;
+    focusLastHintRef.current = false;
+    hintRefs.current[hintsShown - 1]?.focus();
+  }, [hintsShown]);
+
+  function revealHint() {
+    focusLastHintRef.current = hintsShown + 1 === hints.length;
+    setHintsShown(hintsShown + 1);
+  }
+
   function changeAnswer(next: CodeAnswer) {
     // A result belongs to the answer it graded.
     controllerRef.current?.abort();
@@ -156,7 +183,7 @@ export function CodeTaskView({
 
     let next: CheckOutcome;
     try {
-      const result = await gradeCodeTask(kind, language, payload, answer, observingRunner, { signal: controller.signal });
+      const result = await gradeCodeTask(kind, language, { ...payload, hints: [] }, answer, observingRunner, { signal: controller.signal });
       next = { result, reason: reason ?? 'service_error' };
     } catch {
       // The runner contract is to resolve; a rejection is a bug on its side, shown as a failed service.
@@ -249,7 +276,7 @@ export function CodeTaskView({
           ariaLabel={codeRegionLabel}
           selectedLine={buggy.line > 0 ? buggy.line : undefined}
           onLineClick={(line) => changeAnswer({ ...buggy, line })}
-          lineLabel={(line) => labels.line(line, lineText(lines[line - 1] ?? []))}
+          lineLabel={(line) => lineButtonLabel(labels, line, lines[line - 1] ?? [])}
         />
         {payload.tests.length > 0 && (
           <>
@@ -280,8 +307,24 @@ export function CodeTaskView({
         </div>
       )}
 
-      {/* Always rendered, so a screen reader hears the verdict being added to a live region. */}
-      <div role="status" className={styles.verdictRegion}>
+      {/*
+        The live region: always rendered, so a screen reader hears the verdict being added to it, and kept to the
+        verdict and the reason. The visible card below is not live; announcing it would re-read every test on each change.
+      */}
+      <div role="status" data-announcement className={styles.visuallyHidden}>
+        {result && (
+          <>
+            <span>{labels.verdict[result.verdict]}</span>
+            {result.verdict === 'not_graded' && outcome && (
+              <>
+                {' '}
+                <span>{labels.run.unavailable[outcome.reason]}</span>
+              </>
+            )}
+          </>
+        )}
+      </div>
+      <div className={styles.results}>
         {result && (
           <div className={styles.result} data-verdict={result.verdict}>
             <p className={styles.verdict}>{labels.verdict[result.verdict]}</p>
@@ -348,14 +391,25 @@ export function CodeTaskView({
       {practice && hints.length > 0 && (
         <section className={styles.hints}>
           {hints.slice(0, hintsShown).map((hint, index) => (
-            <div key={index} className={styles.hint}>
-              <p className={styles.hintTitle}>{labels.hintTitle(index + 1)}</p>
+            <div
+              key={index}
+              ref={(element) => {
+                hintRefs.current[index] = element;
+              }}
+              tabIndex={-1}
+              role="group"
+              aria-labelledby={`${idBase}-hint-${index}`}
+              className={styles.hint}
+            >
+              <p id={`${idBase}-hint-${index}`} className={styles.hintTitle}>
+                {labels.hintTitle(index + 1)}
+              </p>
               {hint}
             </div>
           ))}
           {hintsShown < hints.length && (
             <div className={styles.toolbar}>
-              <button type="button" className={styles.button} onClick={() => setHintsShown((shown) => shown + 1)}>
+              <button type="button" className={styles.button} onClick={revealHint}>
                 {labels.showHint(hintsShown + 1, hints.length)}
               </button>
             </div>

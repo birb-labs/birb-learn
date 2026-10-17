@@ -3,10 +3,11 @@
 import { lazy, Suspense, useMemo, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import type { HighlightedLine } from '@birb-learn/code-ui';
+// Type-only, so the editor entry (CodeMirror) stays out of this chunk until the lazy import below.
+import type { CodeTaskViewPayload } from '@birb-learn/code-ui/editor';
 // Type-only and deep imports: the code-runner barrel would pull the workers and engines into this graph.
 import type { Runner } from '@birb-learn/code-runner/src/protocol';
 import type { CodeKind, Language } from '@birb-learn/content-schema/src/code-languages';
-import type { CodeTaskPayloadData } from '@birb-learn/content-schema/src/code-payloads';
 import { buildCodeTaskLabels } from '@/lib/code-labels';
 import { lazySiteRunner } from '@/lib/lazy-site-runner';
 import styles from './code-exercise-client.module.css';
@@ -18,7 +19,7 @@ export interface CodeExerciseClientProps {
   kind: CodeKind;
   language: Language;
   starterTokens: HighlightedLine[];
-  payload: CodeTaskPayloadData;
+  payload: CodeTaskViewPayload;
   /** The prompt, resolution and hints are MDX compiled by the server half; the client only places them. */
   prompt: ReactNode;
   resolution?: ReactNode;
@@ -34,7 +35,7 @@ export function CodeExerciseClient({ kind, language, starterTokens, payload, pro
   const labels = useMemo(() => buildCodeTaskLabels(t), [t]);
 
   return (
-    // While the editor code loads the prompt stays readable (and it is what the static page shows without JavaScript).
+    // While the editor code loads, the prompt stays readable.
     <Suspense fallback={<div className={styles.fallback}>{prompt}</div>}>
       <CodeTaskView
         mode="practice"

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import type { CodeTaskPayloadData } from '@birb-learn/content-schema/src/code-payloads';
 import type { RunRequest, RunResult, Runner } from '@birb-learn/code-runner/src/protocol';
@@ -26,6 +26,11 @@ const WRITE: CodeTaskPayloadData = {
 };
 
 const toLines = (code: string) => code.replace(/\n$/, '').split('\n').map((text) => [{ text }]);
+
+/** The live region carries the verdict; the visible card repeats it, so the text itself is not unique. */
+async function expectVerdict(text: string) {
+  await waitFor(() => expect(document.querySelector('[data-announcement]')).toHaveTextContent(text));
+}
 
 function renderExercise(props: Partial<React.ComponentProps<typeof CodeExerciseClient>> = {}) {
   return render(
@@ -60,7 +65,7 @@ describe('CodeExerciseClient', () => {
 
     fireEvent.change(await screen.findByLabelText('A saída que você prevê'), { target: { value: '10' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verificar' }));
-    expect(await screen.findByText('Correto!')).toBeInTheDocument();
+    await expectVerdict('Correto!');
 
     fireEvent.click(screen.getByRole('button', { name: 'Mostrar dica 1 de 1' }));
     expect(screen.getByText('Acompanhe x.')).toBeInTheDocument();
@@ -79,7 +84,7 @@ describe('CodeExerciseClient', () => {
     renderExercise({ kind: 'write', language: 'python', payload: WRITE, starterTokens: toLines(WRITE.starterCode), runner });
 
     fireEvent.click(await screen.findByRole('button', { name: 'Verificar' }));
-    expect(await screen.findByText('Correto!')).toBeInTheDocument();
+    await expectVerdict('Correto!');
     expect(requests).toHaveLength(1);
   });
 
@@ -91,7 +96,7 @@ describe('CodeExerciseClient', () => {
     renderExercise({ kind: 'write', language: 'python', payload: WRITE, starterTokens: toLines(WRITE.starterCode) });
 
     fireEvent.click(await screen.findByRole('button', { name: 'Verificar' }));
-    expect(await screen.findByText('Correto!')).toBeInTheDocument();
+    await expectVerdict('Correto!');
     expect(getSiteRunner).toHaveBeenCalledTimes(1);
   });
 
@@ -100,7 +105,7 @@ describe('CodeExerciseClient', () => {
     renderExercise();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Verificar' }));
-    expect(await screen.findByText('Ainda não')).toBeInTheDocument();
+    await expectVerdict('Ainda não');
     expect(getSiteRunner).not.toHaveBeenCalled();
   });
 });

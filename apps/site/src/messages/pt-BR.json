@@ -327,6 +327,7 @@
       "fixTheCode": "Agora corrija o código:",
       "blank": "Lacuna {n}",
       "line": "Linha {number}: {text}",
+      "emptyLine": "Linha {number}",
       "check": "Verificar",
       "checking": "Verificando...",
       "verdict": {

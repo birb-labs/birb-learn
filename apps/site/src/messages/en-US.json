@@ -327,6 +327,7 @@
       "fixTheCode": "Now fix the code:",
       "blank": "Blank {n}",
       "line": "Line {number}: {text}",
+      "emptyLine": "Line {number}",
       "check": "Check",
       "checking": "Checking...",
       "verdict": {

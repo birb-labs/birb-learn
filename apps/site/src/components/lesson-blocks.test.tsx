@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import ptBR from '@/messages/pt-BR.json';
+import { CodeExerciseBlock } from './code-exercise-block';
 import { LessonBlocks } from './lesson-blocks';
 import type { LessonBlockContent } from '@birb-learn/content-schema';
 
@@ -217,7 +218,7 @@ describe('LessonBlocks code_exercise', () => {
     await user.type(await screen.findByLabelText('Lacuna 1'), '>=');
     await user.type(screen.getByLabelText('Lacuna 2'), 'nome');
     await user.click(screen.getByRole('button', { name: 'Verificar' }));
-    expect(await screen.findByText('Correto!')).toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector('[data-announcement]')).toHaveTextContent('Correto!'));
   });
 
   it('compiles the hints and the resolution, revealed on request', async () => {
@@ -228,6 +229,19 @@ describe('LessonBlocks code_exercise', () => {
     expect(screen.getByText('comparação', { selector: 'strong' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Mostrar solução' }));
     expect(screen.getByText('>=', { selector: 'code' })).toBeInTheDocument();
+  });
+
+  it('keeps the solution and the raw hints out of the payload sent to the client', async () => {
+    const element = await CodeExerciseBlock({ block: codeExerciseBlock({}) });
+    const sent = element.props.payload as Record<string, unknown>;
+
+    expect(sent).not.toHaveProperty('solution');
+    expect(sent).not.toHaveProperty('hints');
+    // Everything grading needs is still there.
+    expect(sent).toMatchObject({ starterCode: fillBlankPayload.starterCode, blanks: fillBlankPayload.blanks, tests: [] });
+    // The solution reaches the client only as highlighted tokens, for the "show solution" button.
+    expect(element.props.solutionTokens).toBeDefined();
+    expect(JSON.stringify(sent)).not.toContain('ORDER BY nome;');
   });
 
   it('fails loudly on a malformed payload', async () => {
