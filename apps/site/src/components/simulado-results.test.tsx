@@ -6,6 +6,7 @@ import { serializeCodeAnswer } from '@birb-learn/code-ui';
 import ptBR from '@/messages/pt-BR.json';
 import { SimuladoResults } from './simulado-results';
 import type { GradedQuestionResult, GradedResult } from '@/lib/grade-simulado';
+import type { ExportedCodeTask } from '@/lib/export-question';
 import type { ExportedQuestion } from '@/lib/simulado-selection';
 
 const fixtureResult: GradedResult = {
@@ -409,6 +410,27 @@ describe('SimuladoResults with code questions', () => {
     expect(screen.getByText('0')).toBeInTheDocument();
     expect(screen.getByText('Solução')).toBeInTheDocument();
     expect(screen.getByText('print(n * 2)')).toBeInTheDocument();
+    expect(screen.getByText('Resolution 30')).toBeInTheDocument();
+  });
+
+  it('renders an attempt reopened from the history, whose stored question has no highlighted tokens', () => {
+    const { starterTokens: _starter, solutionTokens: _solution, ...stored } = writeCodeQuestion.code!;
+    renderResults(
+      single({
+        question: { ...writeCodeQuestion, code: stored as ExportedCodeTask },
+        userAnswer: serializeCodeAnswer({ kind: 'write', code: 'print(0)\n' }),
+        isCorrect: false,
+        verdict: 'incorrect',
+        code: { verdict: 'incorrect', tests: [{ name: 'dobro de 4', passed: false, status: 'ok', expected: '8', actual: '0' }] },
+      }),
+    );
+
+    const card = screen.getByText('Q30').closest('[data-correct]')!;
+    expect(card).toHaveTextContent('Errado');
+    expect(card).toHaveTextContent('dobro de 4');
+    // The solution falls back to its plain text.
+    expect(screen.getByText('Solução')).toBeInTheDocument();
+    expect(card.textContent).toContain('print(n * 2)');
     expect(screen.getByText('Resolution 30')).toBeInTheDocument();
   });
 

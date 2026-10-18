@@ -2,7 +2,7 @@
 
 import { useId } from 'react';
 import { useTranslations } from 'next-intl';
-import { CodeLines, parseCodeAnswer, type CodeTaskLabels } from '@birb-learn/code-ui';
+import { CodeLines, parseCodeAnswer, type CodeTaskLabels, type HighlightedLine } from '@birb-learn/code-ui';
 // Deep import: the code-runner barrel would pull the workers and engines into this graph.
 import { LANGUAGE_INFO } from '@birb-learn/code-runner/src/languages';
 import { verdictOf, type GradedQuestionResult } from '@/lib/grade-simulado';
@@ -32,6 +32,8 @@ export function SimuladoCodeReview({
   const grade = entry.code;
   const verdict = verdictOf(entry);
   const { payload } = task;
+  // Missing on an attempt reopened from the history (see `useSimuladoHistory`).
+  const solutionTokens: HighlightedLine[] | undefined = task.solutionTokens;
 
   let yourAnswer: React.ReactNode = <span>{tTaking('unanswered')}</span>;
   if (answer?.kind === 'write') {
@@ -137,11 +139,19 @@ export function SimuladoCodeReview({
         </div>
       )}
 
-      {task.solutionTokens.length > 0 && (
+      {solutionTokens && solutionTokens.length > 0 ? (
         <section>
           <h4 className={styles.heading}>{labels.solution}</h4>
-          <CodeLines lines={task.solutionTokens} lineNumbers ariaLabel={labels.codeRegion(LANGUAGE_INFO[task.language].label)} />
+          <CodeLines lines={solutionTokens} lineNumbers ariaLabel={labels.codeRegion(LANGUAGE_INFO[task.language].label)} />
         </section>
+      ) : (
+        // An attempt reopened from the history was stored without highlighting: show the plain solution.
+        payload.solution !== undefined && (
+          <section>
+            <h4 className={styles.heading}>{labels.solution}</h4>
+            <pre className={styles.text}>{payload.solution}</pre>
+          </section>
+        )
       )}
     </div>
   );

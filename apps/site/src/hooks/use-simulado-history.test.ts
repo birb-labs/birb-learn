@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import {
   LEGACY_SIMULADO_HISTORY_STORAGE_KEY,
@@ -6,6 +6,7 @@ import {
   useSimuladoHistory,
 } from './use-simulado-history';
 import type { GradedResult } from '@/lib/grade-simulado';
+import type { ExportedQuestion } from '@/lib/simulado-selection';
 
 const fixtureResult: GradedResult = { correctCount: 1, total: 2, perQuestion: [] };
 
@@ -109,5 +110,104 @@ describe('useSimuladoHistory', () => {
 
     expect(new Set(ids).size).toBe(2);
     expect(result.current.history.map((attempt) => attempt.completedAt)).toEqual(ids);
+  });
+
+  describe('code questions and storage limits', () => {
+    const codeQuestion: ExportedQuestion = {
+      id: 30,
+      type: 'code',
+      difficulty: 'easy',
+      promptHtml: '<p>Q30</p>',
+      options: [],
+      acceptedAnswers: [],
+      matchingPairs: [],
+      correctAnswer: null,
+      resolutionHtml: '<p>R</p>',
+      answerFormat: 'text',
+      isFallback: false,
+      tagIds: [],
+      code: {
+        kind: 'write',
+        language: 'python',
+        payload: { starterCode: 'a\n', solution: 'b\n', tests: [{ stdin: '', expectedStdout: 'x' }], blanks: [], hints: [] },
+        starterTokens: [[{ text: 'a' }]],
+        solutionTokens: [[{ text: 'b' }]],
+      },
+    };
+    const longText = 'x'.repeat(5000);
+    const codeResult: GradedResult = {
+      correctCount: 0,
+      total: 1,
+      perQuestion: [
+        {
+          question: codeQuestion,
+          userAnswer: 'a',
+          isCorrect: false,
+          verdict: 'incorrect',
+          code: { verdict: 'incorrect', tests: [{ passed: false, status: 'ok', expected: longText, actual: longText }] },
+        },
+      ],
+    };
+
+    it('stores a code question without its highlighted tokens and with trimmed test output', () => {
+      const { result } = renderHook(() => useSimuladoHistory());
+      act(() => {
+        result.current.addAttempt(codeResult);
+      });
+
+      const raw = window.localStorage.getItem(SIMULADO_HISTORY_STORAGE_KEY) ?? '';
+      expect(raw).not.toContain('starterTokens');
+      expect(raw).not.toContain('solutionTokens');
+      const stored = JSON.parse(raw);
+      const test = stored[0].result.perQuestion[0].code.tests[0];
+      expect(test.expected).toHaveLength(2000);
+      expect(test.actual).toHaveLength(2000);
+      // The payload, which a retry grades with, is kept.
+      expect(stored[0].result.perQuestion[0].question.code.payload.tests).toHaveLength(1);
+      // The attempt in memory is untouched.
+      expect(result.current.history[0].result.perQuestion[0].code?.tests[0].expected).toHaveLength(5000);
+    });
+
+    it('does not throw when the storage is full, keeps the attempt in memory and drops the oldest stored ones', () => {
+      const { result } = renderHook(() => useSimuladoHistory());
+      for (let i = 0; i < 4; i += 1) {
+        act(() => {
+          result.current.addAttempt(fixtureResult);
+        });
+      }
+      const setItem = vi.spyOn(Storage.prototype, 'setItem');
+      // The first write fails (quota); the retry with fewer attempts succeeds.
+      setItem.mockImplementationOnce(() => {
+        throw new DOMException('full', 'QuotaExceededError');
+      });
+
+      expect(() =>
+        act(() => {
+          result.current.addAttempt(fixtureResult);
+        }),
+      ).not.toThrow();
+
+      expect(result.current.history).toHaveLength(5);
+      const stored = JSON.parse(window.localStorage.getItem(SIMULADO_HISTORY_STORAGE_KEY) ?? '[]');
+      expect(stored.length).toBeGreaterThan(0);
+      expect(stored.length).toBeLessThan(5);
+      // The newest attempt is the one that stays.
+      expect(stored[stored.length - 1].completedAt).toBe(result.current.history[4].completedAt);
+      setItem.mockRestore();
+    });
+
+    it('does not throw when the storage keeps failing', () => {
+      const { result } = renderHook(() => useSimuladoHistory());
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('full', 'QuotaExceededError');
+      });
+      expect(() =>
+        act(() => {
+          result.current.addAttempt(fixtureResult);
+        }),
+      ).not.toThrow();
+      expect(result.current.history).toHaveLength(1);
+      vi.restoreAllMocks();
+    });
   });
 });
