@@ -1,8 +1,12 @@
 import { afterEach, vi } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 afterEach(cleanup);
+
+// Code islands lazy-load the CodeMirror editor; under the load of the full
+// suite that import can take longer than the default 1 s `findBy` wait.
+configure({ asyncUtilTimeout: 5000 });
 
 // Mock window.matchMedia for ThemeProvider. Files under
 // `// @vitest-environment node` have no `window`.
