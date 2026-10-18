@@ -1,6 +1,6 @@
 'use client';
 
-import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Suspense, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { Icon } from '@birb-learn/theme';
@@ -10,10 +10,12 @@ import { LANGUAGE_INFO } from '@birb-learn/code-runner/src/languages';
 import type { Runner } from '@birb-learn/code-runner/src/protocol';
 import type { Language } from '@birb-learn/content-schema/src/code-languages';
 import { buildRunPanelLabels } from '@/lib/code-labels';
+import { createRetryableLazy } from '@/lib/retryable-lazy';
+import { LazyIslandBoundary } from './lazy-island-boundary';
 import styles from './code-snippet-interactive.module.css';
 
 // The editor entry brings CodeMirror; load it only once a student opens the runner.
-const RunPanel = lazy(() => import('@birb-learn/code-ui/editor').then((module) => ({ default: module.RunPanel })));
+const RunPanel = createRetryableLazy(() => import('@birb-learn/code-ui/editor').then((module) => ({ default: module.RunPanel })));
 
 const LANGUAGE_STORAGE_KEY = 'birb-learn:code-lang';
 const LAB_INCOMING_STORAGE_KEY = 'birb-learn:lab:incoming';
@@ -425,19 +427,21 @@ export function CodeSnippetInteractive({ variants, runner: injectedRunner }: Cod
 
       {runOpen && runner && variant.runnable && (
         <div className={styles.runner}>
-          <Suspense fallback={null}>
-            <RunPanel
-              key={variant.language}
-              runner={runner}
-              language={variant.language}
-              source={variant.code}
-              stdin={stdin}
-              onStdinChange={(value) => setStdinByLanguage((current) => ({ ...current, [variant.language]: value }))}
-              sqlSetup={variant.sqlSetup}
-              showStdin={variant.stdin !== undefined}
-              labels={runLabels}
-            />
-          </Suspense>
+          <LazyIslandBoundary onRetry={RunPanel.reset}>
+            <Suspense fallback={null}>
+              <RunPanel
+                key={variant.language}
+                runner={runner}
+                language={variant.language}
+                source={variant.code}
+                stdin={stdin}
+                onStdinChange={(value) => setStdinByLanguage((current) => ({ ...current, [variant.language]: value }))}
+                sqlSetup={variant.sqlSetup}
+                showStdin={variant.stdin !== undefined}
+                labels={runLabels}
+              />
+            </Suspense>
+          </LazyIslandBoundary>
         </div>
       )}
     </div>

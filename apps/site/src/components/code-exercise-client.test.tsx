@@ -6,6 +6,16 @@ import type { RunRequest, RunResult, Runner } from '@birb-learn/code-runner/src/
 import ptBR from '@/messages/pt-BR.json';
 import { CodeExerciseClient } from './code-exercise-client';
 
+const editorLoad = vi.hoisted(() => ({ failNext: false }));
+// The editor entry can be made to fail once, like a chunk request on a dropped connection.
+vi.mock('@birb-learn/code-ui/editor', async (importOriginal) => {
+  if (editorLoad.failNext) {
+    editorLoad.failNext = false;
+    throw new Error('Loading chunk failed');
+  }
+  return importOriginal();
+});
+
 const getSiteRunner = vi.fn<() => Runner>();
 vi.mock('@/lib/site-runner', () => ({ getSiteRunner: () => getSiteRunner() }));
 
@@ -51,6 +61,21 @@ function renderExercise(props: Partial<React.ComponentProps<typeof CodeExerciseC
 }
 
 describe('CodeExerciseClient', () => {
+  // First on purpose: the lazy import is made once per file, and this test needs that first import to fail.
+  it('keeps the prompt and offers a retry when the editor chunk cannot load', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    editorLoad.failNext = true;
+    renderExercise();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(ptBR.code.run.unavailable.engine_load);
+    expect(screen.getByText('O que o programa imprime?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: ptBR.code.run.retry }));
+    expect(await screen.findByRole('button', { name: 'Verificar' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+    vi.restoreAllMocks();
+  });
+
   it('shows the prompt at once and the interactive view once it has loaded', async () => {
     renderExercise();
 

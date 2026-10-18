@@ -1,6 +1,6 @@
 'use client';
 
-import { lazy, Suspense, useMemo, type ReactNode } from 'react';
+import { Suspense, useMemo, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import type { HighlightedLine } from '@birb-learn/code-ui';
 // Type-only, so the editor entry (CodeMirror) stays out of this chunk until the lazy import below.
@@ -10,10 +10,12 @@ import type { Runner } from '@birb-learn/code-runner/src/protocol';
 import type { CodeKind, Language } from '@birb-learn/content-schema/src/code-languages';
 import { buildCodeTaskLabels } from '@/lib/code-labels';
 import { lazySiteRunner } from '@/lib/lazy-site-runner';
+import { createRetryableLazy } from '@/lib/retryable-lazy';
+import { LazyIslandBoundary } from './lazy-island-boundary';
 import styles from './code-exercise-client.module.css';
 
 // The editor entry brings CodeMirror; keep it out of the chunk that hydrates the rest of the lesson.
-const CodeTaskView = lazy(() => import('@birb-learn/code-ui/editor').then((module) => ({ default: module.CodeTaskView })));
+const CodeTaskView = createRetryableLazy(() => import('@birb-learn/code-ui/editor').then((module) => ({ default: module.CodeTaskView })));
 
 export interface CodeExerciseClientProps {
   kind: CodeKind;
@@ -35,21 +37,23 @@ export function CodeExerciseClient({ kind, language, starterTokens, payload, pro
   const labels = useMemo(() => buildCodeTaskLabels(t), [t]);
 
   return (
-    // While the editor code loads, the prompt stays readable.
-    <Suspense fallback={<div className={styles.fallback}>{prompt}</div>}>
-      <CodeTaskView
-        mode="practice"
-        kind={kind}
-        language={language}
-        starterTokens={starterTokens}
-        payload={payload}
-        prompt={prompt}
-        resolution={resolution}
-        hints={hints}
-        solutionTokens={solutionTokens}
-        runner={runner ?? lazySiteRunner}
-        labels={labels}
-      />
-    </Suspense>
+    // While the editor code loads, the prompt stays readable; if it cannot load, the prompt stays with a retry.
+    <LazyIslandBoundary onRetry={CodeTaskView.reset} context={<div className={styles.fallback}>{prompt}</div>}>
+      <Suspense fallback={<div className={styles.fallback}>{prompt}</div>}>
+        <CodeTaskView
+          mode="practice"
+          kind={kind}
+          language={language}
+          starterTokens={starterTokens}
+          payload={payload}
+          prompt={prompt}
+          resolution={resolution}
+          hints={hints}
+          solutionTokens={solutionTokens}
+          runner={runner ?? lazySiteRunner}
+          labels={labels}
+        />
+      </Suspense>
+    </LazyIslandBoundary>
   );
 }

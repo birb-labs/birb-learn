@@ -1,14 +1,16 @@
 'use client';
 
-import { lazy, Suspense, useMemo } from 'react';
+import { Suspense, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { parseCodeAnswer, serializeCodeAnswer } from '@birb-learn/code-ui';
 import type { ExportedCodeTask } from '@/lib/export-question';
 import { buildCodeTaskLabels } from '@/lib/code-labels';
 import { lazySiteRunner } from '@/lib/lazy-site-runner';
+import { createRetryableLazy } from '@/lib/retryable-lazy';
+import { LazyIslandBoundary } from './lazy-island-boundary';
 
 // The editor entry brings CodeMirror; keep it out of the chunk that renders the rest of the simulado.
-const CodeTaskView = lazy(() => import('@birb-learn/code-ui/editor').then((module) => ({ default: module.CodeTaskView })));
+const CodeTaskView = createRetryableLazy(() => import('@birb-learn/code-ui/editor').then((module) => ({ default: module.CodeTaskView })));
 
 /**
  * A `code` question while the simulado is being taken: the task view in exam
@@ -33,20 +35,23 @@ export function SimuladoCodeQuestion({
   const prompt = <div dangerouslySetInnerHTML={{ __html: promptHtml }} />;
 
   return (
-    // While the editor code loads, the prompt stays readable.
-    <Suspense fallback={prompt}>
-      <CodeTaskView
-        mode="exam"
-        kind={task.kind}
-        language={task.language}
-        starterTokens={task.starterTokens}
-        payload={task.payload}
-        prompt={prompt}
-        answer={storedAnswer}
-        onAnswerChange={(next) => onAnswerChange(serializeCodeAnswer(next))}
-        runner={lazySiteRunner}
-        labels={labels}
-      />
-    </Suspense>
+    // While the editor code loads, the prompt stays readable. The boundary sits inside the question,
+    // so a load failure leaves the answers held by the simulado untouched.
+    <LazyIslandBoundary onRetry={CodeTaskView.reset} context={prompt}>
+      <Suspense fallback={prompt}>
+        <CodeTaskView
+          mode="exam"
+          kind={task.kind}
+          language={task.language}
+          starterTokens={task.starterTokens}
+          payload={task.payload}
+          prompt={prompt}
+          answer={storedAnswer}
+          onAnswerChange={(next) => onAnswerChange(serializeCodeAnswer(next))}
+          runner={lazySiteRunner}
+          labels={labels}
+        />
+      </Suspense>
+    </LazyIslandBoundary>
   );
 }

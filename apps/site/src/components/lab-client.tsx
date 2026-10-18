@@ -1,6 +1,6 @@
 'use client';
 
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { Icon } from '@birb-learn/theme';
 // Type-only and deep imports: the code-runner barrel would pull the workers and engines into this graph.
@@ -24,15 +24,27 @@ import {
   takeIncoming,
 } from '@/lib/lab-storage';
 import { lazySiteRunner } from '@/lib/lazy-site-runner';
+import { createRetryableLazy } from '@/lib/retryable-lazy';
+import { LazyIslandBoundary } from './lazy-island-boundary';
 import styles from './lab-client.module.css';
 
 // The editor entry brings CodeMirror; keep it out of the chunk that hydrates the rest of the page.
 // Both components come from one import, so the entry is requested once.
 let editorEntry: Promise<typeof import('@birb-learn/code-ui/editor')> | undefined;
-const loadEditorEntry = () => (editorEntry ??= import('@birb-learn/code-ui/editor'));
+const loadEditorEntry = () =>
+  (editorEntry ??= import('@birb-learn/code-ui/editor').catch((error: unknown) => {
+    // A failed request is not kept, so Retry asks for the entry again.
+    editorEntry = undefined;
+    throw error;
+  }));
 
-const CodeEditor = lazy(() => loadEditorEntry().then((module) => ({ default: module.CodeEditor })));
-const RunPanel = lazy(() => loadEditorEntry().then((module) => ({ default: module.RunPanel })));
+const CodeEditor = createRetryableLazy(() => loadEditorEntry().then((module) => ({ default: module.CodeEditor })));
+const RunPanel = createRetryableLazy(() => loadEditorEntry().then((module) => ({ default: module.RunPanel })));
+
+function resetEditorIslands() {
+  CodeEditor.reset();
+  RunPanel.reset();
+}
 
 const DEFAULT_LANGUAGE: Language = 'python';
 const ONECOMPILER_MYSQL_URL = 'https://onecompiler.com/mysql';
@@ -247,53 +259,55 @@ export function LabClient({ runner }: LabClientProps) {
       </div>
 
       {ready ? (
-        <Suspense fallback={loading}>
-          <CodeEditor
-            value={code}
-            onChange={changeCode}
-            language={language}
-            ariaLabel={t('editorLabel', { language: languageName })}
-            minLines={12}
-          />
-          {showSetup && (
-            <div className={styles.setup}>
-              <p className={styles.caption}>{t('setupLabel')}</p>
-              <CodeEditor
-                value={setups[language] ?? ''}
-                onChange={(value) => setSetups((current) => ({ ...current, [language]: value }))}
-                language={language}
-                ariaLabel={t('setupLabel')}
-                minLines={3}
-              />
-            </div>
-          )}
-          {info.engine === 'none' ? (
-            <div className={styles.readOnly}>
-              <p className={styles.note}>{t('mysqlNote')}</p>
-              <div className={styles.actions}>
-                <button type="button" className={`${styles.button} ${styles.primary}`} onClick={copyAndOpenOneCompiler}>
-                  <Icon name="external-link" size={16} aria-hidden />
-                  {tCode('oneCompiler')}
-                </button>
-                <p className={styles.copyStatus} role="status" data-state={copyState}>
-                  {copyState === 'copied' ? tCode('copied') : copyState === 'failed' ? tCode('copyFailed') : ''}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <RunPanel
-              runner={runner ?? lazySiteRunner}
+        <LazyIslandBoundary onRetry={resetEditorIslands}>
+          <Suspense fallback={loading}>
+            <CodeEditor
+              value={code}
+              onChange={changeCode}
               language={language}
-              source={code}
-              stdin={stdins[language] ?? ''}
-              onStdinChange={(value) => setStdins((current) => ({ ...current, [language]: value }))}
-              sqlSetup={showSetup ? (setups[language] ?? '') : undefined}
-              showSqlSetup={false}
-              showStdin={!info.isSql}
-              labels={runLabels}
+              ariaLabel={t('editorLabel', { language: languageName })}
+              minLines={12}
             />
-          )}
-        </Suspense>
+            {showSetup && (
+              <div className={styles.setup}>
+                <p className={styles.caption}>{t('setupLabel')}</p>
+                <CodeEditor
+                  value={setups[language] ?? ''}
+                  onChange={(value) => setSetups((current) => ({ ...current, [language]: value }))}
+                  language={language}
+                  ariaLabel={t('setupLabel')}
+                  minLines={3}
+                />
+              </div>
+            )}
+            {info.engine === 'none' ? (
+              <div className={styles.readOnly}>
+                <p className={styles.note}>{t('mysqlNote')}</p>
+                <div className={styles.actions}>
+                  <button type="button" className={`${styles.button} ${styles.primary}`} onClick={copyAndOpenOneCompiler}>
+                    <Icon name="external-link" size={16} aria-hidden />
+                    {tCode('oneCompiler')}
+                  </button>
+                  <p className={styles.copyStatus} role="status" data-state={copyState}>
+                    {copyState === 'copied' ? tCode('copied') : copyState === 'failed' ? tCode('copyFailed') : ''}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <RunPanel
+                runner={runner ?? lazySiteRunner}
+                language={language}
+                source={code}
+                stdin={stdins[language] ?? ''}
+                onStdinChange={(value) => setStdins((current) => ({ ...current, [language]: value }))}
+                sqlSetup={showSetup ? (setups[language] ?? '') : undefined}
+                showSqlSetup={false}
+                showStdin={!info.isSql}
+                labels={runLabels}
+              />
+            )}
+          </Suspense>
+        </LazyIslandBoundary>
       ) : (
         loading
       )}
