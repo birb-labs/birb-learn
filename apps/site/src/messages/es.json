@@ -306,8 +306,8 @@
       "stdout": "Salida estándar",
       "stderr": "Errores",
       "compileError": "Error de compilación",
-      "running": "Ejecutando...",
-      "loadingEngine": "Cargando {language}...",
+      "running": "Ejecutando…",
+      "loadingEngine": "Cargando {language}…",
       "caseProgress": "Caso {done} de {total}",
       "status": {
         "ok": "Terminado",
@@ -324,10 +324,10 @@
         "service_error": "El servicio de ejecución falló. Inténtalo de nuevo.",
         "engine_load": "No se pudo cargar el entorno de ejecución."
       },
-      "retryIn": "Inténtalo de nuevo en {seconds}s",
+      "retryIn": "Inténtalo de nuevo en {seconds} s",
       "retry": "Intentar de nuevo",
       "rowsShown": "Mostrando {shown} de {total} filas",
-      "remoteNotice": "Este código se ejecuta en un servidor externo. No envíes datos personales.",
+      "remoteNotice": "Este código se ejecuta en godbolt.org (Compiler Explorer), un servicio externo. No envíes datos personales.",
       "noOutput": "Sin salida"
     },
     "task": {
@@ -340,7 +340,8 @@
       "line": "Línea {number}: {text}",
       "emptyLine": "Línea {number}",
       "check": "Comprobar",
-      "checking": "Comprobando...",
+      "checking": "Comprobando…",
+      "testProgress": "{done} de {total} pruebas",
       "verdict": {
         "correct": "¡Correcto!",
         "incorrect": "Todavía no",
@@ -379,7 +380,7 @@
     "restorePrevious": "Restaurar mi código anterior",
     "resetConfirm": "¿Reemplazar tu código en {language} por la plantilla? Perderás tus cambios.",
     "mysqlNote": "El código MySQL no se puede ejecutar aquí. Cópialo y ejecútalo en OneCompiler.",
-    "loading": "Cargando el editor..."
+    "loading": "Cargando el editor…"
   },
   "notFound": {
     "title": "Página no encontrada",

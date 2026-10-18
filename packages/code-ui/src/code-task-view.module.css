@@ -89,6 +89,13 @@
   gap: var(--space-sm);
 }
 
+.notice,
+.progress {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: var(--font-size-sm);
+}
+
 .button {
   padding: var(--space-xs) var(--space-lg);
   border: 1px solid var(--color-surface-border);

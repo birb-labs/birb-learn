@@ -28,9 +28,10 @@ const COUNTDOWN_TICK_MS = 250;
 
 function progressText(progress: RunProgress | null, language: Language, labels: RunPanelLabels): string {
   if (progress?.phase === 'loading_engine') return labels.loadingEngine(LANGUAGE_INFO[language].label);
-  // A single case needs no counter.
+  // A single case needs no counter; the counter counts finished cases, so none is shown before the first one ends.
   if (progress && progress.caseCount > 1) {
-    return labels.caseProgress(progress.phase === 'case_done' ? progress.caseIndex + 1 : progress.caseIndex, progress.caseCount);
+    const finished = progress.phase === 'case_done' ? progress.caseIndex + 1 : progress.caseIndex;
+    if (finished > 0) return labels.caseProgress(finished, progress.caseCount);
   }
   return labels.running;
 }

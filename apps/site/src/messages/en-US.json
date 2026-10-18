@@ -245,7 +245,7 @@
       "scoreWithNotGraded": "{correct} of {total} correct, {notGraded} not graded",
       "notGraded": "Not graded — retry",
       "retry": "Retry",
-      "retryIn": "Retry in {seconds}s",
+      "retryIn": "Retry in {seconds} s",
       "retrying": "Grading again…",
       "retryError": "Could not grade again. Please try later.",
       "chosenLine": "Line you chose: {line}",
@@ -306,8 +306,8 @@
       "stdout": "Standard output",
       "stderr": "Errors",
       "compileError": "Compile error",
-      "running": "Running...",
-      "loadingEngine": "Loading {language}...",
+      "running": "Running…",
+      "loadingEngine": "Loading {language}…",
       "caseProgress": "Case {done} of {total}",
       "status": {
         "ok": "Finished",
@@ -324,10 +324,10 @@
         "service_error": "The run service failed. Please try again.",
         "engine_load": "The runtime could not be loaded."
       },
-      "retryIn": "Try again in {seconds}s",
+      "retryIn": "Try again in {seconds} s",
       "retry": "Try again",
       "rowsShown": "Showing {shown} of {total} rows",
-      "remoteNotice": "This code runs on an external server. Do not send personal data.",
+      "remoteNotice": "This code runs on godbolt.org (Compiler Explorer), an external service. Don't send personal data.",
       "noOutput": "No output"
     },
     "task": {
@@ -340,7 +340,8 @@
       "line": "Line {number}: {text}",
       "emptyLine": "Line {number}",
       "check": "Check",
-      "checking": "Checking...",
+      "checking": "Checking…",
+      "testProgress": "{done} of {total} tests",
       "verdict": {
         "correct": "Correct!",
         "incorrect": "Not yet",
@@ -379,7 +380,7 @@
     "restorePrevious": "Restore my previous code",
     "resetConfirm": "Replace your {language} code with the template? Your changes will be lost.",
     "mysqlNote": "MySQL code cannot run here. Copy it and run it on OneCompiler.",
-    "loading": "Loading the editor..."
+    "loading": "Loading the editor…"
   },
   "notFound": {
     "title": "Page not found",

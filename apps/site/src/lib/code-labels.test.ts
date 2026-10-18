@@ -20,9 +20,9 @@ describe('buildRunPanelLabels', () => {
     const labels = buildRunPanelLabels(t);
 
     expect(labels.run).toBe('Executar');
-    expect(labels.loadingEngine('Python')).toBe('Carregando Python...');
+    expect(labels.loadingEngine('Python')).toBe('Carregando Python…');
     expect(labels.caseProgress(2, 5)).toBe('Caso 2 de 5');
-    expect(labels.retryIn(7)).toBe('Tente de novo em 7s');
+    expect(labels.retryIn(7)).toBe('Tente de novo em 7 s');
     expect(labels.rowsShown(10, 50)).toBe('Mostrando 10 de 50 linhas');
   });
 
@@ -55,6 +55,7 @@ describe('buildCodeTaskLabels', () => {
     expect(labels.line(3, 'total = total + i')).toBe('Linha 3: total = total + i');
     expect(labels.emptyLine(2)).toBe('Linha 2');
     expect(labels.showHint(1, 2)).toBe('Mostrar dica 1 de 2');
+    expect(labels.testProgress(2, 5)).toBe('2 de 5 testes');
     expect(labels.codeRegion('Python')).toBe('Código em Python');
     // The run panel's labels are nested, built from the same translator.
     expect(labels.run.run).toBe('Executar');

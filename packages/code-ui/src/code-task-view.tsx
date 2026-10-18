@@ -4,7 +4,7 @@ import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 're
 // Deep imports: the code-runner barrel would pull the workers and engines into this graph.
 import { composeSource, gradeCodeTask, type CodeAnswer, type CodeGradeResult } from '@birb-learn/code-runner/src/grading';
 import { LANGUAGE_INFO } from '@birb-learn/code-runner/src/languages';
-import type { Runner, UnavailableReason } from '@birb-learn/code-runner/src/protocol';
+import type { RunProgress, Runner, UnavailableReason } from '@birb-learn/code-runner/src/protocol';
 import type { CodeKind, Language } from '@birb-learn/content-schema/src/code-languages';
 import type { CodeTaskPayloadData } from '@birb-learn/content-schema/src/code-payloads';
 import { CodeEditor } from './code-editor';
@@ -126,6 +126,8 @@ export function CodeTaskView({
   }
 
   const [checking, setChecking] = useState(false);
+  // Tests finished by the check in flight, once the runner has reported anything.
+  const [testsDone, setTestsDone] = useState<number | null>(null);
   const [outcome, setOutcome] = useState<CheckOutcome | null>(null);
   const [hintsShown, setHintsShown] = useState(0);
   const [solutionOpen, setSolutionOpen] = useState(false);
@@ -159,6 +161,7 @@ export function CodeTaskView({
     controllerRef.current?.abort();
     controllerRef.current = null;
     setChecking(false);
+    setTestsDone(null);
     setOutcome(null);
     setAnswer(next);
     onAnswerChange?.(next);
@@ -169,13 +172,22 @@ export function CodeTaskView({
     const controller = new AbortController();
     controllerRef.current = controller;
     setChecking(true);
+    setTestsDone(null);
     setOutcome(null);
 
     // The grader reports only that the tests could not run; the reason is read off the runner's own results.
     let reason: UnavailableReason | undefined;
+    // Cases finished by the runs that have already settled: the SQL languages run once per test.
+    let finishedBefore = 0;
+    const reportProgress = (event: RunProgress) => {
+      if (controllerRef.current !== controller || controller.signal.aborted) return;
+      if (event.phase === 'loading_engine') setTestsDone(finishedBefore);
+      else setTestsDone(finishedBefore + (event.phase === 'case_done' ? event.caseIndex + 1 : event.caseIndex));
+    };
     const observingRunner: Runner = {
       async runCode(request, options) {
-        const run = await runner.runCode(request, options);
+        const run = await runner.runCode(request, { ...options, onProgress: reportProgress });
+        finishedBefore += request.cases?.length ?? 1;
         if (run.status === 'unavailable') reason ??= run.reason;
         return run;
       },
@@ -194,6 +206,7 @@ export function CodeTaskView({
     if (controllerRef.current !== controller || controller.signal.aborted) return;
     controllerRef.current = null;
     setChecking(false);
+    setTestsDone(null);
     setOutcome(next);
   }
 
@@ -289,6 +302,10 @@ export function CodeTaskView({
     );
   }
 
+  // Checking sends the code to the service in every kind, so a kind without a run panel (which carries the notice) shows it here.
+  const hasRunPanel = answer.kind === 'write' || (answer.kind === 'find_bug' && payload.tests.length > 0);
+  const showRemoteNotice = LANGUAGE_INFO[language].engine === 'remote' && !hasRunPanel;
+
   const hasSolution = solutionTokens !== undefined || resolution !== undefined;
   const solutionId = `${idBase}-solution`;
   const testsHeadingId = `${idBase}-tests`;
@@ -297,6 +314,7 @@ export function CodeTaskView({
   return (
     <div className={styles.root}>
       <div className={styles.prompt}>{prompt}</div>
+      {showRemoteNotice && <p className={styles.notice}>{labels.run.remoteNotice}</p>}
       {body}
 
       {practice && (
@@ -304,6 +322,7 @@ export function CodeTaskView({
           <button type="button" className={`${styles.button} ${styles.primary}`} disabled={checking} onClick={() => void check()}>
             {checking ? labels.checking : labels.check}
           </button>
+          {checking && testsDone !== null && payload.tests.length > 0 && <p className={styles.progress}>{labels.testProgress(testsDone, payload.tests.length)}</p>}
         </div>
       )}
 

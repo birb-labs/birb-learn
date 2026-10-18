@@ -306,8 +306,8 @@
       "stdout": "Saída padrão",
       "stderr": "Erros",
       "compileError": "Erro de compilação",
-      "running": "Executando...",
-      "loadingEngine": "Carregando {language}...",
+      "running": "Executando…",
+      "loadingEngine": "Carregando {language}…",
       "caseProgress": "Caso {done} de {total}",
       "status": {
         "ok": "Concluído",
@@ -324,10 +324,10 @@
         "service_error": "O serviço de execução falhou. Tente novamente.",
         "engine_load": "Não foi possível carregar o ambiente de execução."
       },
-      "retryIn": "Tente de novo em {seconds}s",
+      "retryIn": "Tente de novo em {seconds} s",
       "retry": "Tentar de novo",
       "rowsShown": "Mostrando {shown} de {total} linhas",
-      "remoteNotice": "Este código é executado em um servidor externo. Não envie dados pessoais.",
+      "remoteNotice": "Este código roda no godbolt.org (Compiler Explorer), um serviço externo. Não envie dados pessoais.",
       "noOutput": "Sem saída"
     },
     "task": {
@@ -340,7 +340,8 @@
       "line": "Linha {number}: {text}",
       "emptyLine": "Linha {number}",
       "check": "Verificar",
-      "checking": "Verificando...",
+      "checking": "Verificando…",
+      "testProgress": "{done} de {total} testes",
       "verdict": {
         "correct": "Correto!",
         "incorrect": "Ainda não",
@@ -379,7 +380,7 @@
     "restorePrevious": "Restaurar meu código anterior",
     "resetConfirm": "Substituir o seu código em {language} pelo modelo? As suas alterações serão perdidas.",
     "mysqlNote": "O código MySQL não roda aqui. Copie-o e rode no OneCompiler.",
-    "loading": "Carregando o editor..."
+    "loading": "Carregando o editor…"
   },
   "notFound": {
     "title": "Página não encontrada",

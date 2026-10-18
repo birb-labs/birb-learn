@@ -22,6 +22,7 @@ export function buildCodeTaskLabels(t: Translate): CodeTaskLabels {
     emptyLine: (number) => t('task.emptyLine', { number }),
     check: t('task.check'),
     checking: t('task.checking'),
+    testProgress: (done, total) => t('task.testProgress', { done, total }),
     verdict: {
       correct: t('task.verdict.correct'),
       incorrect: t('task.verdict.incorrect'),

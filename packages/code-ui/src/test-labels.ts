@@ -49,6 +49,7 @@ export const TEST_TASK_LABELS: CodeTaskLabels = {
   emptyLine: (lineNumber) => `Line ${lineNumber}`,
   check: 'Check',
   checking: 'Checking...',
+  testProgress: (done, total) => `${done} of ${total} tests`,
   verdict: { correct: 'Correct!', incorrect: 'Not quite', not_graded: 'Not graded' },
   tests: 'Tests',
   testName: (n) => `Test ${n}`,

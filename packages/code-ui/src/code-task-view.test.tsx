@@ -394,6 +394,70 @@ describe('CodeTaskView exam mode', () => {
   });
 });
 
+describe('CodeTaskView remote notice', () => {
+  const NOTICE = 'Runs on a remote server';
+
+  it('shows the notice for a remote fill_blank, which has no run panel, in practice and exam mode', () => {
+    const { unmount } = setup('fill_blank', 'rust', FILL_PAYLOAD, { starterTokens: FILL_TOKENS });
+    expect(screen.getAllByText(NOTICE)).toHaveLength(1);
+    unmount();
+    setup('fill_blank', 'rust', FILL_PAYLOAD, { starterTokens: FILL_TOKENS, mode: 'exam' });
+    expect(screen.getAllByText(NOTICE)).toHaveLength(1);
+  });
+
+  it('shows the notice once for a remote write task (the run panel already has it)', () => {
+    setup('write', 'rust', DOUBLE_PAYLOAD);
+    expect(screen.getAllByText(NOTICE)).toHaveLength(1);
+  });
+
+  it('shows no notice for a language that runs in the browser', () => {
+    setup('fill_blank', 'sqlite', FILL_PAYLOAD, { starterTokens: FILL_TOKENS });
+    expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+});
+
+describe('CodeTaskView check progress', () => {
+  /** Reports progress, then settles, so the test can look at the state in between. */
+  class ProgressRunner implements Runner {
+    options: (RunOptions | undefined)[] = [];
+    resolvers: ((result: RunResult) => void)[] = [];
+    runCode(_request: RunRequest, options?: RunOptions): Promise<RunResult> {
+      this.options.push(options);
+      return new Promise((resolve) => this.resolvers.push(resolve));
+    }
+  }
+
+  it('counts finished tests of a single multi-case run', async () => {
+    const runner = new ProgressRunner();
+    setup('write', 'python', DOUBLE_PAYLOAD, { runner });
+    click('Check');
+    expect(screen.queryByText(/tests$/)).toBeNull();
+    act(() => runner.options[0]?.onProgress?.({ phase: 'case_started', caseIndex: 0, caseCount: 2 }));
+    expect(screen.getByText('0 of 2 tests')).toBeTruthy();
+    act(() => runner.options[0]?.onProgress?.({ phase: 'case_done', caseIndex: 0, caseCount: 2 }));
+    expect(screen.getByText('1 of 2 tests')).toBeTruthy();
+    act(() => runner.resolvers[0](okRun('8\n', '-6\n')));
+    await expectVerdict('Correct!');
+    expect(screen.queryByText(/of 2 tests/)).toBeNull();
+  });
+
+  it('counts across the one-run-per-test SQL tests', async () => {
+    const runner = new ProgressRunner();
+    const test = (name: string) => ({ name, sqlSetup: '', expectedRows: { columns: ['nome'], rows: [['Ana']] }, orderMatters: false });
+    const payload: CodeTaskPayloadData = { ...DOUBLE_PAYLOAD, starterCode: 'SELECT 1;', tests: [test('a'), test('b')] };
+    setup('write', 'sqlite', payload, { runner });
+    click('Check');
+    act(() => runner.options[0]?.onProgress?.({ phase: 'case_done', caseIndex: 0, caseCount: 1 }));
+    expect(screen.getByText('1 of 2 tests')).toBeTruthy();
+    await act(async () => runner.resolvers[0](okRun('')));
+    await waitFor(() => expect(runner.options).toHaveLength(2));
+    act(() => runner.options[1]?.onProgress?.({ phase: 'case_started', caseIndex: 0, caseCount: 1 }));
+    expect(screen.getByText('1 of 2 tests')).toBeTruthy();
+    act(() => runner.options[1]?.onProgress?.({ phase: 'case_done', caseIndex: 0, caseCount: 1 }));
+    expect(screen.getByText('2 of 2 tests')).toBeTruthy();
+  });
+});
+
 describe('CodeTaskView runner trouble', () => {
   it('shows "not graded" with the reason when the runner is unavailable', async () => {
     setup('write', 'python', DOUBLE_PAYLOAD, { runner: new FakeRunner(() => unavailable('offline')) });

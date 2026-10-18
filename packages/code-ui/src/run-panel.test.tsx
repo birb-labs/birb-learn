@@ -265,9 +265,14 @@ describe('RunPanel progress', () => {
     expect(screen.getByRole('status').textContent).toContain('Running...');
     act(() => runner.progress({ phase: 'loading_engine' }));
     expect(screen.getByRole('status').textContent).toContain('Loading Python...');
+    // Nothing has finished yet: no "0 of 2".
     act(() => runner.progress({ phase: 'case_started', caseIndex: 0, caseCount: 2 }));
-    expect(screen.getByRole('status').textContent).toContain('Case 0 of 2');
+    expect(screen.getByRole('status').textContent).toContain('Running...');
+    expect(screen.getByRole('status').textContent).not.toContain('Case');
     act(() => runner.progress({ phase: 'case_done', caseIndex: 0, caseCount: 2 }));
+    expect(screen.getByRole('status').textContent).toContain('Case 1 of 2');
+    // The second case started: one is done.
+    act(() => runner.progress({ phase: 'case_started', caseIndex: 1, caseCount: 2 }));
     expect(screen.getByRole('status').textContent).toContain('Case 1 of 2');
     await runner.settle(okResult());
     expect(screen.getByRole('status').textContent).not.toContain('Case');

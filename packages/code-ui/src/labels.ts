@@ -46,6 +46,8 @@ export interface CodeTaskLabels {
   emptyLine: (lineNumber: number) => string;
   check: string;
   checking: string;
+  /** Progress of a check in flight: tests finished out of all tests. */
+  testProgress: (done: number, total: number) => string;
   verdict: { correct: string; incorrect: string; not_graded: string };
   tests: string;
   /** Fallback name of an unnamed test; `n` is 1-based. */
