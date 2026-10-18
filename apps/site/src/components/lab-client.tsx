@@ -211,6 +211,12 @@ export function LabClient({ runner }: LabClientProps) {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = null;
     pendingSaveRef.current = null;
+    // The code a handed-over snippet replaced is still waiting to be stashed: do it now, as a save would have.
+    const replaced = unstashedRef.current[language];
+    if (replaced !== undefined) {
+      savePreviousLabCode(language, replaced);
+      delete unstashedRef.current[language];
+    }
     setCodes((current) => ({ ...current, [language]: info.template }));
     saveLabCode(language, info.template);
   }

@@ -19,9 +19,13 @@ export interface LessonLink {
   title: string;
 }
 
-function isEditableTarget(target: EventTarget | null): boolean {
+/** Where the arrow keys already mean something: code, output regions, tables (they scroll) and tab lists (they move between tabs). */
+const ARROW_KEY_WIDGETS = 'pre, [role="region"], table, [role="tablist"]';
+
+/** True when the arrow keys belong to the focused element and must not step the lesson. */
+function ownsArrowKeys(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.closest(ARROW_KEY_WIDGETS) !== null;
 }
 
 /** Index of the last step whose top has scrolled past the reading line (0 before the first). */
@@ -183,7 +187,7 @@ export function LessonShell({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-      if (isEditableTarget(event.target)) return;
+      if (ownsArrowKeys(event.target)) return;
       if (event.key === 'ArrowRight') {
         event.preventDefault();
         goNext();

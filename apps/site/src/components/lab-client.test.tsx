@@ -373,6 +373,30 @@ describe('LabClient previous code', () => {
     expect(restore()).toBeNull();
   });
 
+  it('stashes the saved code when Reset replaces a handed-over snippet that was never saved', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    localStorage.setItem('birb-learn:lab:python', 'print("mine")');
+    sessionStorage.setItem('birb-learn:lab:incoming', JSON.stringify({ language: 'python', code: 'print("lesson")' }));
+    const { unmount } = render(
+      <NextIntlClientProvider locale="pt-BR" messages={ptBR}>
+        <LabClient runner={runner} />
+      </NextIntlClientProvider>,
+    );
+    await screen.findByRole('textbox', { name: /^Código em/ });
+
+    await user.click(screen.getByRole('button', { name: ptBR.lab.reset }));
+    expect(editor()).toHaveValue(LANGUAGE_INFO.python.template);
+    expect(localStorage.getItem('birb-learn:lab:python')).toBe(LANGUAGE_INFO.python.template);
+    expect(localStorage.getItem('birb-learn:lab:python:previous')).toBe('print("mine")');
+
+    // Leave and come back: the lab still offers the code that was there before.
+    unmount();
+    await renderLoadedLab();
+    await user.click(restore()!);
+    expect(editor()).toHaveValue('print("mine")');
+  });
+
   it('follows the language: the button belongs to the language whose code was replaced', async () => {
     const user = userEvent.setup();
     localStorage.setItem('birb-learn:lab:python', 'print("mine")');

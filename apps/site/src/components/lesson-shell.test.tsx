@@ -132,6 +132,24 @@ describe('LessonShell', () => {
     expect(scrolledTo).toEqual([]);
   });
 
+  it.each([
+    ['a focused code block', <pre key="x" tabIndex={0} aria-label="focus-target">code</pre>],
+    ['a focused region', <div key="x" role="region" tabIndex={0} aria-label="focus-target">output</div>],
+    ['a focused table', <table key="x" tabIndex={0} aria-label="focus-target"><tbody><tr><td>1</td></tr></tbody></table>],
+    ['a tab list', <div key="x" role="tablist" aria-label="focus-target"><button role="tab">A</button></div>],
+  ])('leaves the arrow keys to %s', async (_name, element) => {
+    const user = userEvent.setup();
+    renderShell({ header: element });
+
+    const target = screen.getByLabelText('focus-target');
+    // The tab list keeps the focus on its tab; the others take it themselves.
+    if (target.getAttribute('role') === 'tablist') (target.firstElementChild as HTMLElement).focus();
+    else target.focus();
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{ArrowLeft}');
+    expect(scrolledTo).toEqual([]);
+  });
+
   it('offers the next lesson once the last step is reached', () => {
     setPageHeight(window.innerHeight);
     renderShell();
