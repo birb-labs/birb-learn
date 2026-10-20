@@ -144,9 +144,45 @@ function validateQuestionKey(key: string | null | undefined): string | null {
   return null;
 }
 
-async function findQuestionIdByKey(db: ReturnType<typeof getD1Db>, key: string): Promise<number | undefined> {
-  const row = await db.select({ id: questions.id }).from(questions).where(eq(questions.key, key)).get();
-  return row?.id;
+/**
+ * True when `error` (or any error in its `cause` chain) is SQLite rejecting a
+ * duplicate `questions.key`. The unique index is the only race-free check, so
+ * the routes rely on it instead of a read-then-write lookup.
+ */
+function isDuplicateKeyError(error: unknown): boolean {
+  for (let current: unknown = error; current instanceof Error; current = current.cause) {
+    if (/UNIQUE constraint failed:.*questions\.key/i.test(current.message)) return true;
+  }
+  return false;
+}
+
+/**
+ * Code questions are graded by running code, so clients may omit everything
+ * the other types need (options, pairs, answers, tags). Default those so the
+ * shared write paths never see `undefined`.
+ */
+function withCodeDefaults(body: QuestionStructuralInput): QuestionStructuralInput {
+  if (body.type !== 'code') return body;
+  return {
+    ...body,
+    correctAnswer: body.correctAnswer ?? null,
+    answerFormat: body.answerFormat ?? 'text',
+    tagIds: body.tagIds ?? [],
+    acceptedAnswersShared: body.acceptedAnswersShared ?? [],
+    acceptedAnswersByLocale: body.acceptedAnswersByLocale ?? {},
+    translations: withTranslationDefaults(body.translations ?? {}),
+  };
+}
+
+function withTranslationDefaults(
+  translations: Partial<Record<Locale, QuestionTranslationInput>>,
+): Partial<Record<Locale, QuestionTranslationInput>> {
+  return Object.fromEntries(
+    Object.entries(translations).map(([locale, t]) => [
+      locale,
+      { ...t, options: t.options ?? [], matchingPairs: t.matchingPairs ?? [] },
+    ]),
+  );
 }
 
 /**
@@ -223,30 +259,32 @@ questionsRoutes.get('/:id', async (c) => {
 });
 
 questionsRoutes.post('/', async (c) => {
-  const body = await c.req.json<QuestionStructuralInput>();
+  const body = withCodeDefaults(await c.req.json<QuestionStructuralInput>());
   const validationError = validateStructuralInput(body) ?? validateQuestionKey(body.key);
   if (validationError) return c.json({ error: validationError }, 400);
 
   const db = getD1Db(c.env.DB);
   const key = body.key ?? null;
-  if (key !== null && (await findQuestionIdByKey(db, key)) !== undefined) {
-    return c.json({ error: duplicateKeyMessage(key) }, 409);
-  }
-
   const isCode = body.type === 'code';
-  const [question] = await db
-    .insert(questions)
-    .values({
-      type: body.type,
-      difficulty: body.difficulty,
-      correctAnswer: body.correctAnswer,
-      answerFormat: body.answerFormat,
-      // Only code questions have a kind and language; any other type clears them.
-      codeKind: isCode ? body.codeKind! : null,
-      codeLanguage: isCode ? body.codeLanguage! : null,
-      key,
-    })
-    .returning();
+  let question;
+  try {
+    [question] = await db
+      .insert(questions)
+      .values({
+        type: body.type,
+        difficulty: body.difficulty,
+        correctAnswer: body.correctAnswer,
+        answerFormat: body.answerFormat,
+        // Only code questions have a kind and language; any other type clears them.
+        codeKind: isCode ? body.codeKind! : null,
+        codeLanguage: isCode ? body.codeLanguage! : null,
+        key,
+      })
+      .returning();
+  } catch (error) {
+    if (key !== null && isDuplicateKeyError(error)) return c.json({ error: duplicateKeyMessage(key) }, 409);
+    throw error;
+  }
 
   const structural = structuralTranslation(body.translations)!;
   if (structural.options.length > 0) {
@@ -305,7 +343,7 @@ questionsRoutes.patch('/:id', async (c) => {
   // simply was not mentioned.
   const mergedTranslations: Partial<Record<Locale, QuestionTranslationInput>> = {
     ...current.translations,
-    ...translations,
+    ...(effectiveType === 'code' && translations ? withTranslationDefaults(translations) : translations),
   };
 
   // PATCH bodies are partial, so validate the *effective* post-patch state
@@ -338,10 +376,6 @@ questionsRoutes.patch('/:id', async (c) => {
   if (bodyKey !== undefined) {
     const keyError = validateQuestionKey(bodyKey);
     if (keyError) return c.json({ error: keyError }, 400);
-    if (bodyKey !== null) {
-      const ownerId = await findQuestionIdByKey(db, bodyKey);
-      if (ownerId !== undefined && ownerId !== id) return c.json({ error: duplicateKeyMessage(bodyKey) }, 409);
-    }
     structuralFields.key = bodyKey;
   }
 
@@ -352,13 +386,21 @@ questionsRoutes.patch('/:id', async (c) => {
     // Only code questions have a kind, language and code payload; any other type clears them.
     structuralFields.codeKind = null;
     structuralFields.codeLanguage = null;
-    if (current.type === 'code') {
-      await db.update(questionTranslations).set({ codeJson: null }).where(eq(questionTranslations.questionId, id)).run();
+  }
+
+  // This is the first write, so a duplicate `key` rejected by the unique index
+  // leaves the question exactly as it was.
+  if (Object.keys(structuralFields).length > 0) {
+    try {
+      await db.update(questions).set(structuralFields).where(eq(questions.id, id)).run();
+    } catch (error) {
+      if (typeof bodyKey === 'string' && isDuplicateKeyError(error)) return c.json({ error: duplicateKeyMessage(bodyKey) }, 409);
+      throw error;
     }
   }
 
-  if (Object.keys(structuralFields).length > 0) {
-    await db.update(questions).set(structuralFields).where(eq(questions.id, id)).run();
+  if (effectiveType !== 'code' && current.type === 'code') {
+    await db.update(questionTranslations).set({ codeJson: null }).where(eq(questionTranslations.questionId, id)).run();
   }
 
   if (translations) {

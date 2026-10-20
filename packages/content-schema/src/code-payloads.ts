@@ -213,3 +213,56 @@ export function validateCodeTask(kind: CodeKind, language: Language, payload: Co
 
   return errors;
 }
+
+// The subset of a zod issue that `formatZodIssues` reads. `errors` is only set
+// on `invalid_union` issues: one list of issues per union branch.
+interface ZodIssueLike {
+  path: readonly PropertyKey[];
+  message: string;
+  errors?: readonly (readonly ZodIssueLike[])[];
+}
+
+// "tests" then 0 then "expectedStdout" becomes "tests[0].expectedStdout".
+function formatIssuePath(path: readonly PropertyKey[]): string {
+  return path.reduce<string>((text, segment) => {
+    if (typeof segment === 'number') return `${text}[${segment}]`;
+    return text === '' ? String(segment) : `${text}.${String(segment)}`;
+  }, '');
+}
+
+function valueAtPath(input: unknown, path: readonly PropertyKey[]): unknown {
+  let current = input;
+  for (const segment of path) {
+    if (typeof current !== 'object' || current === null) return undefined;
+    current = (current as Record<PropertyKey, unknown>)[segment];
+  }
+  return current;
+}
+
+// The only union in the payload schemas is `[SqlTest, IoTest]` in `tests`. A
+// SQL test is recognised by `expectedRows`; any other object is read as a
+// stdout test. Anything else falls back to the branch with the fewest issues.
+function pickUnionBranch(branches: readonly (readonly ZodIssueLike[])[], value: unknown): readonly ZodIssueLike[] {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return 'expectedRows' in value ? branches[0] : branches[branches.length - 1];
+  }
+  return branches.reduce((best, branch) => (branch.length < best.length ? branch : best));
+}
+
+/**
+ * Turns zod issues into "path: message" lines. A failed `invalid_union` is
+ * flattened into the issues of the branch that matches the raw `input`, with
+ * the union's own path prefixed, so a stdout test missing its expected output
+ * reads `tests[0].expectedStdout: ...` instead of `tests[0]: Invalid input`.
+ */
+export function formatZodIssues(issues: readonly ZodIssueLike[], input: unknown): string[] {
+  return issues.flatMap((issue) => {
+    if (issue.errors && issue.errors.length > 0) {
+      const branch = pickUnionBranch(issue.errors, valueAtPath(input, issue.path));
+      const prefixed = branch.map((sub) => ({ ...sub, path: [...issue.path, ...sub.path] }));
+      return formatZodIssues(prefixed, input);
+    }
+    const path = formatIssuePath(issue.path);
+    return [path === '' ? issue.message : `${path}: ${issue.message}`];
+  });
+}

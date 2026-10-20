@@ -4,6 +4,7 @@ import {
   CodeSnippetPayload,
   CodeTaskPayload,
   findBlankIds,
+  formatZodIssues,
   parseLineRange,
   validateCodeSnippet,
   validateCodeTask,
@@ -237,5 +238,30 @@ describe('validateCodeTask', () => {
   it('prefixes errors with the offending path', () => {
     const errors = validateCodeTask('write', 'python', task({ tests: [ioTest] }));
     expect(errors[0]).toMatch(/^solution: /);
+  });
+});
+
+describe('formatZodIssues', () => {
+  function issuesFor(input: unknown): string[] {
+    const result = CodeTaskPayload.safeParse(input);
+    if (result.success) throw new Error('expected the payload to be invalid');
+    return formatZodIssues(result.error.issues, input);
+  }
+
+  it('formats a plain issue as "path: message"', () => {
+    expect(issuesFor({ tests: [] })).toEqual([expect.stringMatching(/^starterCode: /)]);
+  });
+
+  it('explains a stdout test missing expectedStdout instead of a bare union error', () => {
+    const issues = issuesFor({ starterCode: '', tests: [{ stdin: '' }] });
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatch(/^tests\[0\]\.expectedStdout: /);
+  });
+
+  it('explains a SQL test (identified by expectedRows) with a malformed result set', () => {
+    const issues = issuesFor({ starterCode: '', tests: [{ expectedRows: { columns: 'a' } }] });
+    expect(issues).toHaveLength(2);
+    expect(issues[0]).toMatch(/^tests\[0\]\.expectedRows\.columns: /);
+    expect(issues[1]).toMatch(/^tests\[0\]\.expectedRows\.rows: /);
   });
 });

@@ -1076,6 +1076,24 @@ describe('lesson content blocks', () => {
       expect(error).toContain('starterCode');
     });
 
+    it('explains a stdout test missing expectedStdout down to the field', async () => {
+      const lessonId = await createLesson('exercise-union-path');
+      const response = await createBlock(lessonId, {
+        type: 'code_exercise',
+        codeKind: 'write',
+        codeLanguage: 'python',
+        translations: {
+          'pt-BR': {
+            promptMdx: 'P',
+            resolutionMdx: 'R',
+            payloadJson: JSON.stringify({ starterCode: '', solution: 'x', tests: [{ stdin: '' }] }),
+          },
+        },
+      });
+      expect(response.status).toBe(400);
+      expect((await response.json<{ error: string }>()).error).toContain('tests[0].expectedStdout: ');
+    });
+
     it('PATCH to predict_output re-validates the stored payloads of every locale', async () => {
       const lessonId = await createLesson('exercise-kind-change');
       const created = await createBlock(lessonId, {

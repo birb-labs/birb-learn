@@ -3,6 +3,7 @@ import {
   CodeSnippetPayload,
   CodeTaskPayload,
   LANGUAGES,
+  formatZodIssues,
   validateCodeSnippet,
   validateCodeTask,
   type CodeKind,
@@ -27,14 +28,6 @@ export function validateCodeKindAndLanguage(codeKind: unknown, codeLanguage: unk
     return `Tarefas de código precisam de uma codeLanguage válida (${LANGUAGES.join(', ')}).`;
   }
   return null;
-}
-
-// "tests", then index 0, then "expectedStdout" becomes "tests[0].expectedStdout".
-function formatIssuePath(path: readonly PropertyKey[]): string {
-  return path.reduce<string>((text, segment) => {
-    if (typeof segment === 'number') return `${text}[${segment}]`;
-    return text === '' ? String(segment) : `${text}.${String(segment)}`;
-  }, '');
 }
 
 function formatPayloadError(locale: Locale, details: string[]): string {
@@ -65,7 +58,7 @@ export function validateSnippetPayloadText(locale: Locale, payloadJson: string |
   if (!result.success) {
     return formatPayloadError(
       locale,
-      result.error.issues.map((issue) => `${formatIssuePath(issue.path)}: ${issue.message}`),
+      formatZodIssues(result.error.issues, parsed.value),
     );
   }
   const errors = validateCodeSnippet(result.data);
@@ -93,7 +86,7 @@ export function validateTaskPayloadText(
   if (!result.success) {
     return formatPayloadError(
       locale,
-      result.error.issues.map((issue) => `${formatIssuePath(issue.path)}: ${issue.message}`),
+      formatZodIssues(result.error.issues, parsed.value),
     );
   }
   const errors = validateCodeTask(codeKind, codeLanguage, result.data);

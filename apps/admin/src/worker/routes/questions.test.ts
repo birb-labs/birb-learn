@@ -1128,4 +1128,143 @@ describe('code questions', () => {
     expect(data.codeLanguage).toBeNull();
     expect(data.translations['pt-BR'].codeJson).toBeNull();
   });
+
+  async function insertQuestionWithKeyDirectly(key: string): Promise<void> {
+    await env.DB.prepare("INSERT INTO questions (type, difficulty, answer_format, key) VALUES ('true_false', 'easy', 'text', ?)")
+      .bind(key)
+      .run();
+  }
+
+  async function countQuestionsWithKey(key: string): Promise<number> {
+    const row = await env.DB.prepare('SELECT COUNT(*) AS total FROM questions WHERE key = ?').bind(key).first<{ total: number }>();
+    return row?.total ?? 0;
+  }
+
+  it('answers 409 on POST when the unique index rejects a key the database already holds', async () => {
+    await insertQuestionWithKeyDirectly('code-raced-post');
+
+    const response = await SELF.fetch('https://admin.test/api/questions', authed(codeBody({ key: 'code-raced-post' })));
+    expect(response.status).toBe(409);
+    expect((await response.json<{ error: string }>()).error).toBe('Já existe uma questão com a chave "code-raced-post".');
+    expect(await countQuestionsWithKey('code-raced-post')).toBe(1);
+  });
+
+  it('answers 409 on PATCH for a taken key and leaves a code question fully intact', async () => {
+    await insertQuestionWithKeyDirectly('code-raced-patch');
+    const created = await SELF.fetch('https://admin.test/api/questions', authed(codeBody({ key: 'code-patch-victim' })));
+    const { id } = await created.json<{ id: number }>();
+
+    // Switching away from `code` and taking a key that is already used: the
+    // rejected key must not leave `code_json` half-cleared.
+    const response = await SELF.fetch(
+      `https://admin.test/api/questions/${id}`,
+      authed(
+        {
+          type: 'true_false',
+          correctAnswer: 'true',
+          key: 'code-raced-patch',
+          translations: { 'pt-BR': { promptMdx: 'P', resolutionMdx: 'R', options: [], matchingPairs: [] } },
+        },
+        'PATCH',
+      ),
+    );
+    expect(response.status).toBe(409);
+
+    const data = await readQuestion(id);
+    expect(data.key).toBe('code-patch-victim');
+    expect(data.codeKind).toBe('write');
+    expect(data.translations['pt-BR'].codeJson).toBe(writePayload('1\n'));
+  });
+
+  it('creates and patches a code question whose body omits options, pairs, answers and tags', async () => {
+    const created = await SELF.fetch('https://admin.test/api/questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({
+        type: 'code',
+        difficulty: 'easy',
+        codeKind: 'write',
+        codeLanguage: 'python',
+        translations: { 'pt-BR': { promptMdx: 'Imprima 1.', resolutionMdx: 'print(1)', codeJson: writePayload('1\n') } },
+      }),
+    });
+    expect(created.status).toBe(201);
+    const { id } = await created.json<{ id: number }>();
+
+    const patched = await SELF.fetch(`https://admin.test/api/questions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({
+        translations: { 'pt-BR': { promptMdx: 'Imprima o número 1.', resolutionMdx: 'print(1)', codeJson: writePayload('1\n') } },
+      }),
+    });
+    expect(patched.status).toBe(200);
+    expect((await readQuestion(id)).translations['pt-BR'].codeJson).toBe(writePayload('1\n'));
+  });
+
+  it('clears code_json in every locale when a code question becomes another type', async () => {
+    const created = await SELF.fetch(
+      'https://admin.test/api/questions',
+      authed(
+        codeBody({
+          translations: { 'pt-BR': codeTranslation(writePayload('1\n')), 'en-US': codeTranslation(writePayload('1\n')) },
+        }),
+      ),
+    );
+    const { id } = await created.json<{ id: number }>();
+
+    const response = await SELF.fetch(`https://admin.test/api/questions/${id}`, authed({ type: 'true_false', correctAnswer: 'true' }, 'PATCH'));
+    expect(response.status).toBe(200);
+
+    const data = await readQuestion(id);
+    expect(data.codeKind).toBeNull();
+    expect(data.codeLanguage).toBeNull();
+    expect(data.translations['pt-BR'].codeJson).toBeNull();
+    expect(data.translations['en-US'].codeJson).toBeNull();
+  });
+
+  it('requires codeJson in every stored locale when a non-code question becomes a code question', async () => {
+    const created = await SELF.fetch(
+      'https://admin.test/api/questions',
+      authed({
+        type: 'true_false',
+        difficulty: 'easy',
+        correctAnswer: 'true',
+        answerFormat: 'text',
+        translations: {
+          'pt-BR': { promptMdx: 'P', resolutionMdx: 'R', options: [], matchingPairs: [] },
+          'en-US': { promptMdx: 'P', resolutionMdx: 'R', options: [], matchingPairs: [] },
+        },
+        acceptedAnswersShared: [],
+        acceptedAnswersByLocale: {},
+        tagIds: [],
+      }),
+    );
+    const { id } = await created.json<{ id: number }>();
+    const asCode = { type: 'code', codeKind: 'write', codeLanguage: 'python' };
+
+    // Only pt-BR carries a payload, so en-US is named as the failing locale.
+    const partial = await SELF.fetch(
+      `https://admin.test/api/questions/${id}`,
+      authed({ ...asCode, translations: { 'pt-BR': codeTranslation(writePayload('1\n')) } }, 'PATCH'),
+    );
+    expect(partial.status).toBe(400);
+    expect((await partial.json<{ error: string }>()).error).toContain('en-US');
+    expect((await readQuestion(id)).codeKind).toBeNull();
+
+    const complete = await SELF.fetch(
+      `https://admin.test/api/questions/${id}`,
+      authed(
+        {
+          ...asCode,
+          translations: { 'pt-BR': codeTranslation(writePayload('1\n')), 'en-US': codeTranslation(writePayload('1\n')) },
+        },
+        'PATCH',
+      ),
+    );
+    expect(complete.status).toBe(200);
+    const data = await readQuestion(id);
+    expect(data.codeKind).toBe('write');
+    expect(data.translations['en-US'].codeJson).toBe(writePayload('1\n'));
+  });
 });
