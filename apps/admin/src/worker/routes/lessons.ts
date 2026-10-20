@@ -16,11 +16,14 @@ import {
   getLessonForAdminEdit,
   lessonBlocks,
   lessonBlockTranslations,
+  type CodeKind,
+  type Language,
   type LessonBlockType,
   LESSON_BLOCK_TYPES,
   type Locale,
 } from '@birb-learn/content-schema';
 import type { Env } from '../env';
+import { validateCodeKindAndLanguage, validateSnippetPayloadText, validateTaskPayloadText } from './codeValidation';
 import { validateTranslationLocales } from './translationInput';
 
 export const lessonsRoutes = new Hono<{ Bindings: Env }>();
@@ -228,12 +231,15 @@ interface LessonBlockTranslationInput {
   promptMdx?: string;
   resolutionMdx?: string;
   caption?: string;
+  payloadJson?: string;
 }
 
 interface LessonBlockInput {
   type: LessonBlockType;
   simulatorKey?: string;
   simulatorParams?: string;
+  codeKind?: CodeKind | null;
+  codeLanguage?: Language | null;
   translations: Partial<Record<Locale, LessonBlockTranslationInput>>;
 }
 
@@ -242,7 +248,13 @@ interface LessonBlockInput {
  * every locale being written. Enforced per-locale (not just pt-BR) so a
  * later translation into en-US/es can't silently save empty content.
  */
-function validateLessonBlockTranslation(type: LessonBlockType, t: LessonBlockTranslationInput): string | null {
+function validateLessonBlockTranslation(
+  type: LessonBlockType,
+  locale: Locale,
+  t: LessonBlockTranslationInput,
+  codeKind: CodeKind | null | undefined,
+  codeLanguage: Language | null | undefined,
+): string | null {
   if (type === 'text' && !t.bodyMdx?.trim()) {
     return 'Blocos de texto precisam de conteúdo.';
   }
@@ -252,7 +264,21 @@ function validateLessonBlockTranslation(type: LessonBlockType, t: LessonBlockTra
   if (type === 'solved_exercise' && (!t.promptMdx?.trim() || !t.resolutionMdx?.trim())) {
     return 'Blocos de exercício resolvido precisam de enunciado e resolução.';
   }
+  if (type === 'code_snippet') {
+    return validateSnippetPayloadText(locale, t.payloadJson);
+  }
+  if (type === 'code_exercise') {
+    if (!t.promptMdx?.trim() || !t.resolutionMdx?.trim()) {
+      return `${locale}: blocos de exercício de código precisam de enunciado e resolução.`;
+    }
+    // The kind and language were checked before any locale, so they are valid here.
+    return validateTaskPayloadText(locale, codeKind as CodeKind, codeLanguage as Language, t.payloadJson);
+  }
   return null;
+}
+
+function isCodeBlockType(type: LessonBlockType): boolean {
+  return type === 'code_snippet' || type === 'code_exercise';
 }
 
 /**
@@ -281,10 +307,14 @@ function validateLessonBlockInput(body: LessonBlockInput, { requirePtBr }: { req
   }
   const simulatorParamsError = validateSimulatorParamsJson(body.simulatorParams);
   if (simulatorParamsError) return simulatorParamsError;
+  if (body.type === 'code_exercise') {
+    const kindError = validateCodeKindAndLanguage(body.codeKind, body.codeLanguage);
+    if (kindError) return kindError;
+  }
   const localeError = validateTranslationLocales(body.translations, { requirePtBr });
   if (localeError) return localeError;
   for (const locale of Object.keys(body.translations) as Locale[]) {
-    const fieldError = validateLessonBlockTranslation(body.type, body.translations[locale]!);
+    const fieldError = validateLessonBlockTranslation(body.type, locale, body.translations[locale]!, body.codeKind, body.codeLanguage);
     if (fieldError) return fieldError;
   }
   return null;
@@ -293,10 +323,13 @@ function validateLessonBlockInput(body: LessonBlockInput, { requirePtBr }: { req
 async function writeLessonBlockTranslations(
   db: ReturnType<typeof getD1Db>,
   blockId: number,
+  type: LessonBlockType,
   translations: Partial<Record<Locale, LessonBlockTranslationInput>>,
 ) {
   for (const locale of Object.keys(translations) as Locale[]) {
     const t = translations[locale]!;
+    // Only code blocks carry a payload; any other type clears it.
+    const payloadJson = isCodeBlockType(type) ? (t.payloadJson ?? null) : null;
     await db
       .insert(lessonBlockTranslations)
       .values({
@@ -307,6 +340,7 @@ async function writeLessonBlockTranslations(
         promptMdx: t.promptMdx ?? null,
         resolutionMdx: t.resolutionMdx ?? null,
         caption: t.caption ?? null,
+        payloadJson,
       })
       .onConflictDoUpdate({
         target: [lessonBlockTranslations.blockId, lessonBlockTranslations.locale],
@@ -316,6 +350,7 @@ async function writeLessonBlockTranslations(
           promptMdx: t.promptMdx ?? null,
           resolutionMdx: t.resolutionMdx ?? null,
           caption: t.caption ?? null,
+          payloadJson,
         },
       })
       .run();
@@ -412,10 +447,12 @@ lessonsRoutes.post('/lessons/:id/blocks', async (c) => {
       type: body.type,
       simulatorKey: body.simulatorKey ?? null,
       simulatorParams: body.simulatorParams ?? null,
+      codeKind: body.type === 'code_exercise' ? body.codeKind! : null,
+      codeLanguage: body.type === 'code_exercise' ? body.codeLanguage! : null,
     })
     .returning();
 
-  await writeLessonBlockTranslations(db, block.id, body.translations);
+  await writeLessonBlockTranslations(db, block.id, body.type, body.translations);
 
   return c.json(block, 201);
 });
@@ -442,13 +479,21 @@ lessonsRoutes.patch('/lessons/:id/blocks/:blockId', async (c) => {
   // `type` field into `structuralFields` at runtime, since `c.req.json<T>()`
   // is only a type assertion and performs no runtime validation.
   const body = await c.req.json<
-    Partial<{ simulatorKey: string; simulatorParams: string; translations: Partial<Record<Locale, LessonBlockTranslationInput>>; type?: unknown }>
+    Partial<{
+      simulatorKey: string;
+      simulatorParams: string;
+      codeKind: CodeKind | null;
+      codeLanguage: Language | null;
+      translations: Partial<Record<Locale, LessonBlockTranslationInput>>;
+      type?: unknown;
+    }>
   >();
 
   const existing = await db.select().from(lessonBlocks).where(eq(lessonBlocks.id, blockId)).get();
   if (!existing) return c.json({ error: 'Not found' }, 404);
 
-  const { translations, type: _ignoredType, ...structuralFields } = body;
+  const { translations, type: _ignoredType, codeKind: _bodyCodeKind, codeLanguage: _bodyCodeLanguage, ...otherStructuralFields } = body;
+  const structuralFields: Record<string, unknown> = { ...otherStructuralFields };
 
   // This must run whenever `simulatorParams` is present, independent of
   // `translations` -- otherwise a structural-only PATCH (no `translations`
@@ -456,19 +501,63 @@ lessonsRoutes.patch('/lessons/:id/blocks/:blockId', async (c) => {
   const simulatorParamsError = validateSimulatorParamsJson(body.simulatorParams);
   if (simulatorParamsError) return c.json({ error: simulatorParamsError }, 400);
 
+  const isCodeExercise = existing.type === 'code_exercise';
+  const effectiveCodeKind = body.codeKind !== undefined ? body.codeKind : existing.codeKind;
+  const effectiveCodeLanguage = body.codeLanguage !== undefined ? body.codeLanguage : existing.codeLanguage;
+
+  if (isCodeExercise) {
+    const kindError = validateCodeKindAndLanguage(effectiveCodeKind, effectiveCodeLanguage);
+    if (kindError) return c.json({ error: kindError }, 400);
+    if (body.codeKind !== undefined) structuralFields.codeKind = body.codeKind;
+    if (body.codeLanguage !== undefined) structuralFields.codeLanguage = body.codeLanguage;
+  } else if (body.codeKind !== undefined || body.codeLanguage !== undefined) {
+    // Only code exercises have a kind and language; any other type clears them.
+    structuralFields.codeKind = null;
+    structuralFields.codeLanguage = null;
+  }
+
   if (translations) {
     const validationError = validateLessonBlockInput(
-      { type: existing.type, simulatorKey: body.simulatorKey ?? existing.simulatorKey ?? undefined, simulatorParams: body.simulatorParams ?? existing.simulatorParams ?? undefined, translations },
+      {
+        type: existing.type,
+        simulatorKey: body.simulatorKey ?? existing.simulatorKey ?? undefined,
+        simulatorParams: body.simulatorParams ?? existing.simulatorParams ?? undefined,
+        codeKind: effectiveCodeKind,
+        codeLanguage: effectiveCodeLanguage,
+        translations,
+      },
       { requirePtBr: false },
     );
     if (validationError) return c.json({ error: validationError }, 400);
+  }
+
+  // Changing the kind or language can invalidate payloads this request does
+  // not rewrite, so every other stored locale is re-checked against the new pair.
+  const codeTargetChanged =
+    isCodeExercise && (effectiveCodeKind !== existing.codeKind || effectiveCodeLanguage !== existing.codeLanguage);
+  if (codeTargetChanged) {
+    const storedRows = await db
+      .select({ locale: lessonBlockTranslations.locale, payloadJson: lessonBlockTranslations.payloadJson })
+      .from(lessonBlockTranslations)
+      .where(eq(lessonBlockTranslations.blockId, blockId))
+      .all();
+    for (const row of storedRows) {
+      if (translations && row.locale in translations) continue;
+      const payloadError = validateTaskPayloadText(
+        row.locale as Locale,
+        effectiveCodeKind as CodeKind,
+        effectiveCodeLanguage as Language,
+        row.payloadJson,
+      );
+      if (payloadError) return c.json({ error: payloadError }, 400);
+    }
   }
 
   if (Object.keys(structuralFields).length > 0) {
     await db.update(lessonBlocks).set(structuralFields).where(eq(lessonBlocks.id, blockId)).run();
   }
   if (translations) {
-    await writeLessonBlockTranslations(db, blockId, translations);
+    await writeLessonBlockTranslations(db, blockId, existing.type, translations);
   }
 
   return c.json({ ok: true });

@@ -17,9 +17,12 @@ import {
   subjects,
   tags,
   tagTranslations,
+  type CodeKind,
+  type Language,
   type Locale,
 } from '@birb-learn/content-schema';
 import type { Env } from '../env';
+import { validateCodeKindAndLanguage, validateTaskPayloadText } from './codeValidation';
 import { validateTranslationLocales } from './translationInput';
 
 interface QuestionInput {
@@ -94,6 +97,7 @@ function validateQuestionInput(body: QuestionInput): string | null {
 interface QuestionTranslationInput {
   promptMdx: string;
   resolutionMdx: string;
+  codeJson?: string | null;
   options: { id?: number; textMdx: string; isCorrect: boolean }[];
   matchingPairs: { id?: number; leftMdx: string; rightMdx: string }[];
 }
@@ -103,6 +107,9 @@ interface QuestionStructuralInput {
   difficulty: QuestionInput['difficulty'];
   correctAnswer: string | null;
   answerFormat: 'text' | 'math';
+  codeKind?: CodeKind | null;
+  codeLanguage?: Language | null;
+  key?: string | null;
   tagIds: number[];
   translations: Partial<Record<Locale, QuestionTranslationInput>>;
   acceptedAnswersShared: string[];
@@ -122,12 +129,67 @@ function structuralTranslation(
   return translations['pt-BR'] ?? Object.values(translations)[0];
 }
 
-function validateStructuralInput(body: QuestionStructuralInput): string | null {
+function duplicateKeyMessage(key: string): string {
+  return `Já existe uma questão com a chave "${key}".`;
+}
+
+const QUESTION_KEY_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
+
+/** `key` is an optional stable identifier; `null` clears it. */
+function validateQuestionKey(key: string | null | undefined): string | null {
+  if (key === undefined || key === null) return null;
+  if (typeof key !== 'string' || !QUESTION_KEY_PATTERN.test(key)) {
+    return 'A chave da questão deve usar apenas letras minúsculas, números e hifens, começando por letra ou número.';
+  }
+  return null;
+}
+
+async function findQuestionIdByKey(db: ReturnType<typeof getD1Db>, key: string): Promise<number | undefined> {
+  const row = await db.select({ id: questions.id }).from(questions).where(eq(questions.key, key)).get();
+  return row?.id;
+}
+
+/**
+ * Validates the code fields of a `code` question for the given locales: the
+ * structural kind and language, then per locale the prompt, resolution and the
+ * `codeJson` task payload.
+ */
+function validateCodeQuestion(body: QuestionStructuralInput, localesToCheck: Locale[]): string | null {
+  const kindError = validateCodeKindAndLanguage(body.codeKind, body.codeLanguage);
+  if (kindError) return kindError;
+
+  for (const locale of localesToCheck) {
+    const translation = body.translations[locale];
+    if (!translation) continue;
+    if (!translation.promptMdx?.trim() || !translation.resolutionMdx?.trim()) {
+      return `${locale}: questões de código precisam de enunciado e resolução.`;
+    }
+    const payloadError = validateTaskPayloadText(
+      locale,
+      body.codeKind as CodeKind,
+      body.codeLanguage as Language,
+      translation.codeJson,
+    );
+    if (payloadError) return payloadError;
+  }
+  return null;
+}
+
+/**
+ * `localesToCheck` are the locales whose code payload must be validated; it
+ * defaults to every locale in the body (creation), while a PATCH narrows it to
+ * the locales it writes unless the type or code target changed.
+ */
+function validateStructuralInput(body: QuestionStructuralInput, localesToCheck?: Locale[]): string | null {
   const localeError = validateTranslationLocales(body.translations, { requirePtBr: true });
   if (localeError) return localeError;
 
   const acceptedAnswersLocaleError = validateTranslationLocales(body.acceptedAnswersByLocale, { requirePtBr: false });
   if (acceptedAnswersLocaleError) return acceptedAnswersLocaleError;
+
+  if (body.type === 'code') {
+    return validateCodeQuestion(body, localesToCheck ?? (Object.keys(body.translations) as Locale[]));
+  }
 
   const anyTranslation = structuralTranslation(body.translations)!;
   return validateQuestionInput({
@@ -162,13 +224,28 @@ questionsRoutes.get('/:id', async (c) => {
 
 questionsRoutes.post('/', async (c) => {
   const body = await c.req.json<QuestionStructuralInput>();
-  const validationError = validateStructuralInput(body);
+  const validationError = validateStructuralInput(body) ?? validateQuestionKey(body.key);
   if (validationError) return c.json({ error: validationError }, 400);
 
   const db = getD1Db(c.env.DB);
+  const key = body.key ?? null;
+  if (key !== null && (await findQuestionIdByKey(db, key)) !== undefined) {
+    return c.json({ error: duplicateKeyMessage(key) }, 409);
+  }
+
+  const isCode = body.type === 'code';
   const [question] = await db
     .insert(questions)
-    .values({ type: body.type, difficulty: body.difficulty, correctAnswer: body.correctAnswer, answerFormat: body.answerFormat })
+    .values({
+      type: body.type,
+      difficulty: body.difficulty,
+      correctAnswer: body.correctAnswer,
+      answerFormat: body.answerFormat,
+      // Only code questions have a kind and language; any other type clears them.
+      codeKind: isCode ? body.codeKind! : null,
+      codeLanguage: isCode ? body.codeLanguage! : null,
+      key,
+    })
     .returning();
 
   const structural = structuralTranslation(body.translations)!;
@@ -183,7 +260,7 @@ questionsRoutes.post('/', async (c) => {
     ).run();
   }
 
-  await writeQuestionTranslations(db, question.id, body.translations);
+  await writeQuestionTranslations(db, question.id, body.type, body.translations);
   await writeAcceptedAnswers(db, question.id, body.answerFormat, body.acceptedAnswersShared, body.acceptedAnswersByLocale);
 
   if (body.tagIds.length > 0) {
@@ -202,7 +279,21 @@ questionsRoutes.patch('/:id', async (c) => {
   const current = await getQuestionForAdminEdit(db, id);
   if (!current) return c.json({ error: 'Not found' }, 404);
 
-  const { translations, acceptedAnswersShared, acceptedAnswersByLocale, tagIds, ...structuralFields } = body;
+  const {
+    translations,
+    acceptedAnswersShared,
+    acceptedAnswersByLocale,
+    tagIds,
+    codeKind: bodyCodeKind,
+    codeLanguage: bodyCodeLanguage,
+    key: bodyKey,
+    ...otherStructuralFields
+  } = body;
+  const structuralFields: Record<string, unknown> = { ...otherStructuralFields };
+
+  const effectiveType = body.type ?? current.type;
+  const effectiveCodeKind = bodyCodeKind !== undefined ? bodyCodeKind : current.codeKind;
+  const effectiveCodeLanguage = bodyCodeLanguage !== undefined ? bodyCodeLanguage : current.codeLanguage;
 
   // A PATCH body carries only the locales it wants to change, but the writes
   // below rebuild the shared option/pair rows from scratch with new ids, which
@@ -222,8 +313,16 @@ questionsRoutes.patch('/:id', async (c) => {
   // multiple_choice question to zero correct options or a short_text question
   // to zero accepted answers, and the failure would only surface much later as
   // a thrown error during the site's production question export.
+  // A PATCH normally re-checks only the code payloads it writes. A new type or
+  // a new kind/language can invalidate payloads it leaves alone, so then every
+  // stored locale is re-checked too.
+  const codeTargetChanged =
+    effectiveType === 'code' &&
+    (current.type !== 'code' || effectiveCodeKind !== current.codeKind || effectiveCodeLanguage !== current.codeLanguage);
+  const localesToCheck = (codeTargetChanged ? Object.keys(mergedTranslations) : Object.keys(translations ?? {})) as Locale[];
+
   const validationError = validateStructuralInput({
-    type: body.type ?? current.type,
+    type: effectiveType,
     difficulty: body.difficulty ?? current.difficulty,
     correctAnswer: body.correctAnswer !== undefined ? body.correctAnswer : current.correctAnswer,
     answerFormat: body.answerFormat ?? current.answerFormat,
@@ -231,8 +330,32 @@ questionsRoutes.patch('/:id', async (c) => {
     translations: mergedTranslations,
     acceptedAnswersShared: acceptedAnswersShared ?? current.acceptedAnswersShared,
     acceptedAnswersByLocale: acceptedAnswersByLocale ?? current.acceptedAnswersByLocale,
-  });
+    codeKind: effectiveCodeKind,
+    codeLanguage: effectiveCodeLanguage,
+  }, localesToCheck);
   if (validationError) return c.json({ error: validationError }, 400);
+
+  if (bodyKey !== undefined) {
+    const keyError = validateQuestionKey(bodyKey);
+    if (keyError) return c.json({ error: keyError }, 400);
+    if (bodyKey !== null) {
+      const ownerId = await findQuestionIdByKey(db, bodyKey);
+      if (ownerId !== undefined && ownerId !== id) return c.json({ error: duplicateKeyMessage(bodyKey) }, 409);
+    }
+    structuralFields.key = bodyKey;
+  }
+
+  if (effectiveType === 'code') {
+    if (bodyCodeKind !== undefined) structuralFields.codeKind = bodyCodeKind;
+    if (bodyCodeLanguage !== undefined) structuralFields.codeLanguage = bodyCodeLanguage;
+  } else {
+    // Only code questions have a kind, language and code payload; any other type clears them.
+    structuralFields.codeKind = null;
+    structuralFields.codeLanguage = null;
+    if (current.type === 'code') {
+      await db.update(questionTranslations).set({ codeJson: null }).where(eq(questionTranslations.questionId, id)).run();
+    }
+  }
 
   if (Object.keys(structuralFields).length > 0) {
     await db.update(questions).set(structuralFields).where(eq(questions.id, id)).run();
@@ -255,7 +378,7 @@ questionsRoutes.patch('/:id', async (c) => {
       ).run();
     }
 
-    await writeQuestionTranslations(db, id, mergedTranslations);
+    await writeQuestionTranslations(db, id, effectiveType, mergedTranslations);
   }
 
   if (acceptedAnswersShared !== undefined || acceptedAnswersByLocale !== undefined) {
@@ -305,16 +428,19 @@ async function deleteOptionsAndPairs(db: ReturnType<typeof getD1Db>, questionId:
 async function writeQuestionTranslations(
   db: ReturnType<typeof getD1Db>,
   questionId: number,
+  type: QuestionInput['type'],
   translations: Partial<Record<Locale, QuestionTranslationInput>>,
 ) {
   for (const locale of Object.keys(translations) as Locale[]) {
     const t = translations[locale]!;
+    // Only code questions carry a payload; any other type clears it.
+    const codeJson = type === 'code' ? (t.codeJson ?? null) : null;
     await db
       .insert(questionTranslations)
-      .values({ questionId, locale, promptMdx: t.promptMdx, resolutionMdx: t.resolutionMdx })
+      .values({ questionId, locale, promptMdx: t.promptMdx, resolutionMdx: t.resolutionMdx, codeJson })
       .onConflictDoUpdate({
         target: [questionTranslations.questionId, questionTranslations.locale],
-        set: { promptMdx: t.promptMdx, resolutionMdx: t.resolutionMdx },
+        set: { promptMdx: t.promptMdx, resolutionMdx: t.resolutionMdx, codeJson },
       })
       .run();
 

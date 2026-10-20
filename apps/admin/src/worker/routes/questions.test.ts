@@ -917,3 +917,215 @@ describe('question and tag locale-key validation', () => {
     expect(tree.map((tag) => tag.slug)).toContain('bad-locale-tag');
   });
 });
+
+describe('code questions', () => {
+  const writePayload = (stdout: string) =>
+    JSON.stringify({ starterCode: '', solution: 'print(1)', tests: [{ stdin: '', expectedStdout: stdout }] });
+
+  function codeTranslation(codeJson?: string) {
+    return { promptMdx: 'Imprima 1.', resolutionMdx: 'print(1)', options: [], matchingPairs: [], ...(codeJson === undefined ? {} : { codeJson }) };
+  }
+
+  function codeBody(overrides: Record<string, unknown> = {}) {
+    return {
+      type: 'code',
+      difficulty: 'easy',
+      correctAnswer: null,
+      answerFormat: 'text',
+      codeKind: 'write',
+      codeLanguage: 'python',
+      translations: { 'pt-BR': codeTranslation(writePayload('1\n')) },
+      acceptedAnswersShared: [],
+      acceptedAnswersByLocale: {},
+      tagIds: [],
+      ...overrides,
+    };
+  }
+
+  interface QuestionRead {
+    difficulty: string;
+    codeKind: string | null;
+    codeLanguage: string | null;
+    key: string | null;
+    translations: Record<string, { codeJson: string | null }>;
+  }
+
+  async function readQuestion(id: number): Promise<QuestionRead> {
+    const response = await SELF.fetch(`https://admin.test/api/questions/${id}`, { headers: { Cookie: cookie } });
+    expect(response.status).toBe(200);
+    return response.json<QuestionRead>();
+  }
+
+  it('creates a code question and reads its kind, language, key and code back', async () => {
+    const response = await SELF.fetch(
+      'https://admin.test/api/questions',
+      authed(codeBody({ key: 'code-create-ok' })),
+    );
+    expect(response.status).toBe(201);
+    const { id } = await response.json<{ id: number }>();
+
+    const data = await readQuestion(id);
+    expect(data.codeKind).toBe('write');
+    expect(data.codeLanguage).toBe('python');
+    expect(data.key).toBe('code-create-ok');
+    expect(data.translations['pt-BR'].codeJson).toBe(writePayload('1\n'));
+  });
+
+  it('rejects a code question without codeKind or codeLanguage', async () => {
+    const withoutKind = await SELF.fetch('https://admin.test/api/questions', authed(codeBody({ codeKind: undefined })));
+    expect(withoutKind.status).toBe(400);
+    const withoutLanguage = await SELF.fetch('https://admin.test/api/questions', authed(codeBody({ codeLanguage: undefined })));
+    expect(withoutLanguage.status).toBe(400);
+  });
+
+  it('rejects a code question locale without codeJson, naming the locale', async () => {
+    const response = await SELF.fetch(
+      'https://admin.test/api/questions',
+      authed(
+        codeBody({
+          translations: { 'pt-BR': codeTranslation(writePayload('1\n')), 'en-US': codeTranslation() },
+        }),
+      ),
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json<{ error: string }>()).error).toContain('en-US');
+  });
+
+  it('rejects a code question without a prompt or resolution', async () => {
+    const response = await SELF.fetch(
+      'https://admin.test/api/questions',
+      authed(codeBody({ translations: { 'pt-BR': { ...codeTranslation(writePayload('1\n')), resolutionMdx: '  ' } } })),
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects an invalid task payload with the validator message', async () => {
+    const response = await SELF.fetch(
+      'https://admin.test/api/questions',
+      authed(codeBody({ translations: { 'pt-BR': codeTranslation(JSON.stringify({ starterCode: '', solution: 'x', tests: [] })) } })),
+    );
+    expect(response.status).toBe(400);
+    const { error } = await response.json<{ error: string }>();
+    expect(error).toContain('pt-BR: payload inválido');
+    expect(error).toContain('tests: a write task needs at least 1 test');
+  });
+
+  it('rejects a mysql write question because mysql is read-only', async () => {
+    const codeJson = JSON.stringify({
+      starterCode: '',
+      solution: 'SELECT 1',
+      tests: [{ sqlSetup: '', expectedRows: { columns: ['1'], rows: [['1']] } }],
+    });
+    const response = await SELF.fetch(
+      'https://admin.test/api/questions',
+      authed(codeBody({ codeLanguage: 'mysql', translations: { 'pt-BR': codeTranslation(codeJson) } })),
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json<{ error: string }>()).error).toContain('read-only');
+  });
+
+  it('rejects a duplicate key with 409', async () => {
+    const first = await SELF.fetch('https://admin.test/api/questions', authed(codeBody({ key: 'code-duplicate' })));
+    expect(first.status).toBe(201);
+
+    const second = await SELF.fetch('https://admin.test/api/questions', authed(codeBody({ key: 'code-duplicate' })));
+    expect(second.status).toBe(409);
+    expect((await second.json<{ error: string }>()).error).toBe('Já existe uma questão com a chave "code-duplicate".');
+  });
+
+  it('rejects a key outside the allowed pattern with 400', async () => {
+    for (const key of ['Upper', '-leading', 'has space', 'under_score', '']) {
+      const response = await SELF.fetch('https://admin.test/api/questions', authed(codeBody({ key })));
+      expect(response.status, `key "${key}"`).toBe(400);
+    }
+  });
+
+  it('lets a question keep its own key on PATCH but not take another question key', async () => {
+    const a = await (await SELF.fetch('https://admin.test/api/questions', authed(codeBody({ key: 'code-key-a' })))).json<{ id: number }>();
+    await SELF.fetch('https://admin.test/api/questions', authed(codeBody({ key: 'code-key-b' })));
+
+    const own = await SELF.fetch(`https://admin.test/api/questions/${a.id}`, authed({ key: 'code-key-a' }, 'PATCH'));
+    expect(own.status).toBe(200);
+    const taken = await SELF.fetch(`https://admin.test/api/questions/${a.id}`, authed({ key: 'code-key-b' }, 'PATCH'));
+    expect(taken.status).toBe(409);
+  });
+
+  it('keeps code_json when a PATCH only changes the difficulty', async () => {
+    const created = await SELF.fetch('https://admin.test/api/questions', authed(codeBody({ key: 'code-patch-difficulty' })));
+    const { id } = await created.json<{ id: number }>();
+
+    const response = await SELF.fetch(`https://admin.test/api/questions/${id}`, authed({ difficulty: 'hard' }, 'PATCH'));
+    expect(response.status).toBe(200);
+
+    const data = await readQuestion(id);
+    expect(data.difficulty).toBe('hard');
+    expect(data.translations['pt-BR'].codeJson).toBe(writePayload('1\n'));
+    expect(data.codeKind).toBe('write');
+  });
+
+  it('rejects a PATCH that changes the kind when a stored payload no longer fits, naming the locale', async () => {
+    const created = await SELF.fetch(
+      'https://admin.test/api/questions',
+      authed(
+        codeBody({
+          translations: { 'pt-BR': codeTranslation(writePayload('1\n')), 'en-US': codeTranslation(writePayload('1\n')) },
+        }),
+      ),
+    );
+    const { id } = await created.json<{ id: number }>();
+
+    const response = await SELF.fetch(`https://admin.test/api/questions/${id}`, authed({ codeKind: 'predict_output' }, 'PATCH'));
+    expect(response.status).toBe(400);
+    const { error } = await response.json<{ error: string }>();
+    expect(error).toContain('payload inválido');
+    expect(error).toContain('expectedOutput');
+
+    expect((await readQuestion(id)).codeKind).toBe('write');
+  });
+
+  it('accepts a kind change when every locale carries a payload that fits it', async () => {
+    const created = await SELF.fetch('https://admin.test/api/questions', authed(codeBody()));
+    const { id } = await created.json<{ id: number }>();
+    const predict = JSON.stringify({ starterCode: 'print(1)', expectedOutput: '1' });
+
+    const response = await SELF.fetch(
+      `https://admin.test/api/questions/${id}`,
+      authed({ codeKind: 'predict_output', translations: { 'pt-BR': codeTranslation(predict) } }, 'PATCH'),
+    );
+    expect(response.status).toBe(200);
+    const data = await readQuestion(id);
+    expect(data.codeKind).toBe('predict_output');
+    expect(data.translations['pt-BR'].codeJson).toBe(predict);
+  });
+
+  it('keeps the code columns null for non-code questions and ignores code fields sent with them', async () => {
+    const created = await SELF.fetch(
+      'https://admin.test/api/questions',
+      authed({
+        type: 'true_false',
+        difficulty: 'easy',
+        correctAnswer: 'true',
+        answerFormat: 'text',
+        codeKind: 'write',
+        codeLanguage: 'python',
+        translations: { 'pt-BR': { ...codeTranslation(writePayload('1\n')) } },
+        acceptedAnswersShared: [],
+        acceptedAnswersByLocale: {},
+        tagIds: [],
+      }),
+    );
+    expect(created.status).toBe(201);
+    const { id } = await created.json<{ id: number }>();
+
+    const patched = await SELF.fetch(
+      `https://admin.test/api/questions/${id}`,
+      authed({ difficulty: 'medium', codeKind: 'write', translations: { 'pt-BR': codeTranslation(writePayload('1\n')) } }, 'PATCH'),
+    );
+    expect(patched.status).toBe(200);
+
+    const data = await readQuestion(id);
+    expect(data.codeKind).toBeNull();
+    expect(data.codeLanguage).toBeNull();
+    expect(data.translations['pt-BR'].codeJson).toBeNull();
+  });
+});

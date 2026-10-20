@@ -900,4 +900,276 @@ describe('lesson content blocks', () => {
     });
     expect(getResponse.status).toBe(404);
   });
+
+  describe('code blocks', () => {
+    const snippetPayload = (code: string) => JSON.stringify({ variants: [{ language: 'python', code }] });
+    const writePayload = (stdout: string) =>
+      JSON.stringify({ starterCode: '', solution: 'print(1)', tests: [{ stdin: '', expectedStdout: stdout }] });
+
+    async function patchBlock(lessonId: number, blockId: number, body: unknown): Promise<Response> {
+      return SELF.fetch(`https://admin.test/api/lessons/lessons/${lessonId}/blocks/${blockId}`, {
+        method: 'PATCH',
+        headers: headers(),
+        body: JSON.stringify(body),
+      });
+    }
+
+    async function getFirstBlock(lessonId: number) {
+      const lesson = (await getLesson(lessonId)) as unknown as {
+        blocks: {
+          id: number;
+          codeKind: string | null;
+          codeLanguage: string | null;
+          translations: Record<string, { payloadJson: string | null }>;
+        }[];
+      };
+      return lesson.blocks[0];
+    }
+
+    it('creates a code_snippet with a valid pt-BR payload and reads it back', async () => {
+      const lessonId = await createLesson('snippet-ok');
+      const payloadJson = snippetPayload('print(1)');
+
+      const response = await createBlock(lessonId, { type: 'code_snippet', translations: { 'pt-BR': { payloadJson } } });
+      expect(response.status).toBe(201);
+
+      const block = await getFirstBlock(lessonId);
+      expect(block.translations['pt-BR'].payloadJson).toBe(payloadJson);
+      expect(block.codeKind).toBeNull();
+      expect(block.codeLanguage).toBeNull();
+    });
+
+    it('rejects a code_snippet without payloadJson', async () => {
+      const lessonId = await createLesson('snippet-missing');
+      const response = await createBlock(lessonId, { type: 'code_snippet', translations: { 'pt-BR': { caption: 'x' } } });
+      expect(response.status).toBe(400);
+      expect((await getLesson(lessonId)).blocks).toEqual([]);
+    });
+
+    it('rejects an en-US translation of a code block without payloadJson, naming the locale', async () => {
+      const lessonId = await createLesson('snippet-en-missing');
+      const response = await createBlock(lessonId, {
+        type: 'code_snippet',
+        translations: { 'pt-BR': { payloadJson: snippetPayload('print(1)') }, 'en-US': { caption: 'No payload' } },
+      });
+      expect(response.status).toBe(400);
+      const { error } = await response.json<{ error: string }>();
+      expect(error).toContain('en-US');
+      expect((await getLesson(lessonId)).blocks).toEqual([]);
+    });
+
+    it('rejects a code_snippet payload that is not valid JSON or fails the schema, naming the locale', async () => {
+      const lessonId = await createLesson('snippet-invalid');
+      const notJson = await createBlock(lessonId, { type: 'code_snippet', translations: { 'pt-BR': { payloadJson: '{oops' } } });
+      expect(notJson.status).toBe(400);
+      expect((await notJson.json<{ error: string }>()).error).toContain('pt-BR');
+
+      const badShape = await createBlock(lessonId, {
+        type: 'code_snippet',
+        translations: { 'pt-BR': { payloadJson: JSON.stringify({ variants: [] }) } },
+      });
+      expect(badShape.status).toBe(400);
+      expect((await badShape.json<{ error: string }>()).error).toContain('pt-BR: payload inválido');
+    });
+
+    it('creates a code_exercise and stores its kind, language and payload', async () => {
+      const lessonId = await createLesson('exercise-ok');
+      const payloadJson = writePayload('1\n');
+
+      const response = await createBlock(lessonId, {
+        type: 'code_exercise',
+        codeKind: 'write',
+        codeLanguage: 'python',
+        translations: { 'pt-BR': { promptMdx: 'Imprima 1.', resolutionMdx: 'print(1)', payloadJson } },
+      });
+      expect(response.status).toBe(201);
+
+      const block = await getFirstBlock(lessonId);
+      expect(block.codeKind).toBe('write');
+      expect(block.codeLanguage).toBe('python');
+      expect(block.translations['pt-BR'].payloadJson).toBe(payloadJson);
+    });
+
+    it('rejects a code_exercise without codeKind', async () => {
+      const lessonId = await createLesson('exercise-no-kind');
+      const response = await createBlock(lessonId, {
+        type: 'code_exercise',
+        codeLanguage: 'python',
+        translations: { 'pt-BR': { promptMdx: 'P', resolutionMdx: 'R', payloadJson: writePayload('1\n') } },
+      });
+      expect(response.status).toBe(400);
+    });
+
+    it('rejects a code_exercise with an unknown codeLanguage', async () => {
+      const lessonId = await createLesson('exercise-bad-language');
+      const response = await createBlock(lessonId, {
+        type: 'code_exercise',
+        codeKind: 'write',
+        codeLanguage: 'cobol',
+        translations: { 'pt-BR': { promptMdx: 'P', resolutionMdx: 'R', payloadJson: writePayload('1\n') } },
+      });
+      expect(response.status).toBe(400);
+    });
+
+    it('rejects a code_exercise without a prompt or resolution', async () => {
+      const lessonId = await createLesson('exercise-no-prompt');
+      const response = await createBlock(lessonId, {
+        type: 'code_exercise',
+        codeKind: 'write',
+        codeLanguage: 'python',
+        translations: { 'pt-BR': { payloadJson: writePayload('1\n') } },
+      });
+      expect(response.status).toBe(400);
+    });
+
+    it('rejects a write task payload with no tests, with the validator message', async () => {
+      const lessonId = await createLesson('exercise-no-tests');
+      const response = await createBlock(lessonId, {
+        type: 'code_exercise',
+        codeKind: 'write',
+        codeLanguage: 'python',
+        translations: {
+          'pt-BR': { promptMdx: 'P', resolutionMdx: 'R', payloadJson: JSON.stringify({ starterCode: '', solution: 'print(1)', tests: [] }) },
+        },
+      });
+      expect(response.status).toBe(400);
+      const { error } = await response.json<{ error: string }>();
+      expect(error).toContain('pt-BR: payload inválido');
+      expect(error).toContain('tests: a write task needs at least 1 test');
+    });
+
+    it('rejects a mysql write exercise because mysql is read-only', async () => {
+      const lessonId = await createLesson('exercise-mysql');
+      const payloadJson = JSON.stringify({
+        starterCode: '',
+        solution: 'SELECT 1',
+        tests: [{ sqlSetup: '', expectedRows: { columns: ['1'], rows: [['1']] } }],
+      });
+      const response = await createBlock(lessonId, {
+        type: 'code_exercise',
+        codeKind: 'write',
+        codeLanguage: 'mysql',
+        translations: { 'pt-BR': { promptMdx: 'P', resolutionMdx: 'R', payloadJson } },
+      });
+      expect(response.status).toBe(400);
+      expect((await response.json<{ error: string }>()).error).toContain('read-only');
+    });
+
+    it('validates every locale written, naming the failing one', async () => {
+      const lessonId = await createLesson('exercise-en-invalid');
+      const response = await createBlock(lessonId, {
+        type: 'code_exercise',
+        codeKind: 'write',
+        codeLanguage: 'python',
+        translations: {
+          'pt-BR': { promptMdx: 'P', resolutionMdx: 'R', payloadJson: writePayload('1\n') },
+          'en-US': {
+            promptMdx: 'P',
+            resolutionMdx: 'R',
+            payloadJson: JSON.stringify({ solution: 'x', tests: [{ stdin: '', expectedStdout: '1' }] }),
+          },
+        },
+      });
+      expect(response.status).toBe(400);
+      const { error } = await response.json<{ error: string }>();
+      expect(error).toContain('en-US: payload inválido');
+      expect(error).toContain('starterCode');
+    });
+
+    it('PATCH to predict_output re-validates the stored payloads of every locale', async () => {
+      const lessonId = await createLesson('exercise-kind-change');
+      const created = await createBlock(lessonId, {
+        type: 'code_exercise',
+        codeKind: 'write',
+        codeLanguage: 'python',
+        translations: {
+          'pt-BR': { promptMdx: 'P', resolutionMdx: 'R', payloadJson: writePayload('1\n') },
+          'en-US': { promptMdx: 'P', resolutionMdx: 'R', payloadJson: writePayload('1\n') },
+        },
+      });
+      const block = await created.json<{ id: number }>();
+
+      const response = await patchBlock(lessonId, block.id, { codeKind: 'predict_output' });
+      expect(response.status).toBe(400);
+      const { error } = await response.json<{ error: string }>();
+      expect(error).toContain('payload inválido');
+      expect(error).toContain('expectedOutput');
+
+      expect((await getFirstBlock(lessonId)).codeKind).toBe('write');
+    });
+
+    it('PATCH to a new kind names a stored locale that the PATCH leaves untouched', async () => {
+      const lessonId = await createLesson('exercise-kind-change-en');
+      const created = await createBlock(lessonId, {
+        type: 'code_exercise',
+        codeKind: 'write',
+        codeLanguage: 'python',
+        translations: {
+          'pt-BR': { promptMdx: 'P', resolutionMdx: 'R', payloadJson: writePayload('1\n') },
+          'en-US': { promptMdx: 'P', resolutionMdx: 'R', payloadJson: writePayload('1\n') },
+        },
+      });
+      const block = await created.json<{ id: number }>();
+
+      const response = await patchBlock(lessonId, block.id, {
+        codeKind: 'predict_output',
+        translations: {
+          'pt-BR': { promptMdx: 'P', resolutionMdx: 'R', payloadJson: JSON.stringify({ starterCode: 'print(1)', expectedOutput: '1' }) },
+        },
+      });
+      expect(response.status).toBe(400);
+      expect((await response.json<{ error: string }>()).error).toContain('en-US: payload inválido');
+    });
+
+    it('PATCH to a new kind succeeds when every locale carries a payload that fits it', async () => {
+      const lessonId = await createLesson('exercise-kind-change-ok');
+      const created = await createBlock(lessonId, {
+        type: 'code_exercise',
+        codeKind: 'write',
+        codeLanguage: 'python',
+        translations: { 'pt-BR': { promptMdx: 'P', resolutionMdx: 'R', payloadJson: writePayload('1\n') } },
+      });
+      const block = await created.json<{ id: number }>();
+      const predictPayload = JSON.stringify({ starterCode: 'print(1)', expectedOutput: '1' });
+
+      const response = await patchBlock(lessonId, block.id, {
+        codeKind: 'predict_output',
+        translations: { 'pt-BR': { promptMdx: 'P', resolutionMdx: 'R', payloadJson: predictPayload } },
+      });
+      expect(response.status).toBe(200);
+
+      const after = await getFirstBlock(lessonId);
+      expect(after.codeKind).toBe('predict_output');
+      expect(after.translations['pt-BR'].payloadJson).toBe(predictPayload);
+    });
+
+    it('PATCH writing an en-US translation without payloadJson is rejected', async () => {
+      const lessonId = await createLesson('snippet-patch-en');
+      const created = await createBlock(lessonId, {
+        type: 'code_snippet',
+        translations: { 'pt-BR': { payloadJson: snippetPayload('print(1)') } },
+      });
+      const block = await created.json<{ id: number }>();
+
+      const response = await patchBlock(lessonId, block.id, { translations: { 'en-US': { caption: 'Missing payload' } } });
+      expect(response.status).toBe(400);
+      expect((await response.json<{ error: string }>()).error).toContain('en-US');
+    });
+
+    it('ignores and clears code fields on a non-code block', async () => {
+      const lessonId = await createLesson('text-ignores-code');
+      const response = await createBlock(lessonId, {
+        type: 'text',
+        codeKind: 'write',
+        codeLanguage: 'python',
+        translations: { 'pt-BR': { bodyMdx: 'Texto', payloadJson: snippetPayload('x') } },
+      });
+      expect(response.status).toBe(201);
+
+      const block = await getFirstBlock(lessonId);
+      expect(block.codeKind).toBeNull();
+      expect(block.codeLanguage).toBeNull();
+      expect(block.translations['pt-BR'].payloadJson).toBeNull();
+    });
+  });
 });
