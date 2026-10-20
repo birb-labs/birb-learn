@@ -6,6 +6,13 @@ import { OrderingItemsEditor } from '../components/OrderingItemsEditor';
 import { AcceptedAnswersEditor } from '../components/AcceptedAnswersEditor';
 import { MatchingPairsEditor, type EditableMatchingPair } from '../components/MatchingPairsEditor';
 import { TagPicker, type TopicNode } from '../components/TagPicker';
+import { CopyFromPtBrButton } from '../code/CopyFromPtBrButton';
+import { CodeTaskForm } from '../code/CodeTaskForm';
+import { adaptTaskPayload, parseTaskPayload, placeholderTask } from '../code/task-payload';
+import { VerifyButton } from '../code/VerifyButton';
+// Deep imports: the content-schema barrel also exports the Drizzle queries, which must stay out of the browser bundle.
+import type { CodeKind, Language } from '@birb-learn/content-schema/src/code-languages';
+import type { CodeTaskPayloadData } from '@birb-learn/content-schema/src/code-payloads';
 import styles from './QuestionEditorPage.module.css';
 
 type QuestionType =
@@ -27,7 +34,13 @@ interface QuestionTranslation {
   resolutionMdx: string;
   options: EditableOption[];
   matchingPairs: EditableMatchingPair[];
+  /** JSON text of the task payload, as stored; only code questions have one. */
+  codeJson?: string | null;
 }
+
+// The kind and language a new code question starts with: the ones `placeholderTask` is valid for.
+const DEFAULT_CODE_KIND: CodeKind = 'write';
+const DEFAULT_CODE_LANGUAGE: Language = 'python';
 
 const DEFAULT_TRANSLATION: QuestionTranslation = {
   promptMdx: '',
@@ -53,6 +66,11 @@ export function QuestionEditorPage({ questionId, onDone }: { questionId: number 
   const [acceptedAnswersByLocale, setAcceptedAnswersByLocale] = useState<Partial<Record<Locale, string[]>>>({});
   const [tagTree, setTagTree] = useState<TopicNode[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [codeKind, setCodeKind] = useState<CodeKind>(DEFAULT_CODE_KIND);
+  const [codeLanguage, setCodeLanguage] = useState<Language>(DEFAULT_CODE_LANGUAGE);
+  const [questionKey, setQuestionKey] = useState('');
+  // The task payload of a code question, per locale tab.
+  const [codePayloads, setCodePayloads] = useState<Partial<Record<Locale, CodeTaskPayloadData>>>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -70,6 +88,9 @@ export function QuestionEditorPage({ questionId, onDone }: { questionId: number 
           difficulty: Difficulty;
           correctAnswer: string | null;
           answerFormat: 'text' | 'math';
+          codeKind?: CodeKind | null;
+          codeLanguage?: Language | null;
+          key?: string | null;
           tagIds: number[];
           translations: Partial<Record<Locale, QuestionTranslation>>;
           acceptedAnswersShared: string[];
@@ -83,6 +104,15 @@ export function QuestionEditorPage({ questionId, onDone }: { questionId: number 
         setAnswerFormat(question.answerFormat);
         setSelectedTagIds(question.tagIds);
         setTranslations(question.translations);
+        setCodeKind(question.codeKind ?? DEFAULT_CODE_KIND);
+        setCodeLanguage(question.codeLanguage ?? DEFAULT_CODE_LANGUAGE);
+        setQuestionKey(question.key ?? '');
+        const loadedPayloads: Partial<Record<Locale, CodeTaskPayloadData>> = {};
+        for (const locale of LOCALES) {
+          const payload = parseTaskPayload(question.translations[locale]?.codeJson);
+          if (payload) loadedPayloads[locale] = payload;
+        }
+        setCodePayloads(loadedPayloads);
         setAcceptedAnswersShared(question.acceptedAnswersShared.length > 0 ? question.acceptedAnswersShared : ['']);
         setAcceptedAnswersByLocale(question.acceptedAnswersByLocale);
       });
@@ -92,6 +122,36 @@ export function QuestionEditorPage({ questionId, onDone }: { questionId: number 
 
   function updateCurrent(patch: Partial<QuestionTranslation>) {
     setTranslations((prev) => ({ ...prev, [activeLocale]: { ...current, ...patch } }));
+  }
+
+  // pt-BR always has a payload to edit (a placeholder until the author changes it); the other
+  // locales have one only once the author wrote it or copied the pt-BR one.
+  function codePayloadFor(locale: Locale): CodeTaskPayloadData | undefined {
+    return codePayloads[locale] ?? (locale === 'pt-BR' ? placeholderTask() : undefined);
+  }
+
+  const currentCodePayload = codePayloadFor(activeLocale);
+
+  function setCurrentCodePayload(payload: CodeTaskPayloadData) {
+    setCodePayloads((prev) => ({ ...prev, [activeLocale]: payload }));
+  }
+
+  // The kind and the language are shared by every locale, and a change can invalidate a payload
+  // (a predict_output task has no tests, SQL tests differ from stdout tests), so every locale is reshaped.
+  function retargetCode(kind: CodeKind, language: Language) {
+    setCodeKind(kind);
+    setCodeLanguage(language);
+    const reshaped: Partial<Record<Locale, CodeTaskPayloadData>> = {};
+    for (const locale of LOCALES) {
+      const payload = codePayloadFor(locale);
+      if (payload) reshaped[locale] = adaptTaskPayload(payload, kind, language);
+    }
+    setCodePayloads(reshaped);
+  }
+
+  function copyCodeFromPtBr() {
+    const source = codePayloadFor('pt-BR');
+    if (source) setCurrentCodePayload(structuredClone(source));
   }
 
   const currentAcceptedAnswers = answerFormat === 'math' ? acceptedAnswersShared : (acceptedAnswersByLocale[activeLocale] ?? ['']);
@@ -133,11 +193,23 @@ export function QuestionEditorPage({ questionId, onDone }: { questionId: number 
     const usesOptions = type === 'multiple_choice' || type === 'multiple_response' || type === 'ordering';
     const fullTranslations: Partial<Record<Locale, QuestionTranslation>> = {};
     for (const locale of LOCALES) {
+      const codePayload = type === 'code' ? codePayloadFor(locale) : undefined;
       const translation = locale === activeLocale ? current : translations[locale];
       if (!translation) continue;
+      // A locale tab the author never filled in is left out, so it is not rejected as an empty translation.
+      if (
+        type === 'code' &&
+        locale !== 'pt-BR' &&
+        !codePayloads[locale] &&
+        translation.promptMdx.trim() === '' &&
+        translation.resolutionMdx.trim() === ''
+      ) {
+        continue;
+      }
       fullTranslations[locale] = {
         promptMdx: translation.promptMdx,
         resolutionMdx: translation.resolutionMdx,
+        ...(codePayload ? { codeJson: JSON.stringify(codePayload) } : {}),
         options: usesOptions
           ? current.options.map((option, index) => ({
               textMdx: (translation.options[index] ?? option).textMdx,
@@ -163,6 +235,7 @@ export function QuestionEditorPage({ questionId, onDone }: { questionId: number 
       translations: fullTranslations,
       acceptedAnswersShared: type === 'short_text' && answerFormat === 'math' ? acceptedAnswersShared : [],
       acceptedAnswersByLocale: type === 'short_text' && answerFormat === 'text' ? fullAcceptedAnswersByLocale : {},
+      ...(type === 'code' ? { codeKind, codeLanguage, key: questionKey.trim() === '' ? null : questionKey.trim() } : {}),
     };
 
     const response =
@@ -216,6 +289,7 @@ export function QuestionEditorPage({ questionId, onDone }: { questionId: number 
         <option value="short_text">Texto curto</option>
         <option value="ordering">Ordenação</option>
         <option value="matching">Associação</option>
+        <option value="code">Código</option>
       </select>
 
       <label htmlFor="difficulty">Dificuldade</label>
@@ -230,7 +304,41 @@ export function QuestionEditorPage({ questionId, onDone }: { questionId: number 
         <option value="hard">Difícil</option>
       </select>
 
+      {type === 'code' && (
+        <>
+          <label htmlFor="question-key">Chave (opcional)</label>
+          <input
+            id="question-key"
+            className={styles.textInput}
+            placeholder="letras minúsculas, números e hifens"
+            value={questionKey}
+            onChange={(event) => setQuestionKey(event.target.value)}
+          />
+        </>
+      )}
+
       <MdxEditor label="Enunciado" value={current.promptMdx} onChange={(promptMdx) => updateCurrent({ promptMdx })} />
+
+      {type === 'code' &&
+        (currentCodePayload ? (
+          <>
+            {activeLocale !== 'pt-BR' && <CopyFromPtBrButton disabled={false} onCopy={copyCodeFromPtBr} />}
+            <CodeTaskForm
+              kind={codeKind}
+              language={codeLanguage}
+              value={currentCodePayload}
+              onChange={setCurrentCodePayload}
+              onKindChange={(kind) => retargetCode(kind, codeLanguage)}
+              onLanguageChange={(language) => retargetCode(codeKind, language)}
+            />
+            <VerifyButton kind="task" taskKind={codeKind} language={codeLanguage} payload={currentCodePayload} />
+          </>
+        ) : (
+          <>
+            <p>Este idioma ainda não tem código.</p>
+            <CopyFromPtBrButton disabled={false} onCopy={copyCodeFromPtBr} />
+          </>
+        ))}
 
       {(type === 'multiple_choice' || type === 'multiple_response') && (
         <OptionsEditor type={type} options={current.options} onChange={(options) => updateCurrent({ options })} />

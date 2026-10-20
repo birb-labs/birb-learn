@@ -12,6 +12,8 @@
     "hash-password": "tsx scripts/hash-password.ts"
   },
   "dependencies": {
+    "@birb-learn/code-runner": "workspace:*",
+    "@birb-learn/code-ui": "workspace:*",
     "@birb-learn/content-schema": "workspace:*",
     "@birb-learn/math-input": "workspace:*",
     "@birb-learn/theme": "workspace:*",

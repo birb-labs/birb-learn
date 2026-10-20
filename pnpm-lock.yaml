@@ -17,6 +17,12 @@ importers:
 
   apps/admin:
     dependencies:
+      '@birb-learn/code-runner':
+        specifier: workspace:*
+        version: link:../../packages/code-runner
+      '@birb-learn/code-ui':
+        specifier: workspace:*
+        version: link:../../packages/code-ui
       '@birb-learn/content-schema':
         specifier: workspace:*
         version: link:../../packages/content-schema

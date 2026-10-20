@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { cloudflare } from '@cloudflare/vite-plugin';
@@ -10,6 +11,17 @@ export default defineConfig({
   // falls back to an assets-only worker (no Hono routes registered).
   plugins: [react(), cloudflare({ configPath: '../../wrangler.jsonc' })],
   root: 'src/client',
+  resolve: {
+    alias: {
+      // wasmoon (the Lua engine of the code runner) runs `await import('module')`
+      // in a branch taken only under Node; browsers never reach it, but the
+      // bundler must resolve it.
+      module: fileURLToPath(new URL('./src/client/empty-module.ts', import.meta.url)),
+    },
+  },
+  // The code runner's engine worker (`new Worker(new URL(...), { type: 'module' })`)
+  // is a code-split bundle, which the default `iife` worker format cannot express.
+  worker: { format: 'es' },
   build: {
     outDir: '../../dist/client',
     emptyOutDir: true,
