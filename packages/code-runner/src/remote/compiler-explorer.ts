@@ -34,14 +34,42 @@ export interface CompilerExplorerRunnerOptions {
   budget?: { requests: number; windowMs: number };
   /** Overrides `REMOTE_REQUEST_TIMEOUT_MS` (tests only). */
   requestTimeoutMs?: number;
+  /**
+   * Stores finished results and compile errors, used instead of the in-memory
+   * cache (for a cache that outlives the runner, e.g. a key-value store). A
+   * failing `get` counts as a miss and a failing `set` is ignored: a cache
+   * must never break a run.
+   */
+  cache?: RemoteResultCache;
 }
 
-type CaseOutcome =
+/** What the remote runner remembers: a case result is keyed on (compiler, flags, source, stdin), a compile error on (compiler, flags, source). */
+export interface RemoteResultCache {
+  get(key: string): Promise<CaseOutcome | undefined>;
+  set(key: string, value: CaseOutcome): Promise<void>;
+}
+
+export type CaseOutcome =
   | { kind: 'case'; result: CaseResult; cacheable: boolean }
   | { kind: 'compile_error'; compileOutput: string }
   | { kind: 'unavailable'; reason: UnavailableReason; message: string; retryAfterMs?: number };
 
 class RequestTimeoutError extends Error {}
+
+/** The default cache: in memory, the oldest entry is dropped first. */
+function createMemoryCache(): RemoteResultCache {
+  const entries = new Map<string, CaseOutcome>();
+  return {
+    async get(key) {
+      return entries.get(key);
+    },
+    async set(key, value) {
+      entries.delete(key);
+      entries.set(key, value);
+      if (entries.size > CACHE_LIMIT) entries.delete(entries.keys().next().value as string);
+    },
+  };
+}
 
 function abortError(): DOMException {
   return new DOMException('The run was aborted', 'AbortError');
@@ -71,8 +99,8 @@ function parseRetryAfterMs(header: string | null): number | undefined {
  * in flight (other runs queue), at most `budget.requests` requests per rolling
  * `budget.windowMs` (beyond that the run is `unavailable` with `rate_limited`, a
  * `retryAfterMs` hint and nothing more is sent), an HTTP 429 cool-down, and an
- * in-memory cache of finished results (and of compile errors, per source) so an
- * identical program and input is never sent twice. A run whose uncached cases fit
+ * in-memory cache (or the injected `cache`) of finished results and of compile
+ * errors per source, so an identical program and input is never sent twice. A run whose uncached cases fit
  * the budget but not what is left of it fails fast, before anything is sent.
  *
  * `RunRequest.timeoutMs` is ignored: the service has its own execution limit and
@@ -85,10 +113,11 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
   // Looked up per call: the platform `fetch` must be called on the global object.
   const doFetch: typeof fetch = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
 
-  const cache = new Map<string, CaseResult>();
+  // Results are kept apart from compile errors so that, in memory, neither evicts the other.
   // Compile errors are deterministic and independent of stdin, and beginners re-run
   // broken code often: remember them per (compiler, flags, source).
-  const compileErrors = new Map<string, string>();
+  const cache = options.cache ?? createMemoryCache();
+  const compileErrors = options.cache ?? createMemoryCache();
   const requestTimes: number[] = [];
   // After an HTTP 429 the budget counts as spent until this instant.
   let blockedUntil = 0;
@@ -114,10 +143,20 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
     return unavailable('rate_limited', message, retryAfterMs(needed));
   }
 
-  function remember<T>(store: Map<string, T>, key: string, value: T): void {
-    store.delete(key);
-    store.set(key, value);
-    if (store.size > CACHE_LIMIT) store.delete(store.keys().next().value as string);
+  async function recall(store: RemoteResultCache, key: string): Promise<CaseOutcome | undefined> {
+    try {
+      return await store.get(key);
+    } catch {
+      return undefined;
+    }
+  }
+
+  async function remember(store: RemoteResultCache, key: string, value: CaseOutcome): Promise<void> {
+    try {
+      await store.set(key, value);
+    } catch {
+      // A broken cache only costs a request next time.
+    }
   }
 
   /** Sends one request. Throws `AbortError` when the caller aborts. */
@@ -233,8 +272,10 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
     const cases: CaseResult[] = [];
 
     const sourceKey = JSON.stringify([id, flags, req.source]);
-    const knownCompileError = compileErrors.get(sourceKey);
-    if (knownCompileError !== undefined) return { status: 'compile_error', compileOutput: knownCompileError, cases: [] };
+    const knownCompileError = await recall(compileErrors, sourceKey);
+    if (knownCompileError?.kind === 'compile_error') {
+      return { status: 'compile_error', compileOutput: knownCompileError.compileOutput, cases: [] };
+    }
 
     const keyOf = (stdin: string) => JSON.stringify([id, flags, req.source, stdin]);
     const testCases = req.cases ?? [{}];
@@ -242,7 +283,12 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
     // Fail fast: a run that fits the budget but not what is left of it would waste
     // requests on a partial result. A run larger than the whole budget cannot fit
     // ever, so it is sent in order and stops where the budget runs out.
-    const uncached = new Set(testCases.map((c) => keyOf(c.stdin ?? '')).filter((key) => !cache.has(key))).size;
+    const known = new Map<string, CaseResult>();
+    for (const key of new Set(testCases.map((c) => keyOf(c.stdin ?? '')))) {
+      const hit = await recall(cache, key);
+      if (hit?.kind === 'case') known.set(key, hit.result);
+    }
+    const uncached = new Set(testCases.map((c) => keyOf(c.stdin ?? '')).filter((key) => !known.has(key))).size;
     if (uncached > 0) {
       const remaining = remainingBudget();
       if (blockedUntil > now()) {
@@ -262,7 +308,7 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
       reportProgress(onProgress, { phase: 'case_started', caseIndex, caseCount });
       const stdin = testCase.stdin ?? '';
       const key = keyOf(stdin);
-      const cached = cache.get(key);
+      const cached = known.get(key);
       if (cached) {
         cases.push({ ...cached });
         reportProgress(onProgress, { phase: 'case_done', caseIndex, caseCount });
@@ -276,10 +322,13 @@ export function createCompilerExplorerRunner(options: CompilerExplorerRunnerOpti
       if (outcome.kind === 'unavailable') return unavailable(outcome.reason, outcome.message, outcome.retryAfterMs);
       // The program is compiled for every case, so a build failure ends the run at once.
       if (outcome.kind === 'compile_error') {
-        remember(compileErrors, sourceKey, outcome.compileOutput);
+        await remember(compileErrors, sourceKey, outcome);
         return { status: 'compile_error', compileOutput: outcome.compileOutput, cases: [] };
       }
-      if (outcome.cacheable) remember(cache, key, outcome.result);
+      if (outcome.cacheable) {
+        known.set(key, outcome.result);
+        await remember(cache, key, outcome);
+      }
       cases.push(outcome.result);
       reportProgress(onProgress, { phase: 'case_done', caseIndex, caseCount });
     }

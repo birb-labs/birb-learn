@@ -4,7 +4,7 @@ import { READ_ONLY_LANGUAGES } from '../languages';
 import { gradeCodeTask } from '../grading';
 import { OUTPUT_LIMIT_BYTES, type RunProgress, type RunRequest, type RunResult } from '../protocol';
 import { createRunner, createSiteRunner } from '../run-code';
-import { createCompilerExplorerRunner } from './compiler-explorer';
+import { createCompilerExplorerRunner, type CaseOutcome } from './compiler-explorer';
 import { buildCompileRequest } from './map-response';
 import cCompileError from './fixtures/c-compile-error.json';
 import cExit3 from './fixtures/c-exit-3.json';
@@ -747,6 +747,111 @@ describe('createCompilerExplorerRunner', () => {
       await runner.runCode({ language: 'cpp', source: 'one' });
 
       expect(fake.calls).toHaveLength(3);
+    });
+  });
+
+  describe('injected cache', () => {
+    function memoryCache(entries: [string, CaseOutcome][] = []) {
+      const store = new Map<string, CaseOutcome>(entries);
+      const log: string[] = [];
+      return {
+        store,
+        log,
+        cache: {
+          async get(key: string) {
+            log.push(`get ${key}`);
+            return store.get(key);
+          },
+          async set(key: string, value: CaseOutcome) {
+            log.push(`set ${key}`);
+            store.set(key, value);
+          },
+        },
+      };
+    }
+
+    it('is consulted before fetching and written after a successful case', async () => {
+      const fake = recordingFetch(echo);
+      const { cache, store, log } = memoryCache();
+      const runner = createCompilerExplorerRunner({ fetch: fake.fetch, cache });
+
+      const result = await runner.runCode({ ...RUST, cases: [{ stdin: 'a' }] });
+
+      expect(result.cases[0].stdout).toBe('got a\n');
+      // Reads (the source's compile error, then the case) come before the only write.
+      expect(log.map((entry) => entry.split(' ')[0])).toEqual(['get', 'get', 'set']);
+      const [[key, outcome]] = [...store.entries()];
+      expect(JSON.parse(key)).toEqual([expect.any(String), expect.any(String), RUST.source, 'a']);
+      expect(outcome).toMatchObject({ kind: 'case', cacheable: true, result: { status: 'ok', stdout: 'got a\n' } });
+    });
+
+    it('answers a hit without sending a request', async () => {
+      const first = recordingFetch(echo);
+      const warm = memoryCache();
+      await createCompilerExplorerRunner({ fetch: first.fetch, cache: warm.cache }).runCode({
+        ...RUST,
+        cases: [{ stdin: 'a' }],
+      });
+
+      const second = recordingFetch(echo);
+      const runner = createCompilerExplorerRunner({
+        fetch: second.fetch,
+        cache: memoryCache([...warm.store.entries()]).cache,
+        now: () => 0,
+        budget: { requests: 0, windowMs: 60000 },
+      });
+      const result = await runner.runCode({ ...RUST, cases: [{ stdin: 'a' }] });
+
+      expect(second.calls).toHaveLength(0);
+      expect(result).toMatchObject({ status: 'ok', cases: [{ status: 'ok', stdout: 'got a\n' }] });
+    });
+
+    it('is used instead of the in-memory cache', async () => {
+      const fake = recordingFetch(echo);
+      const { cache } = memoryCache();
+      const runner = createCompilerExplorerRunner({ fetch: fake.fetch, cache });
+      // A second runner with no cache must not see what the first stored.
+      const plain = createCompilerExplorerRunner({ fetch: fake.fetch });
+
+      await runner.runCode(RUST);
+      await plain.runCode(RUST);
+      await runner.runCode(RUST);
+
+      expect(fake.calls).toHaveLength(2);
+    });
+
+    it('stores compile errors per source, and not failures', async () => {
+      const broken = recordingFetch(() => Promise.resolve(jsonResponse(cCompileError)));
+      const { cache, store } = memoryCache();
+      const runner = createCompilerExplorerRunner({ fetch: broken.fetch, cache });
+
+      await runner.runCode({ language: 'c', source: 'int main(' });
+      const again = await runner.runCode({ language: 'c', source: 'int main(', cases: [{ stdin: 'x' }] });
+
+      expect(broken.calls).toHaveLength(1);
+      expect(again.status).toBe('compile_error');
+      expect([...store.values()]).toEqual([{ kind: 'compile_error', compileOutput: expect.any(String) }]);
+
+      const down = recordingFetch(() => Promise.reject(new TypeError('down')));
+      const empty = memoryCache();
+      await createCompilerExplorerRunner({ fetch: down.fetch, cache: empty.cache }).runCode(RUST);
+      expect(empty.store.size).toBe(0);
+    });
+
+    it('treats a failing cache as a miss', async () => {
+      const fake = recordingFetch(echo);
+      const runner = createCompilerExplorerRunner({
+        fetch: fake.fetch,
+        cache: {
+          get: () => Promise.reject(new Error('kv down')),
+          set: () => Promise.reject(new Error('kv down')),
+        },
+      });
+
+      const result = await runner.runCode({ ...RUST, cases: [{ stdin: 'a' }] });
+
+      expect(result.status).toBe('ok');
+      expect(fake.calls).toHaveLength(1);
     });
   });
 

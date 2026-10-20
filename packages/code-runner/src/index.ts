@@ -2,6 +2,7 @@ export * from './protocol';
 export * from './languages';
 export * from './output';
 export * from './grading';
+export * from './verify';
 export * from './run-code';
 export { BrowserRunner } from './browser-runner';
 export * from './remote/compiler-explorer';
