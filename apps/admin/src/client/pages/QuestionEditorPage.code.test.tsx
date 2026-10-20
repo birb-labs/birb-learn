@@ -178,6 +178,80 @@ describe('QuestionEditorPage code questions', () => {
     expect(body.translations['en-US']).toMatchObject({ promptMdx: 'Double it.', resolutionMdx: 'Print it.' });
   });
 
+  it('saves a copied payload even when the prose of that tab is not edited and the tab is left', async () => {
+    const fetchSpy = mockFetch([tagsGet, questionGet(codeQuestion()), questionPatch]);
+    render(<QuestionEditorPage questionId={7} onDone={vi.fn()} />);
+    await screen.findByLabelText('Solução');
+
+    await userEvent.click(screen.getByRole('button', { name: 'en-US' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Copiar do pt-BR' }));
+    // The copy brings the pt-BR prose along as a starting text.
+    expect(screen.getByLabelText('Enunciado')).toHaveValue('Dobre.');
+    expect(screen.getByLabelText('Resolução')).toHaveValue('Imprima.');
+    await userEvent.click(screen.getByRole('button', { name: 'pt-BR' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    const body = savedBody(fetchSpy, 'PATCH', '/api/questions/7');
+    expect(Object.keys(body.translations).sort()).toEqual(['en-US', 'pt-BR']);
+    expect(JSON.parse(body.translations['en-US'].codeJson)).toEqual(JSON.parse(TASK_JSON));
+    expect(body.translations['en-US']).toMatchObject({ promptMdx: 'Dobre.', resolutionMdx: 'Imprima.' });
+  });
+
+  it('keeps the prose a translator already wrote when copying the code', async () => {
+    mockFetch([tagsGet, questionGet(codeQuestion()), questionPatch]);
+    render(<QuestionEditorPage questionId={7} onDone={vi.fn()} />);
+    await screen.findByLabelText('Solução');
+
+    await userEvent.click(screen.getByRole('button', { name: 'en-US' }));
+    fireEvent.change(screen.getByLabelText('Enunciado'), { target: { value: 'Double it.' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Copiar do pt-BR' }));
+
+    expect(screen.getByLabelText('Enunciado')).toHaveValue('Double it.');
+    expect(screen.getByLabelText('Resolução')).toHaveValue('Imprima.');
+  });
+
+  it('shows a stored payload that does not pass the schema as it is, never as the placeholder', async () => {
+    const invalid = JSON.stringify({ starterCode: 'x = ___1___', solution: 'x = 1', tests: [], blanks: [{ id: 1, accepted: [] }], hints: [] });
+    mockFetch([
+      tagsGet,
+      questionGet(
+        codeQuestion({
+          codeKind: 'fill_blank',
+          translations: { 'pt-BR': { promptMdx: 'P', resolutionMdx: 'R', codeJson: invalid, options: [], matchingPairs: [] } },
+        }),
+      ),
+    ]);
+    render(<QuestionEditorPage questionId={7} onDone={vi.fn()} />);
+
+    expect(await screen.findByLabelText('Código com lacunas')).toHaveValue('x = ___1___');
+  });
+
+  it('moves a read-only language to sqlite when the kind starts running code', async () => {
+    const mysqlTask = JSON.stringify({ starterCode: 'SELECT 1;', expectedOutput: '1', tests: [], blanks: [], hints: [] });
+    const fetchSpy = mockFetch([
+      tagsGet,
+      questionGet(
+        codeQuestion({
+          codeKind: 'predict_output',
+          codeLanguage: 'mysql',
+          translations: { 'pt-BR': { promptMdx: 'P', resolutionMdx: 'R', codeJson: mysqlTask, options: [], matchingPairs: [] } },
+        }),
+      ),
+      questionPatch,
+    ]);
+    render(<QuestionEditorPage questionId={7} onDone={vi.fn()} />);
+    expect(await screen.findByLabelText('Linguagem')).toHaveValue('mysql');
+
+    await userEvent.selectOptions(screen.getByLabelText('Tipo de tarefa'), 'write');
+    expect(screen.getByLabelText('Linguagem')).toHaveValue('sqlite');
+    await userEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    const body = savedBody(fetchSpy, 'PATCH', '/api/questions/7');
+    expect(body).toMatchObject({ codeKind: 'write', codeLanguage: 'sqlite' });
+    const payload = CodeTaskPayload.parse(JSON.parse(body.translations['pt-BR'].codeJson));
+    expect(validateCodeTask('write', 'sqlite', payload)).toEqual([]);
+  });
+
   it('does not send an untouched empty locale tab', async () => {
     const fetchSpy = mockFetch([tagsGet, questionGet(codeQuestion()), questionPatch]);
     render(<QuestionEditorPage questionId={7} onDone={vi.fn()} />);

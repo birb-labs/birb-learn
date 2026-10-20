@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../api';
 import { MdxEditor } from '../components/MdxEditor';
-import { CodeExerciseBlockEditor, CodeSnippetBlockEditor } from '../code/CodeBlockEditors';
-import { adaptTaskPayload, parseTaskPayload, placeholderSnippet, placeholderTask } from '../code/task-payload';
+import { CodeBlockEditor } from '../code/CodeBlockEditors';
+import { placeholderSnippet, placeholderTask } from '../code/task-payload';
 // Deep import: the content-schema barrel also exports the Drizzle queries, which must stay out of the browser bundle.
 import type { CodeKind, Language } from '@birb-learn/content-schema/src/code-languages';
 import styles from './LessonEditorPage.module.css';
@@ -255,38 +255,17 @@ export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDon
     setError(null);
   }
 
-  // The kind and the language of a code exercise are shared by every locale, and a change can
-  // invalidate the stored payloads (a predict_output task has no tests, SQL tests differ from
-  // stdout tests). So the same PATCH reshapes the payload of every locale that has one: the server
-  // re-checks each stored locale against the new pair and would otherwise reject the change.
-  // Optimistic like the content edits above, and for the same reason it is never reverted.
-  async function handleChangeCodeTarget(block: Block, change: { codeKind?: CodeKind; codeLanguage?: Language }) {
-    const codeKind = change.codeKind ?? block.codeKind ?? DEFAULT_CODE_KIND;
-    const codeLanguage = change.codeLanguage ?? block.codeLanguage ?? DEFAULT_CODE_LANGUAGE;
-    const translations: Partial<Record<Locale, BlockTranslation>> = {};
-    for (const locale of LOCALES) {
-      const translation = block.translations[locale];
-      const payload = parseTaskPayload(translation?.payloadJson);
-      if (!translation || !payload) continue;
-      translations[locale] = { ...translation, payloadJson: JSON.stringify(adaptTaskPayload(payload, codeKind, codeLanguage)) };
-    }
-    setLesson((prev) => ({
-      ...prev,
-      blocks: prev.blocks.map((b) =>
-        b.id === block.id ? { ...b, codeKind, codeLanguage, translations: { ...b.translations, ...translations } } : b,
-      ),
-    }));
-    const response = await apiFetch(`/api/lessons/lessons/${lessonId}/blocks/${block.id}`, {
+  // Code blocks keep their own drafts and save them debounced (see `CodeBlockEditor`); this only
+  // sends one PATCH and reports the server's error message, or `null` when it saved.
+  async function saveCodeBlock(blockId: number, body: Record<string, unknown>): Promise<string | null> {
+    const response = await apiFetch(`/api/lessons/lessons/${lessonId}/blocks/${blockId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ codeKind, codeLanguage, translations }),
+      body: JSON.stringify(body),
     });
-    if (!response.ok) {
-      const data = await response.json<{ error: string }>();
-      setError(data.error);
-      return;
-    }
-    setError(null);
+    if (response.ok) return null;
+    const data = await response.json<{ error: string }>();
+    return data.error;
   }
 
   return (
@@ -326,7 +305,16 @@ export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDon
                 </button>
               </div>
 
-              {block.type === 'simulator' ? (
+              {block.type === 'code_snippet' || block.type === 'code_exercise' ? (
+                <CodeBlockEditor
+                  type={block.type}
+                  initialKind={block.codeKind}
+                  initialLanguage={block.codeLanguage}
+                  translations={block.translations}
+                  activeLocale={activeLocale}
+                  save={(body) => saveCodeBlock(block.id, body)}
+                />
+              ) : block.type === 'simulator' ? (
                 <>
                   <input
                     className={styles.titleInput}
@@ -361,14 +349,7 @@ export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDon
                       <ReferenceHint value={referenceValueFor(block, activeLocale, 'title')} />
                     </>
                   )}
-                  {block.type === 'code_snippet' ? (
-                    <CodeSnippetBlockEditor
-                      locale={activeLocale}
-                      payloadJson={content.payloadJson}
-                      ptBrPayloadJson={block.translations['pt-BR']?.payloadJson}
-                      onChange={(payloadJson) => handleSaveBlockContent(block, { ...content, payloadJson })}
-                    />
-                  ) : block.type === 'solved_exercise' || block.type === 'code_exercise' ? (
+                  {block.type === 'solved_exercise' ? (
                     <>
                       <MdxEditor
                         label="Enunciado"
@@ -382,18 +363,6 @@ export function LessonEditorPage({ lessonId, onDone }: { lessonId: number; onDon
                         onChange={(resolutionMdx) => handleSaveBlockContent(block, { ...content, resolutionMdx })}
                       />
                       <ReferenceHint value={referenceValueFor(block, activeLocale, 'resolutionMdx')} />
-                      {block.type === 'code_exercise' && (
-                        <CodeExerciseBlockEditor
-                          locale={activeLocale}
-                          kind={block.codeKind ?? DEFAULT_CODE_KIND}
-                          language={block.codeLanguage ?? DEFAULT_CODE_LANGUAGE}
-                          payloadJson={content.payloadJson}
-                          ptBrPayloadJson={block.translations['pt-BR']?.payloadJson}
-                          onChange={(payloadJson) => handleSaveBlockContent(block, { ...content, payloadJson })}
-                          onKindChange={(codeKind) => handleChangeCodeTarget(block, { codeKind })}
-                          onLanguageChange={(codeLanguage) => handleChangeCodeTarget(block, { codeLanguage })}
-                        />
-                      )}
                     </>
                   ) : (
                     <>

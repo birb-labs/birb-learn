@@ -2,15 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { verifyCodeSnippet, verifyCodeTask, type VerifyIssue, type VerifyReport } from '@birb-learn/code-runner/src/verify';
 // Deep imports: the content-schema barrel also exports the Drizzle queries, which must stay out of the browser bundle.
 import type { CodeKind, Language } from '@birb-learn/content-schema/src/code-languages';
-import {
-  CodeSnippetPayload,
-  CodeTaskPayload,
-  formatZodIssues,
-  validateCodeSnippet,
-  validateCodeTask,
-  type CodeSnippetPayloadData,
-  type CodeTaskPayloadData,
-} from '@birb-learn/content-schema/src/code-payloads';
+import type { CodeSnippetPayloadData, CodeTaskPayloadData } from '@birb-learn/content-schema/src/code-payloads';
+import { checkSnippet, checkTask } from './validate';
 import styles from './VerifyButton.module.css';
 
 export type VerifyButtonProps =
@@ -44,18 +37,14 @@ function invalidReport(lines: string[]): VerifyReport {
  */
 async function verify(props: VerifyButtonProps, signal: AbortSignal): Promise<VerifyReport> {
   if (props.kind === 'snippet') {
-    const parsed = CodeSnippetPayload.safeParse(props.payload);
-    if (!parsed.success) return invalidReport(formatZodIssues(parsed.error.issues, props.payload));
-    const errors = validateCodeSnippet(parsed.data);
-    if (errors.length > 0) return invalidReport(errors);
-    return verifyCodeSnippet(parsed.data, await loadRunner(), { signal });
+    const checked = checkSnippet(props.payload);
+    if (!checked.ok) return invalidReport(checked.problems);
+    return verifyCodeSnippet(checked.data, await loadRunner(), { signal });
   }
 
-  const parsed = CodeTaskPayload.safeParse(props.payload);
-  if (!parsed.success) return invalidReport(formatZodIssues(parsed.error.issues, props.payload));
-  const errors = validateCodeTask(props.taskKind, props.language, parsed.data);
-  if (errors.length > 0) return invalidReport(errors);
-  return verifyCodeTask(props.taskKind, props.language, parsed.data, await loadRunner(), { signal });
+  const checked = checkTask(props.taskKind, props.language, props.payload);
+  if (!checked.ok) return invalidReport(checked.problems);
+  return verifyCodeTask(props.taskKind, props.language, checked.data, await loadRunner(), { signal });
 }
 
 // The runner and its engine plumbing are only needed once an author verifies something, so they load on demand.

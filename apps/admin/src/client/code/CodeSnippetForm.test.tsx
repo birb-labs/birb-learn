@@ -129,14 +129,50 @@ describe('CodeSnippetForm', () => {
     expect(screen.getByLabelText('Preparação SQL da variante 1')).toBeInTheDocument();
   });
 
-  it('omits the optional fields again when they are cleared', () => {
+  it('omits stdin again when it is cleared', () => {
     const onChange = vi.fn();
-    const value = snippet({ ...PYTHON, stdin: '4', expectedOutput: '8' });
+    const value = snippet({ ...PYTHON, stdin: '4' });
     render(<CodeSnippetForm value={value} onChange={onChange} />);
 
-    fireEvent.change(screen.getByLabelText('Saída esperada da variante 1'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Entrada (stdin) da variante 1'), { target: { value: '' } });
 
-    expect(onChange).toHaveBeenLastCalledWith({ variants: [{ ...PYTHON, stdin: '4' }] });
+    expect(onChange).toHaveBeenLastCalledWith({ variants: [PYTHON] });
+  });
+
+  it('checks the output only when "Verificar a saída" is checked', async () => {
+    const onChange = vi.fn();
+    render(<CodeSnippetForm value={snippet(PYTHON)} onChange={onChange} />);
+    expect(screen.getByRole('checkbox', { name: 'Verificar a saída' })).not.toBeChecked();
+    expect(screen.queryByLabelText('Saída esperada da variante 1')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Verificar a saída' }));
+
+    expect(onChange).toHaveBeenLastCalledWith({ variants: [{ ...PYTHON, expectedOutput: '' }] });
+  });
+
+  it('keeps an empty expected output (the program prints nothing) and drops it when unchecked', async () => {
+    const onChange = vi.fn();
+    const value = snippet({ ...PYTHON, expectedOutput: '8' });
+    render(<CodeSnippetForm value={value} onChange={onChange} />);
+    expect(screen.getByRole('checkbox', { name: 'Verificar a saída' })).toBeChecked();
+
+    fireEvent.change(screen.getByLabelText('Saída esperada da variante 1'), { target: { value: '' } });
+    expect(onChange).toHaveBeenLastCalledWith({ variants: [{ ...PYTHON, expectedOutput: '' }] });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Verificar a saída' }));
+    expect(onChange).toHaveBeenLastCalledWith({ variants: [PYTHON] });
+  });
+
+  it('gives every form its own control ids, so labels never reach another block', () => {
+    render(
+      <>
+        <CodeSnippetForm value={snippet(PYTHON)} onChange={() => {}} />
+        <CodeSnippetForm value={snippet(PYTHON)} onChange={() => {}} />
+      </>,
+    );
+
+    const secondLabel = screen.getAllByText('Linguagem')[1] as HTMLLabelElement;
+    expect(secondLabel.control).toBe(screen.getAllByLabelText('Linguagem da variante 1')[1]);
   });
 
   it('edits the code of a variant', () => {

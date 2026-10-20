@@ -1,8 +1,6 @@
 // Deep imports: the content-schema barrel also exports the Drizzle queries, which must stay out of the browser bundle.
-import { isSqlLanguage, type CodeKind, type Language } from '@birb-learn/content-schema/src/code-languages';
+import { isReadOnlyCodeLanguage, isSqlLanguage, type CodeKind, type Language } from '@birb-learn/content-schema/src/code-languages';
 import {
-  CodeSnippetPayload,
-  CodeTaskPayload,
   findBlankIds,
   type CodeSnippetPayloadData,
   type CodeTaskPayloadData,
@@ -45,30 +43,17 @@ export function placeholderTask(): CodeTaskPayloadData {
   };
 }
 
-function parseJson(text: string | null | undefined): unknown {
-  if (text === null || text === undefined || text.trim() === '') return undefined;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-}
-
-/** The stored snippet payload text as typed data, or `null` when it is missing or does not parse. */
-export function parseSnippetPayload(text: string | null | undefined): CodeSnippetPayloadData | null {
-  const result = CodeSnippetPayload.safeParse(parseJson(text));
-  return result.success ? result.data : null;
-}
-
-/** The stored task payload text as typed data, or `null` when it is missing or does not parse. */
-export function parseTaskPayload(text: string | null | undefined): CodeTaskPayloadData | null {
-  const result = CodeTaskPayload.safeParse(parseJson(text));
-  return result.success ? result.data : null;
-}
-
 /** Keeps the blank for every `___n___` marker in `code`, adds a new one for each new marker and drops the rest. */
 export function syncBlanks(code: string, blanks: CodeTaskPayloadData['blanks']): CodeTaskPayloadData['blanks'] {
   return findBlankIds(code).map((id) => blanks.find((blank) => blank.id === id) ?? { id, accepted: [''] });
+}
+
+/**
+ * The language a task of `kind` can keep when it moves from `language`: code that is run (every
+ * kind but predict_output) cannot be in a read-only language such as MySQL, so it moves to SQLite.
+ */
+export function languageForKind(kind: CodeKind, language: Language): Language {
+  return kind !== 'predict_output' && isReadOnlyCodeLanguage(language) ? 'sqlite' : language;
 }
 
 function isSqlTest(test: CodeTaskTests[number]): boolean {

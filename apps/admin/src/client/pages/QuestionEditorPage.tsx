@@ -8,7 +8,8 @@ import { MatchingPairsEditor, type EditableMatchingPair } from '../components/Ma
 import { TagPicker, type TopicNode } from '../components/TagPicker';
 import { CopyFromPtBrButton } from '../code/CopyFromPtBrButton';
 import { CodeTaskForm } from '../code/CodeTaskForm';
-import { adaptTaskPayload, parseTaskPayload, placeholderTask } from '../code/task-payload';
+import { readStoredTask } from '../code/lenient';
+import { adaptTaskPayload, languageForKind, placeholderTask } from '../code/task-payload';
 import { VerifyButton } from '../code/VerifyButton';
 // Deep imports: the content-schema barrel also exports the Drizzle queries, which must stay out of the browser bundle.
 import type { CodeKind, Language } from '@birb-learn/content-schema/src/code-languages';
@@ -109,8 +110,9 @@ export function QuestionEditorPage({ questionId, onDone }: { questionId: number 
         setQuestionKey(question.key ?? '');
         const loadedPayloads: Partial<Record<Locale, CodeTaskPayloadData>> = {};
         for (const locale of LOCALES) {
-          const payload = parseTaskPayload(question.translations[locale]?.codeJson);
-          if (payload) loadedPayloads[locale] = payload;
+          // Read leniently: a stored payload that fails the schema is shown as it is, not swapped for the placeholder.
+          const stored = readStoredTask(question.translations[locale]?.codeJson);
+          if (stored.kind === 'typed') loadedPayloads[locale] = stored.payload;
         }
         setCodePayloads(loadedPayloads);
         setAcceptedAnswersShared(question.acceptedAnswersShared.length > 0 ? question.acceptedAnswersShared : ['']);
@@ -138,7 +140,8 @@ export function QuestionEditorPage({ questionId, onDone }: { questionId: number 
 
   // The kind and the language are shared by every locale, and a change can invalidate a payload
   // (a predict_output task has no tests, SQL tests differ from stdout tests), so every locale is reshaped.
-  function retargetCode(kind: CodeKind, language: Language) {
+  function retargetCode(kind: CodeKind, requestedLanguage: Language) {
+    const language = languageForKind(kind, requestedLanguage);
     setCodeKind(kind);
     setCodeLanguage(language);
     const reshaped: Partial<Record<Locale, CodeTaskPayloadData>> = {};
@@ -151,7 +154,15 @@ export function QuestionEditorPage({ questionId, onDone }: { questionId: number 
 
   function copyCodeFromPtBr() {
     const source = codePayloadFor('pt-BR');
-    if (source) setCurrentCodePayload(structuredClone(source));
+    if (!source) return;
+    setCodePayloads((prev) => ({ ...prev, [activeLocale]: structuredClone(source) }));
+    // The pt-BR prose is only a starting text for the translation, so what the translator wrote stays.
+    // It also makes the copy a complete translation, which the server needs to save it.
+    const ptBr = translations['pt-BR'] ?? DEFAULT_TRANSLATION;
+    updateCurrent({
+      promptMdx: current.promptMdx.trim() === '' ? ptBr.promptMdx : current.promptMdx,
+      resolutionMdx: current.resolutionMdx.trim() === '' ? ptBr.resolutionMdx : current.resolutionMdx,
+    });
   }
 
   const currentAcceptedAnswers = answerFormat === 'math' ? acceptedAnswersShared : (acceptedAnswersByLocale[activeLocale] ?? ['']);
@@ -194,7 +205,8 @@ export function QuestionEditorPage({ questionId, onDone }: { questionId: number 
     const fullTranslations: Partial<Record<Locale, QuestionTranslation>> = {};
     for (const locale of LOCALES) {
       const codePayload = type === 'code' ? codePayloadFor(locale) : undefined;
-      const translation = locale === activeLocale ? current : translations[locale];
+      // A copied payload belongs to a translation even if the prose of that tab was never edited.
+      const translation = locale === activeLocale ? current : (translations[locale] ?? (codePayload ? DEFAULT_TRANSLATION : undefined));
       if (!translation) continue;
       // A locale tab the author never filled in is left out, so it is not rejected as an empty translation.
       if (

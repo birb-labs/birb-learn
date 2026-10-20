@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CodeSnippetPayload, CodeTaskPayload, validateCodeSnippet, validateCodeTask } from '@birb-learn/content-schema/src/code-payloads';
+import { SAVE_DEBOUNCE_MS } from '../code/use-debounced-saver';
 import { LessonEditorPage } from './LessonEditorPage';
 
 vi.mock('@birb-learn/code-ui/editor', async () => ({ CodeEditor: (await import('../code/test-support')).FakeCodeEditor }));
@@ -17,41 +18,41 @@ const TASK_JSON = JSON.stringify({
   blanks: [],
   hints: [],
 });
+const FILL_BLANK_JSON = JSON.stringify({
+  starterCode: 'x = 1\n',
+  solution: 'x = 1\n',
+  tests: [{ stdin: '', expectedStdout: '' }],
+  blanks: [],
+  hints: [],
+});
 
-interface Handler {
-  match: (url: string, init?: RequestInit) => boolean;
-  body: unknown;
-  status?: number;
-}
+type Responder = (init: RequestInit) => Promise<Response> | Response;
 
-function mockFetch(handlers: Handler[]) {
+/** Routes the lesson page requests; PATCHes to a block go through `patch`, so a test can hold them back. */
+function mockLessonApi(blocks: unknown[], options: { patch?: Responder; post?: Responder } = {}) {
+  const ok = () => new Response(JSON.stringify({ ok: true }), { status: 200 });
   return vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
     const url = typeof input === 'string' ? input : input.toString();
-    const handler = handlers.find((h) => h.match(url, init as RequestInit));
-    if (!handler) throw new Error(`Unexpected fetch: ${(init as RequestInit | undefined)?.method ?? 'GET'} ${url}`);
-    return Promise.resolve(new Response(JSON.stringify(handler.body), { status: handler.status ?? 200 }));
+    const method = (init as RequestInit | undefined)?.method ?? 'GET';
+    if (url === '/api/lessons/lessons/1' && method === 'GET') {
+      return Promise.resolve(new Response(JSON.stringify({ translations: { 'pt-BR': { title: 'Lição' } }, blocks }), { status: 200 }));
+    }
+    if (url === '/api/lessons/lessons/1/blocks' && method === 'POST') {
+      return Promise.resolve(options.post?.(init!) ?? new Response(JSON.stringify({ id: 5 }), { status: 201 }));
+    }
+    if (url === '/api/lessons/lessons/1/blocks/1' && method === 'PATCH') {
+      return Promise.resolve(options.patch?.(init!) ?? ok());
+    }
+    throw new Error(`Unexpected fetch: ${method} ${url}`);
   });
 }
 
-const lessonGet = (blocks: unknown[]): Handler => ({
-  match: (url, init) => url === '/api/lessons/lessons/1' && (init?.method ?? 'GET') === 'GET',
-  body: { translations: { 'pt-BR': { title: 'Lição' } }, blocks },
-});
-const blockPost: Handler = {
-  match: (url, init) => url === '/api/lessons/lessons/1/blocks' && init?.method === 'POST',
-  body: { id: 5 },
-  status: 201,
-};
-const blockPatch: Handler = {
-  match: (url, init) => url === '/api/lessons/lessons/1/blocks/1' && init?.method === 'PATCH',
-  body: { ok: true },
-};
-
-function bodyOf(fetchSpy: ReturnType<typeof mockFetch>, method: string, url: string) {
-  const calls = fetchSpy.mock.calls.filter(([u, init]) => u === url && (init as RequestInit)?.method === method);
-  expect(calls.length).toBeGreaterThan(0);
-  return JSON.parse((calls[calls.length - 1][1] as RequestInit).body as string);
+function sentBodies(fetchSpy: ReturnType<typeof mockLessonApi>, method: string, url: string) {
+  return fetchSpy.mock.calls
+    .filter(([u, init]) => u === url && (init as RequestInit)?.method === method)
+    .map(([, init]) => JSON.parse((init as RequestInit).body as string));
 }
+const patches = (fetchSpy: ReturnType<typeof mockLessonApi>) => sentBodies(fetchSpy, 'PATCH', '/api/lessons/lessons/1/blocks/1');
 
 const snippetBlock = (translations: Record<string, unknown>) => ({
   id: 1,
@@ -73,16 +74,35 @@ const exerciseBlock = (translations: Record<string, unknown>, codeKind = 'write'
   codeLanguage,
   translations,
 });
+const PT_EXERCISE = { promptMdx: 'Dobre.', resolutionMdx: 'Imprima.', payloadJson: TASK_JSON };
+
+/** Renders the page, waits for the blocks, then fakes the timers the save debounce runs on. */
+async function renderLoaded(awaitLabel: string) {
+  const view = render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
+  await screen.findByLabelText(awaitLabel);
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  return view;
+}
+
+async function settle(ms = SAVE_DEBOUNCE_MS + 100) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
+
+function edit(label: string, value: string) {
+  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+}
 
 describe('LessonEditorPage code blocks', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
   it('offers the code block types with their pt-BR labels', async () => {
-    mockFetch([lessonGet([])]);
+    mockLessonApi([]);
     render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
-
     await screen.findByDisplayValue('Lição');
 
     expect(screen.getByRole('button', { name: '+ Trecho de código' })).toBeInTheDocument();
@@ -90,13 +110,13 @@ describe('LessonEditorPage code blocks', () => {
   });
 
   it('POSTs a new code snippet block with a valid placeholder payload', async () => {
-    const fetchSpy = mockFetch([lessonGet([]), blockPost]);
+    const fetchSpy = mockLessonApi([]);
     render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
     await screen.findByDisplayValue('Lição');
 
     await userEvent.click(screen.getByRole('button', { name: '+ Trecho de código' }));
 
-    const body = bodyOf(fetchSpy, 'POST', '/api/lessons/lessons/1/blocks');
+    const [body] = sentBodies(fetchSpy, 'POST', '/api/lessons/lessons/1/blocks');
     expect(body.type).toBe('code_snippet');
     expect(body).not.toHaveProperty('codeKind');
     const payload = CodeSnippetPayload.parse(JSON.parse(body.translations['pt-BR'].payloadJson));
@@ -105,13 +125,13 @@ describe('LessonEditorPage code blocks', () => {
   });
 
   it('POSTs a new code exercise block with a valid write task and its kind and language', async () => {
-    const fetchSpy = mockFetch([lessonGet([]), blockPost]);
+    const fetchSpy = mockLessonApi([]);
     render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
     await screen.findByDisplayValue('Lição');
 
     await userEvent.click(screen.getByRole('button', { name: '+ Exercício de código' }));
 
-    const body = bodyOf(fetchSpy, 'POST', '/api/lessons/lessons/1/blocks');
+    const [body] = sentBodies(fetchSpy, 'POST', '/api/lessons/lessons/1/blocks');
     expect(body).toMatchObject({ type: 'code_exercise', codeKind: 'write', codeLanguage: 'python' });
     const translation = body.translations['pt-BR'];
     expect(translation.promptMdx.trim()).not.toBe('');
@@ -121,116 +141,350 @@ describe('LessonEditorPage code blocks', () => {
     expect(payload.tests).toHaveLength(1);
   });
 
-  it('shows the label of an existing code block and edits its code', async () => {
-    const fetchSpy = mockFetch([lessonGet([snippetBlock({ 'pt-BR': { payloadJson: SNIPPET_JSON } })]), blockPatch]);
-    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
+  describe('saving', () => {
+    it('shows the label of an existing code block and saves one PATCH with the final draft after rapid edits', async () => {
+      const fetchSpy = mockLessonApi([snippetBlock({ 'pt-BR': { payloadJson: SNIPPET_JSON } })]);
+      await renderLoaded('Código da variante 1');
+      expect(screen.getByText('Trecho de código', { exact: true })).toBeInTheDocument();
 
-    const editor = await screen.findByLabelText('Código da variante 1');
-    expect(screen.getByText('Trecho de código', { exact: true })).toBeInTheDocument();
+      edit('Código da variante 1', 'print(2)\n');
+      await settle(200);
+      edit('Código da variante 1', 'print(23)\n');
+      await settle(200);
+      edit('Código da variante 1', 'print(234)\n');
+      expect(patches(fetchSpy)).toHaveLength(0);
+      expect(screen.getByLabelText('Código da variante 1')).toHaveValue('print(234)\n');
 
-    fireEvent.change(editor, { target: { value: 'print(2)\n' } });
+      await settle();
 
-    const body = bodyOf(fetchSpy, 'PATCH', '/api/lessons/lessons/1/blocks/1');
-    expect(Object.keys(body.translations)).toEqual(['pt-BR']);
-    expect(JSON.parse(body.translations['pt-BR'].payloadJson).variants[0].code).toBe('print(2)\n');
-    expect(screen.getByLabelText('Código da variante 1')).toHaveValue('print(2)\n');
+      const bodies = patches(fetchSpy);
+      expect(bodies).toHaveLength(1);
+      expect(Object.keys(bodies[0].translations)).toEqual(['pt-BR']);
+      expect(JSON.parse(bodies[0].translations['pt-BR'].payloadJson).variants[0].code).toBe('print(234)\n');
+    });
+
+    it('saves right away when the focus leaves the block', async () => {
+      const fetchSpy = mockLessonApi([snippetBlock({ 'pt-BR': { payloadJson: SNIPPET_JSON } })]);
+      await renderLoaded('Código da variante 1');
+
+      edit('Código da variante 1', 'print(2)\n');
+      fireEvent.blur(screen.getByLabelText('Código da variante 1'));
+
+      expect(patches(fetchSpy)).toHaveLength(1);
+    });
+
+    it('saves the pending edits when the page unmounts', async () => {
+      const fetchSpy = mockLessonApi([snippetBlock({ 'pt-BR': { payloadJson: SNIPPET_JSON } })]);
+      const { unmount } = await renderLoaded('Código da variante 1');
+
+      edit('Código da variante 1', 'print(2)\n');
+      unmount();
+
+      expect(patches(fetchSpy)).toHaveLength(1);
+    });
+
+    it('does not let a slow, older response decide what is shown', async () => {
+      const resolvers: Array<(response: Response) => void> = [];
+      const fetchSpy = mockLessonApi([snippetBlock({ 'pt-BR': { payloadJson: SNIPPET_JSON } })], {
+        patch: () => new Promise<Response>((resolve) => resolvers.push(resolve)),
+      });
+      await renderLoaded('Código da variante 1');
+
+      edit('Código da variante 1', 'print(2)\n');
+      await settle();
+      expect(patches(fetchSpy)).toHaveLength(1);
+
+      // Still typing while the first request is in flight: nothing else is sent yet.
+      edit('Código da variante 1', 'print(3)\n');
+      await settle();
+      expect(patches(fetchSpy)).toHaveLength(1);
+
+      // The first request fails late; its error is about an older draft and must not show.
+      await act(async () => resolvers[0](new Response(JSON.stringify({ error: 'Erro antigo.' }), { status: 400 })));
+      expect(screen.queryByText('Erro antigo.')).not.toBeInTheDocument();
+      expect(patches(fetchSpy)).toHaveLength(2);
+      expect(JSON.parse(patches(fetchSpy)[1].translations['pt-BR'].payloadJson).variants[0].code).toBe('print(3)\n');
+
+      await act(async () => resolvers[1](new Response(JSON.stringify({ ok: true }), { status: 200 })));
+      expect(screen.queryByText('Erro antigo.')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Código da variante 1')).toHaveValue('print(3)\n');
+    });
+
+    it('shows the server error of the latest save', async () => {
+      mockLessonApi([snippetBlock({ 'pt-BR': { payloadJson: SNIPPET_JSON } })], {
+        patch: () => new Response(JSON.stringify({ error: 'pt-BR: payload inválido — x' }), { status: 400 }),
+      });
+      await renderLoaded('Código da variante 1');
+
+      edit('Código da variante 1', 'print(2)\n');
+      await settle();
+
+      expect(screen.getByText('pt-BR: payload inválido — x')).toBeInTheDocument();
+    });
+
+    it('shows what is wrong with a draft that is not valid yet and sends nothing', async () => {
+      const fetchSpy = mockLessonApi([snippetBlock({ 'pt-BR': { payloadJson: SNIPPET_JSON } })]);
+      await renderLoaded('Código da variante 1');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Adicionar anotação' }));
+      edit('Variante 1: linhas da anotação 1', '9');
+      await settle();
+
+      expect(patches(fetchSpy)).toHaveLength(0);
+      const problem = screen.getByText(/past the end of the code/);
+      expect(problem).toHaveStyle({ whiteSpace: 'pre-wrap' });
+      expect(screen.getByText(/ainda não é válido/)).toBeInTheDocument();
+      // The author's draft is untouched.
+      expect(screen.getByLabelText('Variante 1: linhas da anotação 1')).toHaveValue('9');
+
+      edit('Variante 1: linhas da anotação 1', '1');
+      await settle();
+
+      expect(patches(fetchSpy)).toHaveLength(1);
+      expect(screen.queryByText(/past the end of the code/)).not.toBeInTheDocument();
+    });
   });
 
-  it('copies the pt-BR payload into the current locale tab', async () => {
-    const fetchSpy = mockFetch([lessonGet([snippetBlock({ 'pt-BR': { payloadJson: SNIPPET_JSON } })]), blockPatch]);
-    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
-    await screen.findByLabelText('Código da variante 1');
+  describe('keeping the draft', () => {
+    it('keeps the code of a fill_blank exercise when a blank without answers makes it invalid, and saves it once valid', async () => {
+      const fetchSpy = mockLessonApi([
+        exerciseBlock({ 'pt-BR': { ...PT_EXERCISE, payloadJson: FILL_BLANK_JSON } }, 'fill_blank'),
+      ]);
+      await renderLoaded('Código com lacunas');
 
-    await userEvent.click(screen.getByRole('button', { name: 'en-US' }));
-    expect(screen.queryByLabelText('Código da variante 1')).not.toBeInTheDocument();
-    expect(screen.getByText('Este idioma ainda não tem código.')).toBeInTheDocument();
+      edit('Código com lacunas', 'x = ___2___\n');
+      await settle();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Copiar do pt-BR' }));
+      // Not the placeholder, not the stored text: what the author typed.
+      expect(screen.getByLabelText('Código com lacunas')).toHaveValue('x = ___2___\n');
+      expect(screen.getByLabelText('Respostas aceitas da lacuna 2 (1)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Solução')).toHaveValue('x = 1\n');
+      expect(patches(fetchSpy)).toHaveLength(0);
 
-    const body = bodyOf(fetchSpy, 'PATCH', '/api/lessons/lessons/1/blocks/1');
-    expect(Object.keys(body.translations)).toEqual(['en-US']);
-    expect(body.translations['en-US'].payloadJson).toBe(SNIPPET_JSON);
-    expect(await screen.findByLabelText('Código da variante 1')).toHaveValue('print(1)\n');
+      edit('Código com lacunas', 'x = ___2___ + 1\n');
+      edit('Respostas aceitas da lacuna 2 (1)', '1');
+      await settle();
+
+      expect(screen.getByLabelText('Código com lacunas')).toHaveValue('x = ___2___ + 1\n');
+      const [body] = patches(fetchSpy);
+      const saved = JSON.parse(body.translations['pt-BR'].payloadJson);
+      expect(saved.starterCode).toBe('x = ___2___ + 1\n');
+      expect(saved.blanks).toEqual([{ id: 2, accepted: ['1'] }]);
+      expect(saved.solution).toBe('x = 1\n');
+    });
+
+    it('keeps an annotation whose lines were cleared and an emptied hint', async () => {
+      const stored = JSON.stringify({
+        variants: [{ language: 'python', code: 'print(1)\n', annotations: [{ lines: '1', mdx: 'A' }], walkthrough: [], runnable: false }],
+      });
+      mockLessonApi([snippetBlock({ 'pt-BR': { payloadJson: stored } })]);
+      await renderLoaded('Código da variante 1');
+
+      edit('Variante 1: linhas da anotação 1', '');
+      edit('Variante 1: texto da anotação 1', '');
+      await settle();
+
+      expect(screen.getByLabelText('Variante 1: linhas da anotação 1')).toHaveValue('');
+      expect(screen.getByLabelText('Variante 1: texto da anotação 1')).toHaveValue('');
+      expect(screen.getByLabelText('Código da variante 1')).toHaveValue('print(1)\n');
+    });
+
+    it('keeps an emptied variant code', async () => {
+      const fetchSpy = mockLessonApi([snippetBlock({ 'pt-BR': { payloadJson: SNIPPET_JSON } })]);
+      await renderLoaded('Código da variante 1');
+
+      edit('Código da variante 1', '');
+      await settle();
+      edit('Código da variante 1', 'x');
+      await settle();
+
+      expect(screen.getByLabelText('Código da variante 1')).toHaveValue('x');
+      const bodies = patches(fetchSpy);
+      expect(bodies).toHaveLength(1);
+      expect(JSON.parse(bodies[0].translations['pt-BR'].payloadJson).variants[0].code).toBe('x');
+    });
+
+    it('shows a stored payload that does not pass the schema as it is, never as the placeholder', async () => {
+      const invalid = JSON.stringify({ starterCode: 'x = ___1___', solution: 'x = 1', tests: [], blanks: [{ id: 1, accepted: [] }], hints: [] });
+      const fetchSpy = mockLessonApi([exerciseBlock({ 'pt-BR': { ...PT_EXERCISE, payloadJson: invalid } }, 'fill_blank')]);
+      await renderLoaded('Código com lacunas');
+      await settle();
+
+      expect(screen.getByLabelText('Código com lacunas')).toHaveValue('x = ___1___');
+      expect(patches(fetchSpy)).toHaveLength(0);
+    });
+
+    it('shows stored text it cannot read as it is, editable, and never replaces it', async () => {
+      const broken = '{"variants": [';
+      const fetchSpy = mockLessonApi([snippetBlock({ 'pt-BR': { payloadJson: broken } })]);
+      render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
+
+      expect(await screen.findByLabelText('JSON salvo do código')).toHaveValue(broken);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      await settle();
+
+      expect(screen.queryByLabelText('Código da variante 1')).not.toBeInTheDocument();
+      expect(patches(fetchSpy)).toHaveLength(0);
+
+      // Fixed by hand, it turns into the structured form.
+      edit('JSON salvo do código', SNIPPET_JSON);
+      await settle();
+      expect(screen.getByLabelText('Código da variante 1')).toHaveValue('print(1)\n');
+      expect(patches(fetchSpy)).toHaveLength(1);
+    });
+
+    it('keeps the drafts of the other locale tabs when switching tabs', async () => {
+      mockLessonApi([snippetBlock({ 'pt-BR': { payloadJson: SNIPPET_JSON } })]);
+      await renderLoaded('Código da variante 1');
+      edit('Código da variante 1', 'print(99)\n');
+      vi.useRealTimers();
+
+      await userEvent.click(screen.getByRole('button', { name: 'en-US' }));
+      await userEvent.click(screen.getByRole('button', { name: 'pt-BR' }));
+
+      expect(screen.getByLabelText('Código da variante 1')).toHaveValue('print(99)\n');
+    });
   });
 
-  it('does not offer the copy button on the pt-BR tab', async () => {
-    mockFetch([lessonGet([snippetBlock({ 'pt-BR': { payloadJson: SNIPPET_JSON } })])]);
-    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
-    await screen.findByLabelText('Código da variante 1');
+  describe('locales', () => {
+    it('copies the pt-BR payload into the current locale tab and saves it', async () => {
+      const fetchSpy = mockLessonApi([snippetBlock({ 'pt-BR': { payloadJson: SNIPPET_JSON } })]);
+      await renderLoaded('Código da variante 1');
+      vi.useRealTimers();
 
-    expect(screen.queryByRole('button', { name: 'Copiar do pt-BR' })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'en-US' }));
+      expect(screen.queryByLabelText('Código da variante 1')).not.toBeInTheDocument();
+      expect(screen.getByText('Este idioma ainda não tem código.')).toBeInTheDocument();
+
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      fireEvent.click(screen.getByRole('button', { name: 'Copiar do pt-BR' }));
+      await settle();
+
+      const [body] = patches(fetchSpy);
+      expect(Object.keys(body.translations)).toEqual(['en-US']);
+      expect(JSON.parse(body.translations['en-US'].payloadJson)).toEqual(JSON.parse(SNIPPET_JSON));
+      expect(screen.getByLabelText('Código da variante 1')).toHaveValue('print(1)\n');
+    });
+
+    it('does not offer the copy button on the pt-BR tab', async () => {
+      mockLessonApi([snippetBlock({ 'pt-BR': { payloadJson: SNIPPET_JSON } })]);
+      render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
+      await screen.findByLabelText('Código da variante 1');
+
+      expect(screen.queryByRole('button', { name: 'Copiar do pt-BR' })).not.toBeInTheDocument();
+    });
+
+    it('copies the prompt and the resolution too on an untranslated code exercise tab', async () => {
+      const fetchSpy = mockLessonApi([exerciseBlock({ 'pt-BR': PT_EXERCISE })]);
+      await renderLoaded('Solução');
+      vi.useRealTimers();
+      await userEvent.click(screen.getByRole('button', { name: 'en-US' }));
+      expect(screen.getByLabelText('Enunciado')).toHaveValue('');
+
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      fireEvent.click(screen.getByRole('button', { name: 'Copiar do pt-BR' }));
+      await settle();
+
+      expect(screen.getByLabelText('Enunciado')).toHaveValue('Dobre.');
+      expect(screen.getByLabelText('Resolução')).toHaveValue('Imprima.');
+      const [body] = patches(fetchSpy);
+      expect(body.translations['en-US']).toMatchObject({ promptMdx: 'Dobre.', resolutionMdx: 'Imprima.' });
+      expect(JSON.parse(body.translations['en-US'].payloadJson)).toEqual(JSON.parse(TASK_JSON));
+    });
+
+    it('does not overwrite prose the translator already wrote when copying the code', async () => {
+      mockLessonApi([exerciseBlock({ 'pt-BR': PT_EXERCISE })]);
+      await renderLoaded('Solução');
+      vi.useRealTimers();
+      await userEvent.click(screen.getByRole('button', { name: 'en-US' }));
+      fireEvent.change(screen.getByLabelText('Enunciado'), { target: { value: 'Double it.' } });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Copiar do pt-BR' }));
+
+      expect(screen.getByLabelText('Enunciado')).toHaveValue('Double it.');
+      expect(screen.getByLabelText('Resolução')).toHaveValue('Imprima.');
+    });
   });
 
-  it('shows the prompt, the resolution and the task of a code exercise, and PATCHes the prompt with the payload', async () => {
-    const fetchSpy = mockFetch([
-      lessonGet([exerciseBlock({ 'pt-BR': { promptMdx: 'Dobre.', resolutionMdx: 'Imprima.', payloadJson: TASK_JSON } })]),
-      blockPatch,
-    ]);
-    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
+  describe('code exercises', () => {
+    it('shows the prompt, the resolution and the task, and saves the prompt together with the payload', async () => {
+      const fetchSpy = mockLessonApi([exerciseBlock({ 'pt-BR': PT_EXERCISE })]);
+      await renderLoaded('Enunciado');
+      expect(screen.getByLabelText('Resolução')).toHaveValue('Imprima.');
+      expect(screen.getByLabelText('Solução')).toHaveValue('n = int(input())\nprint(n)\n');
 
-    const prompt = await screen.findByLabelText('Enunciado');
-    expect(screen.getByLabelText('Resolução')).toHaveValue('Imprima.');
-    expect(screen.getByLabelText('Solução')).toHaveValue('n = int(input())\nprint(n)\n');
+      edit('Enunciado', 'Dobre o número.');
+      await settle();
 
-    fireEvent.change(prompt, { target: { value: 'Dobre o número.' } });
+      const [body] = patches(fetchSpy);
+      expect(body).toMatchObject({ codeKind: 'write', codeLanguage: 'python' });
+      expect(body.translations['pt-BR']).toMatchObject({ promptMdx: 'Dobre o número.', resolutionMdx: 'Imprima.', payloadJson: TASK_JSON });
+    });
 
-    const body = bodyOf(fetchSpy, 'PATCH', '/api/lessons/lessons/1/blocks/1');
-    expect(body.translations['pt-BR']).toMatchObject({ promptMdx: 'Dobre o número.', resolutionMdx: 'Imprima.', payloadJson: TASK_JSON });
-  });
+    it('does not send a prompt that was blanked, which the server would reject', async () => {
+      const fetchSpy = mockLessonApi([exerciseBlock({ 'pt-BR': PT_EXERCISE })]);
+      await renderLoaded('Enunciado');
 
-  it('changing the kind of a code exercise PATCHes the new kind with every locale payload adapted', async () => {
-    const fetchSpy = mockFetch([
-      lessonGet([
+      edit('Enunciado', '');
+      await settle();
+
+      expect(patches(fetchSpy)).toHaveLength(0);
+      expect(screen.getByText(/ainda não é válido/)).toBeInTheDocument();
+      expect(screen.getByLabelText('Enunciado')).toHaveValue('');
+    });
+
+    it('changing the kind PATCHes the new kind with every locale payload adapted', async () => {
+      const fetchSpy = mockLessonApi([
         exerciseBlock({
-          'pt-BR': { promptMdx: 'Dobre.', resolutionMdx: 'Imprima.', payloadJson: TASK_JSON },
+          'pt-BR': PT_EXERCISE,
           'en-US': { promptMdx: 'Double.', resolutionMdx: 'Print.', payloadJson: TASK_JSON },
         }),
-      ]),
-      blockPatch,
-    ]);
-    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
-    await screen.findByLabelText('Enunciado');
+      ]);
+      await renderLoaded('Enunciado');
 
-    await userEvent.selectOptions(screen.getByLabelText('Tipo de tarefa'), 'predict_output');
+      fireEvent.change(screen.getByLabelText('Tipo de tarefa'), { target: { value: 'predict_output' } });
+      await settle();
 
-    const body = bodyOf(fetchSpy, 'PATCH', '/api/lessons/lessons/1/blocks/1');
-    expect(body.codeKind).toBe('predict_output');
-    expect(body.codeLanguage).toBe('python');
-    expect(Object.keys(body.translations).sort()).toEqual(['en-US', 'pt-BR']);
-    for (const locale of ['pt-BR', 'en-US']) {
-      const payload = CodeTaskPayload.parse(JSON.parse(body.translations[locale].payloadJson));
-      expect(validateCodeTask('predict_output', 'python', payload)).toEqual([]);
-      expect(body.translations[locale].promptMdx).toBeTruthy();
-    }
-    expect(screen.getByLabelText('Saída esperada')).toBeInTheDocument();
-  });
+      const [body] = patches(fetchSpy);
+      expect(body.codeKind).toBe('predict_output');
+      expect(body.codeLanguage).toBe('python');
+      expect(Object.keys(body.translations).sort()).toEqual(['en-US', 'pt-BR']);
+      for (const locale of ['pt-BR', 'en-US']) {
+        const payload = CodeTaskPayload.parse(JSON.parse(body.translations[locale].payloadJson));
+        expect(validateCodeTask('predict_output', 'python', payload)).toEqual([]);
+        expect(body.translations[locale].promptMdx).toBeTruthy();
+      }
+      expect(screen.getByLabelText('Saída esperada')).toBeInTheDocument();
+    });
 
-  it('changing the language of a code exercise to SQL swaps the tests for SQL tests', async () => {
-    const fetchSpy = mockFetch([
-      lessonGet([exerciseBlock({ 'pt-BR': { promptMdx: 'Dobre.', resolutionMdx: 'Imprima.', payloadJson: TASK_JSON } })]),
-      blockPatch,
-    ]);
-    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
-    await screen.findByLabelText('Enunciado');
+    it('moves a read-only language to sqlite when the kind starts running code', async () => {
+      const mysqlTask = JSON.stringify({ starterCode: 'SELECT 1;', expectedOutput: '1', tests: [], blanks: [], hints: [] });
+      const fetchSpy = mockLessonApi([exerciseBlock({ 'pt-BR': { ...PT_EXERCISE, payloadJson: mysqlTask } }, 'predict_output', 'mysql')]);
+      await renderLoaded('Enunciado');
+      expect(screen.getByLabelText('Linguagem')).toHaveValue('mysql');
 
-    await userEvent.selectOptions(screen.getByLabelText('Linguagem'), 'sqlite');
+      fireEvent.change(screen.getByLabelText('Tipo de tarefa'), { target: { value: 'write' } });
+      await settle();
 
-    const body = bodyOf(fetchSpy, 'PATCH', '/api/lessons/lessons/1/blocks/1');
-    expect(body.codeLanguage).toBe('sqlite');
-    const payload = CodeTaskPayload.parse(JSON.parse(body.translations['pt-BR'].payloadJson));
-    expect(validateCodeTask('write', 'sqlite', payload)).toEqual([]);
-    expect(screen.getByLabelText('Preparação SQL do teste 1')).toBeInTheDocument();
-  });
+      expect(screen.getByLabelText('Linguagem')).toHaveValue('sqlite');
+      const [body] = patches(fetchSpy);
+      expect(body).toMatchObject({ codeKind: 'write', codeLanguage: 'sqlite' });
+      const payload = CodeTaskPayload.parse(JSON.parse(body.translations['pt-BR'].payloadJson));
+      expect(validateCodeTask('write', 'sqlite', payload)).toEqual([]);
+    });
 
-  it('shows the server error when a code edit is rejected', async () => {
-    mockFetch([
-      lessonGet([snippetBlock({ 'pt-BR': { payloadJson: SNIPPET_JSON } })]),
-      { ...blockPatch, body: { error: 'pt-BR: payload inválido — variants[0].code: x' }, status: 400 },
-    ]);
-    render(<LessonEditorPage lessonId={1} onDone={vi.fn()} />);
+    it('changing the language to SQL swaps the tests for SQL tests', async () => {
+      const fetchSpy = mockLessonApi([exerciseBlock({ 'pt-BR': PT_EXERCISE })]);
+      await renderLoaded('Enunciado');
 
-    fireEvent.change(await screen.findByLabelText('Código da variante 1'), { target: { value: '' } });
+      fireEvent.change(screen.getByLabelText('Linguagem'), { target: { value: 'sqlite' } });
+      await settle();
 
-    expect(await screen.findByText('pt-BR: payload inválido — variants[0].code: x')).toBeInTheDocument();
+      const [body] = patches(fetchSpy);
+      expect(body.codeLanguage).toBe('sqlite');
+      const payload = CodeTaskPayload.parse(JSON.parse(body.translations['pt-BR'].payloadJson));
+      expect(validateCodeTask('write', 'sqlite', payload)).toEqual([]);
+      expect(screen.getByLabelText('Preparação SQL do teste 1')).toBeInTheDocument();
+    });
   });
 });

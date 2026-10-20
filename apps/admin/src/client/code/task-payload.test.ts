@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { validateCodeSnippet, validateCodeTask, type CodeTaskPayloadData } from '@birb-learn/content-schema/src/code-payloads';
-import { adaptTaskPayload, parseSnippetPayload, parseTaskPayload, placeholderSnippet, placeholderTask, syncBlanks } from './task-payload';
+import { adaptTaskPayload, languageForKind, placeholderSnippet, placeholderTask, syncBlanks } from './task-payload';
 
 const WRITE: CodeTaskPayloadData = {
   starterCode: 'x = ___1___\n',
@@ -18,22 +18,6 @@ describe('placeholders', () => {
   });
 });
 
-describe('parseSnippetPayload / parseTaskPayload', () => {
-  it('parse stored text and apply the schema defaults', () => {
-    const snippet = parseSnippetPayload(JSON.stringify({ variants: [{ language: 'python', code: 'x' }] }));
-    expect(snippet?.variants[0]).toMatchObject({ annotations: [], walkthrough: [], runnable: false });
-
-    expect(parseTaskPayload(JSON.stringify({ starterCode: '' }))).toMatchObject({ tests: [], blanks: [], hints: [] });
-  });
-
-  it('return null for missing, malformed or invalid text', () => {
-    for (const text of [null, undefined, '', '{', '{}', '[]']) {
-      expect(parseSnippetPayload(text)).toBeNull();
-    }
-    expect(parseTaskPayload('{"tests":3}')).toBeNull();
-  });
-});
-
 describe('syncBlanks', () => {
   it('creates blanks for new markers, keeps known ones and drops the rest', () => {
     const blanks = [
@@ -44,6 +28,20 @@ describe('syncBlanks', () => {
       { id: 1, accepted: ['a'] },
       { id: 2, accepted: [''] },
     ]);
+  });
+});
+
+describe('languageForKind', () => {
+  it('moves a read-only language to sqlite for the kinds that run code', () => {
+    for (const kind of ['write', 'fill_blank', 'find_bug'] as const) {
+      expect(languageForKind(kind, 'mysql')).toBe('sqlite');
+    }
+  });
+
+  it('keeps the language otherwise', () => {
+    expect(languageForKind('predict_output', 'mysql')).toBe('mysql');
+    expect(languageForKind('write', 'python')).toBe('python');
+    expect(languageForKind('write', 'postgresql')).toBe('postgresql');
   });
 });
 

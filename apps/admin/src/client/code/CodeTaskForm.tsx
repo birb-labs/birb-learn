@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { CodeEditor } from '@birb-learn/code-ui/editor';
 import { LANGUAGE_INFO } from '@birb-learn/code-runner/src/languages';
 // Deep imports: the content-schema barrel also exports the Drizzle queries, which must stay out of the browser bundle.
@@ -41,6 +42,11 @@ function isSqlTest(test: Test): test is SqlTest {
 function withName<T extends { name?: string }>(test: T, name: string): T {
   const { name: _previous, ...rest } = test;
   return (name === '' ? rest : { ...rest, name }) as T;
+}
+
+/** A row shorter than the header gets empty cells, so every column of it can be edited. */
+function padRow(row: (string | null)[], length: number): (string | null)[] {
+  return row.length >= length ? row : [...row, ...Array<string>(length - row.length).fill('')];
 }
 
 function IoTestEditor({ test, number, onChange }: { test: IoTest; number: number; onChange: (test: IoTest) => void }) {
@@ -147,10 +153,11 @@ function SqlTestEditor({
             <tr key={rowIndex}>
               {columns.map((_, columnIndex) => {
                 // `null` is an SQL NULL cell; a row shorter than the header is padded with empty strings.
-                const cell = row[columnIndex] === undefined ? '' : row[columnIndex];
+                const paddedRow = padRow(row, columns.length);
+                const cell = paddedRow[columnIndex];
                 const position = `Teste ${number}, linha ${rowIndex + 1}, coluna ${columnIndex + 1}`;
                 const setCell = (value: string | null) =>
-                  setRows({ rows: replaceAt(rows, rowIndex, replaceAt(row, columnIndex, value)) });
+                  setRows({ rows: replaceAt(rows, rowIndex, replaceAt(paddedRow, columnIndex, value)) });
                 return (
                   <td key={columnIndex}>
                     <div className={styles.cell}>
@@ -283,6 +290,7 @@ export function CodeTaskForm({
   onKindChange: (kind: CodeKind) => void;
   onLanguageChange: (language: Language) => void;
 }) {
+  const id = useId();
   const sql = isSqlLanguage(language);
   // A predict_output task only shows code: no solution, harness or tests.
   const gradedByTests = kind !== 'predict_output';
@@ -298,9 +306,9 @@ export function CodeTaskForm({
   return (
     <div className={styles.form}>
       <div className={styles.field}>
-        <label htmlFor="code-task-kind">Tipo de tarefa</label>
+        <label htmlFor={`${id}-kind`}>Tipo de tarefa</label>
         <select
-          id="code-task-kind"
+          id={`${id}-kind`}
           className={styles.select}
           value={kind}
           onChange={(event) => onKindChange(event.target.value as CodeKind)}
@@ -314,9 +322,9 @@ export function CodeTaskForm({
       </div>
 
       <div className={styles.field}>
-        <label htmlFor="code-task-language">Linguagem</label>
+        <label htmlFor={`${id}-language`}>Linguagem</label>
         <select
-          id="code-task-language"
+          id={`${id}-language`}
           className={styles.select}
           value={language}
           onChange={(event) => onLanguageChange(event.target.value as Language)}
@@ -336,9 +344,9 @@ export function CodeTaskForm({
 
       {kind === 'predict_output' && (
         <div className={styles.field}>
-          <label htmlFor="code-task-expected-output">Saída esperada</label>
+          <label htmlFor={`${id}-expected-output`}>Saída esperada</label>
           <textarea
-            id="code-task-expected-output"
+            id={`${id}-expected-output`}
             className={styles.textarea}
             value={value.expectedOutput ?? ''}
             onChange={(event) => onChange({ ...value, expectedOutput: event.target.value })}
@@ -350,9 +358,9 @@ export function CodeTaskForm({
 
       {kind === 'find_bug' && (
         <div className={styles.field}>
-          <label htmlFor="code-task-bug-lines">Linhas com erro</label>
+          <label htmlFor={`${id}-bug-lines`}>Linhas com erro</label>
           <input
-            id="code-task-bug-lines"
+            id={`${id}-bug-lines`}
             className={`${styles.input} ${styles.linesInput}`}
             placeholder="3 ou 3-5"
             value={value.bugLines ?? ''}

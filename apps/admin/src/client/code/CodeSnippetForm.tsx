@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { CodeEditor } from '@birb-learn/code-ui/editor';
 import { LANGUAGE_INFO } from '@birb-learn/code-runner/src/languages';
 // Deep imports: the content-schema barrel also exports the Drizzle queries, which must stay out of the browser bundle.
@@ -10,7 +11,7 @@ import styles from './CodeForms.module.css';
 
 type Variant = CodeSnippetPayloadData['variants'][number];
 type LineNote = Variant['annotations'][number];
-type OptionalTextKey = 'stdin' | 'sqlSetup' | 'expectedOutput';
+type OptionalTextKey = 'stdin' | 'sqlSetup';
 
 /** Sets an optional text field, or drops it when the author empties it. */
 function withOptionalText(variant: Variant, key: OptionalTextKey, text: string): Variant {
@@ -93,6 +94,7 @@ function VariantEditor({
   onMove: (direction: -1 | 1) => void;
   onRemove: () => void;
 }) {
+  const id = useId();
   const sql = isSqlLanguage(variant.language);
   const readOnly = isReadOnlyCodeLanguage(variant.language);
 
@@ -109,9 +111,9 @@ function VariantEditor({
       </div>
 
       <div className={styles.field}>
-        <label htmlFor={`variant-${number}-language`}>Linguagem</label>
+        <label htmlFor={`${id}-language`}>Linguagem</label>
         <select
-          id={`variant-${number}-language`}
+          id={`${id}-language`}
           aria-label={`Linguagem da variante ${number}`}
           className={styles.select}
           value={variant.language}
@@ -156,9 +158,9 @@ function VariantEditor({
         </div>
       ) : (
         <div className={styles.field}>
-          <label htmlFor={`variant-${number}-stdin`}>Entrada (stdin)</label>
+          <label htmlFor={`${id}-stdin`}>Entrada (stdin)</label>
           <textarea
-            id={`variant-${number}-stdin`}
+            id={`${id}-stdin`}
             aria-label={`Entrada (stdin) da variante ${number}`}
             className={styles.textarea}
             value={variant.stdin ?? ''}
@@ -167,16 +169,30 @@ function VariantEditor({
         </div>
       )}
 
-      <div className={styles.field}>
-        <label htmlFor={`variant-${number}-expected`}>Saída esperada</label>
-        <textarea
-          id={`variant-${number}-expected`}
-          aria-label={`Saída esperada da variante ${number}`}
-          className={styles.textarea}
-          value={variant.expectedOutput ?? ''}
-          onChange={(event) => onChange(withOptionalText(variant, 'expectedOutput', event.target.value))}
+      <label className={styles.inline}>
+        <input
+          type="checkbox"
+          checked={variant.expectedOutput !== undefined}
+          onChange={(event) => {
+            const { expectedOutput: _previous, ...rest } = variant;
+            // Checked starts at an empty output: a program may legitimately print nothing.
+            onChange(event.target.checked ? { ...rest, expectedOutput: '' } : rest);
+          }}
         />
-      </div>
+        Verificar a saída
+      </label>
+      {variant.expectedOutput !== undefined && (
+        <div className={styles.field}>
+          <label htmlFor={`${id}-expected`}>Saída esperada</label>
+          <textarea
+            id={`${id}-expected`}
+            aria-label={`Saída esperada da variante ${number}`}
+            className={styles.textarea}
+            value={variant.expectedOutput}
+            onChange={(event) => onChange({ ...variant, expectedOutput: event.target.value })}
+          />
+        </div>
+      )}
 
       <LineNotesEditor
         variantNumber={number}

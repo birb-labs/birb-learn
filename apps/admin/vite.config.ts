@@ -1,7 +1,21 @@
-import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { cloudflare } from '@cloudflare/vite-plugin';
+
+// wasmoon (the Lua engine of the code runner) runs `await import('module')` in a
+// branch taken only under Node; browsers never reach it, but the bundler must
+// resolve it. Only the engine worker bundles wasmoon, so the stand-in is a worker
+// plugin: the app and the Cloudflare worker keep resolving `module` as before.
+// Same idea as the site's `turbopack.resolveAlias`.
+const EMPTY_MODULE_ID = '\0empty-node-module';
+function emptyNodeModule(): Plugin {
+  return {
+    name: 'empty-node-module',
+    enforce: 'pre',
+    resolveId: (source) => (source === 'module' ? EMPTY_MODULE_ID : null),
+    load: (id) => (id === EMPTY_MODULE_ID ? 'export default {};' : null),
+  };
+}
 
 export default defineConfig({
   // `configPath` is set explicitly because Vite's `root` below is
@@ -11,17 +25,9 @@ export default defineConfig({
   // falls back to an assets-only worker (no Hono routes registered).
   plugins: [react(), cloudflare({ configPath: '../../wrangler.jsonc' })],
   root: 'src/client',
-  resolve: {
-    alias: {
-      // wasmoon (the Lua engine of the code runner) runs `await import('module')`
-      // in a branch taken only under Node; browsers never reach it, but the
-      // bundler must resolve it.
-      module: fileURLToPath(new URL('./src/client/empty-module.ts', import.meta.url)),
-    },
-  },
   // The code runner's engine worker (`new Worker(new URL(...), { type: 'module' })`)
   // is a code-split bundle, which the default `iife` worker format cannot express.
-  worker: { format: 'es' },
+  worker: { format: 'es', plugins: () => [emptyNodeModule()] },
   build: {
     outDir: '../../dist/client',
     emptyOutDir: true,

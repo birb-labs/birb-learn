@@ -225,6 +225,29 @@ describe('CodeTaskForm', () => {
     expect(lastTests()[0]).toMatchObject({ expectedRows: { rows: [['x']] } });
   });
 
+  it('pads a row shorter than the header, so its missing cells can be edited', () => {
+    const spy = vi.fn();
+    const sqlTest = { sqlSetup: '', expectedRows: { columns: ['a', 'b'], rows: [['1']] }, orderMatters: false };
+    render(<Harness initialLanguage="sqlite" initial={{ ...WRITE, tests: [sqlTest] }} spy={spy} />);
+
+    fireEvent.change(screen.getByLabelText('Teste 1, linha 1, coluna 2'), { target: { value: 'x' } });
+
+    expect((spy.mock.lastCall![0] as CodeTaskPayloadData).tests[0]).toMatchObject({ expectedRows: { rows: [['1', 'x']] } });
+  });
+
+  it('gives every form its own control ids, so labels never reach another block', () => {
+    render(
+      <>
+        <Harness />
+        <Harness />
+      </>,
+    );
+
+    const secondLabel = screen.getAllByText('Tipo de tarefa')[1] as HTMLLabelElement;
+    expect(secondLabel.control).toBe(screen.getAllByLabelText('Tipo de tarefa')[1]);
+    expect(screen.getAllByLabelText('Tipo de tarefa')[0]).not.toBe(secondLabel.control);
+  });
+
   it('adds a SQL test for a SQL language', async () => {
     const spy = vi.fn();
     render(<Harness initialLanguage="sqlite" initial={{ ...WRITE, tests: [] }} spy={spy} />);
