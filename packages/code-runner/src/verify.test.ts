@@ -205,8 +205,37 @@ describe('verifyCodeTask: write', () => {
     const report = await verifyCodeTask('write', 'c', task({ solution: 'BAD', tests }), runner);
 
     expect(report.issues).toEqual([
-      { path: 'solution', severity: 'error', message: expect.stringContaining('syntax error') },
+      { path: 'solution', severity: 'error', message: expect.stringContaining('compiler output: syntax error') },
     ]);
+  });
+
+  it('appends the stderr of a failing test to its message', async () => {
+    const { runner } = fakeRunner((req) => ({
+      status: 'ok',
+      cases: (req.cases ?? []).map(() =>
+        caseResult({ status: 'runtime_error', stderr: '  Traceback: ZeroDivisionError  \n', exitCode: 1 }),
+      ),
+    }));
+
+    const report = await verifyCodeTask('write', 'python', task({ solution: 'BAD', tests }), runner);
+
+    expect(report.issues).toHaveLength(2);
+    for (const issue of report.issues) {
+      expect(issue.message).toContain('(runtime_error)');
+      expect(issue.message.endsWith('\nstderr: Traceback: ZeroDivisionError')).toBe(true);
+    }
+  });
+
+  it('bounds a long stderr to 500 characters', async () => {
+    const { runner } = fakeRunner((req) => ({
+      status: 'ok',
+      cases: (req.cases ?? []).map(() => caseResult({ status: 'runtime_error', stderr: 'e'.repeat(2000) })),
+    }));
+
+    const report = await verifyCodeTask('write', 'python', task({ solution: 'BAD', tests: [tests[0]] }), runner);
+
+    expect(report.issues[0].message).toContain(`stderr: ${'e'.repeat(500)}...`);
+    expect(report.issues[0].message).not.toContain('e'.repeat(501));
   });
 
   it('requires a solution', async () => {
@@ -218,14 +247,17 @@ describe('verifyCodeTask: write', () => {
     expect(requests).toEqual([]);
   });
 
-  it('runs nothing when there are no tests', async () => {
-    const { runner, requests } = programs(doubler);
+  it.each(['write', 'fill_blank', 'find_bug'] as const)(
+    'runs nothing and says so when a %s task has no tests',
+    async (kind) => {
+      const { runner, requests } = programs(doubler);
 
-    const report = await verifyCodeTask('write', 'python', task({ solution: 'GOOD' }), runner);
+      const report = await verifyCodeTask(kind, 'python', task({ solution: 'GOOD', bugLines: '1' }), runner);
 
-    expect(report).toEqual({ issues: [], notVerified: [] });
-    expect(requests).toEqual([]);
-  });
+      expect(report).toEqual({ issues: [], notVerified: ['tests: no tests, solution not run'] });
+      expect(requests).toEqual([]);
+    },
+  );
 
   it('runs SQL tests one by one with their setup', async () => {
     const { runner, requests } = fakeRunner(() => ({
@@ -318,7 +350,7 @@ describe('verifyCodeTask: find_bug', () => {
 
     const report = await verifyCodeTask('find_bug', 'python', bug({ tests: [] }), runner);
 
-    expect(report).toEqual({ issues: [], notVerified: [] });
+    expect(report).toEqual({ issues: [], notVerified: ['tests: no tests, solution not run'] });
     expect(requests).toEqual([]);
   });
 
@@ -362,6 +394,28 @@ describe('verifyCodeTask: predict_output', () => {
     expect(report.issues).toEqual([
       { path: 'starterCode', severity: 'error', message: expect.stringContaining('timeout') },
     ]);
+  });
+
+  it('runs the starterCode exactly as the student sees it, without the harness', async () => {
+    const { runner, requests } = programs(() => 'hi');
+
+    await verifyCodeTask('predict_output', 'python', predict({ harness: { prefix: 'PRE', suffix: 'SUF' } }), runner);
+
+    expect(requests[0].source).toBe('print("hi")');
+  });
+
+  it('appends the stderr of a failing run', async () => {
+    const { runner } = fakeRunner(() => ({
+      status: 'ok',
+      cases: [caseResult({ status: 'runtime_error', stderr: 'NameError: x\n' })],
+    }));
+    const mismatch = fakeRunner(() => ({ status: 'ok', cases: [caseResult({ stdout: 'no', stderr: 'warning: w' })] }));
+
+    const crashed = await verifyCodeTask('predict_output', 'python', predict(), runner);
+    const wrong = await verifyCodeTask('predict_output', 'python', predict(), mismatch.runner);
+
+    expect(crashed.issues[0].message).toContain('stderr: NameError: x');
+    expect(wrong.issues[0].message).toContain('stderr: warning: w');
   });
 
   it('puts a MySQL predict_output in notVerified without running it', async () => {

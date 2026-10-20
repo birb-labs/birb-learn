@@ -23,6 +23,8 @@ export interface TestOutcome {
   expected: string;
   /** Display string: normalized stdout, or formatted result sets for SQL. */
   actual: string;
+  /** The program's stderr for this test, when it ran and wrote any. */
+  stderr?: string;
 }
 
 export interface CodeGradeResult {
@@ -132,6 +134,7 @@ async function runSqlTests(
       status: caseResult.status,
       expected: formatResultSets([test.expectedRows]),
       actual: lastSet ? formatResultSets([lastSet]) : '',
+      ...(caseResult.stderr === '' ? {} : { stderr: caseResult.stderr }),
     });
   }
 
@@ -151,6 +154,7 @@ function outcomesFromRun(run: RunResult, tests: AnyTest[]): TestOutcome[] {
       status: caseResult.status,
       expected,
       actual,
+      ...(caseResult.stderr === '' ? {} : { stderr: caseResult.stderr }),
     };
   });
 }

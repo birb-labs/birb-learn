@@ -31,11 +31,20 @@ interface VerifyOptions {
 type TestRun = Awaited<ReturnType<typeof runTests>>;
 
 const SHOWN_CHARS = 120;
+const DETAIL_CHARS = 500;
 
 /** `text` as a quoted, single-line string of bounded length. */
 function quoted(text: string): string {
   const shown = text.length > SHOWN_CHARS ? `${text.slice(0, SHOWN_CHARS)}...` : text;
   return JSON.stringify(shown);
+}
+
+/** Compiler output or stderr, trimmed and bounded, ready to append to a message. */
+function detail(label: string, text: string | undefined): string {
+  const trimmed = text?.trim() ?? '';
+  if (trimmed === '') return '';
+  const shown = trimmed.length > DETAIL_CHARS ? `${trimmed.slice(0, DETAIL_CHARS)}...` : trimmed;
+  return `\n${label}: ${shown}`;
 }
 
 function unavailableIssue(path: string, run: RunResult): VerifyIssue {
@@ -47,8 +56,8 @@ function unavailableIssue(path: string, run: RunResult): VerifyIssue {
     return { path, severity: 'warning', message };
   }
   const reason = run.reason ?? 'unknown';
-  const detail = run.message ? `: ${run.message}` : '';
-  return { path, severity: 'error', message: `runner unavailable (${reason})${detail}` };
+  const cause = run.message ? `: ${run.message}` : '';
+  return { path, severity: 'error', message: `runner unavailable (${reason})${cause}` };
 }
 
 /**
@@ -76,12 +85,13 @@ function testLabel(test: TestOutcome, index: number): string {
 /** One issue per failed test, or a single one when the code did not compile. */
 function failureIssues(path: string, subject: string, run: TestRun): VerifyIssue[] {
   if (run.compileOutput !== undefined) {
-    return [{ path, severity: 'error', message: `${subject} does not compile: ${run.compileOutput.trim()}` }];
+    const message = `${subject} does not compile${detail('compiler output', run.compileOutput)}`;
+    return [{ path, severity: 'error', message }];
   }
   return run.tests.flatMap((test, index): VerifyIssue[] => {
     if (test.passed) return [];
     const status = test.status === 'ok' ? '' : ` (${test.status})`;
-    const message = `${subject} fails test ${testLabel(test, index)}: expected ${quoted(test.expected)}, got ${quoted(test.actual)}${status}`;
+    const message = `${subject} fails test ${testLabel(test, index)}: expected ${quoted(test.expected)}, got ${quoted(test.actual)}${status}${detail('stderr', test.stderr)}`;
     return [{ path, severity: 'error', message }];
   });
 }
@@ -139,13 +149,13 @@ export async function verifyCodeSnippet(
     if (run.status === 'unavailable') {
       report.issues.push(unavailableIssue(path, run));
     } else if (run.status === 'compile_error') {
-      report.issues.push({ path, severity: 'error', message: `does not compile: ${(run.compileOutput ?? '').trim()}` });
+      const message = `does not compile${detail('compiler output', run.compileOutput)}`;
+      report.issues.push({ path, severity: 'error', message });
     } else {
       const result = run.cases[0];
       if (!result || result.status !== 'ok') {
-        const stderr = result?.stderr.trim();
-        const detail = stderr ? `: ${stderr}` : '';
-        report.issues.push({ path, severity: 'error', message: `run ended with ${result?.status ?? run.status}${detail}` });
+        const message = `run ended with ${result?.status ?? run.status}${detail('stderr', result?.stderr)}`;
+        report.issues.push({ path, severity: 'error', message });
       } else if (variant.expectedOutput !== undefined) {
         const expected = normalizeOutput(variant.expectedOutput);
         const actual = normalizeOutput(result.stdout);
@@ -153,7 +163,7 @@ export async function verifyCodeSnippet(
           report.issues.push({
             path,
             severity: 'error',
-            message: `output differs from expectedOutput: expected ${quoted(expected)}, got ${quoted(actual)}`,
+            message: `output differs from expectedOutput: expected ${quoted(expected)}, got ${quoted(actual)}${detail('stderr', result.stderr)}`,
           });
         }
       }
@@ -190,8 +200,10 @@ export async function verifyCodeTask(
     report.issues.push({ path: 'solution', severity: 'error', message: 'solution is required' });
     return report;
   }
-  // Without tests there is nothing to run.
-  if (payload.tests.length === 0) return report;
+  if (payload.tests.length === 0) {
+    report.notVerified.push('tests: no tests, solution not run');
+    return report;
+  }
 
   const solutionSource = composeSource(payload.solution, payload.harness);
   const solutionRun = await runChecked(tracked, report, 'solution', language, solutionSource, payload.tests, opts);
@@ -233,12 +245,12 @@ async function verifyPredictOutput(
     return;
   }
 
-  const source = composeSource(payload.starterCode, payload.harness);
-  const run = await tracked.runner.runCode({ language, source, cases: [{}] }, opts);
+  // Exactly what the student sees: a harness is for tests, a predict_output has none.
+  const run = await tracked.runner.runCode({ language, source: payload.starterCode, cases: [{}] }, opts);
   if (run.status === 'unavailable') {
     report.issues.push(unavailableIssue('starterCode', run));
   } else if (run.status === 'compile_error') {
-    const message = `starterCode does not compile: ${(run.compileOutput ?? '').trim()}`;
+    const message = `starterCode does not compile${detail('compiler output', run.compileOutput)}`;
     report.issues.push({ path: 'starterCode', severity: 'error', message });
   } else {
     const result = run.cases[0];
@@ -246,7 +258,7 @@ async function verifyPredictOutput(
       report.issues.push({
         path: 'starterCode',
         severity: 'error',
-        message: `starterCode run ended with ${result?.status ?? run.status}`,
+        message: `starterCode run ended with ${result?.status ?? run.status}${detail('stderr', result?.stderr)}`,
       });
       return;
     }
@@ -256,7 +268,7 @@ async function verifyPredictOutput(
       report.issues.push({
         path: 'expectedOutput',
         severity: 'error',
-        message: `starterCode prints ${quoted(actual)}, not the expectedOutput ${quoted(expected)}`,
+        message: `starterCode prints ${quoted(actual)}, not the expectedOutput ${quoted(expected)}${detail('stderr', result.stderr)}`,
       });
     }
   }
