@@ -1,0 +1,8 @@
+key: binary-true-false
+type: true_false
+difficulty: easy
+prompt: |
+  Um bit pode valer 2.
+correctAnswer: false
+resolution: |
+  Um bit vale apenas 0 ou 1.

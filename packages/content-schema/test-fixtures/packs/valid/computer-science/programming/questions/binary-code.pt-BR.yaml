@@ -1,0 +1,20 @@
+key: binary-code
+type: code
+difficulty: medium
+tags: [binary-conversion]
+kind: write
+language: javascript
+prompt: |
+  Leia um número inteiro com `input()` e imprima-o em binário.
+starterCode: |
+  const n = Number(input());
+solution: |
+  const n = Number(input());
+  console.log(n.toString(2));
+tests:
+  - stdin: "6"
+    expectedStdout: "110"
+  - stdin: "1"
+    expectedStdout: "1"
+resolution: |
+  O método `toString(2)` converte para binário.

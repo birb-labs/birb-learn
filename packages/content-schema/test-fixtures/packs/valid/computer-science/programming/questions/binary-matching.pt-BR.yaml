@@ -1,0 +1,13 @@
+key: binary-matching
+type: matching
+difficulty: hard
+tags: [binary-conversion]
+prompt: |
+  Associe cada número binário ao seu valor decimal.
+pairs:
+  - left: "11"
+    right: "3"
+  - left: "101"
+    right: "5"
+resolution: |
+  11 vale 2 + 1 e 101 vale 4 + 1.

@@ -1,0 +1,5 @@
+slug: lost
+title: Lição perdida
+blocks:
+  - type: text
+    body: A seção desta lição não está no _tree.yaml.

@@ -1,0 +1,9 @@
+key: binary-short-math
+type: short_text
+difficulty: medium
+answerFormat: math
+prompt: |
+  Escreva 8 como uma potência de 2.
+acceptedAnswers: ["2^3"]
+resolution: |
+  Como 2 · 2 · 2 = 8, temos 8 = 2³.

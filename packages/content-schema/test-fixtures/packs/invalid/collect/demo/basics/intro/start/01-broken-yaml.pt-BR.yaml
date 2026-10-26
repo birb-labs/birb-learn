@@ -1,0 +1,6 @@
+slug: broken-yaml
+title: YAML quebrado
+blocks:
+  - type: text
+    # Mistake 2: an unquoted colon inside a value.
+    body: a: b: c

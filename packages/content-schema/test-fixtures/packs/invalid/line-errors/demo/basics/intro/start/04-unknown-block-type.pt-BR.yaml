@@ -1,0 +1,7 @@
+slug: unknown-block-type
+title: Tipo desconhecido
+blocks:
+  - type: text
+    body: Texto.
+  - type: video
+    body: Um vídeo.

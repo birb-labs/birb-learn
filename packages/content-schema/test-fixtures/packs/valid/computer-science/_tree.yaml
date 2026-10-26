@@ -1,0 +1,40 @@
+discipline:
+  slug: computer-science
+  order: 1
+  names:
+    pt-BR: Ciência da Computação
+    en-US: Computer Science
+    es: Ciencias de la Computación
+subjects:
+  - slug: programming
+    order: 1
+    names:
+      pt-BR: Programação
+      en-US: Programming
+      es: Programación
+    topics:
+      - slug: programming-basics
+        order: 1
+        names:
+          pt-BR: Fundamentos
+          en-US: Basics
+          es: Fundamentos
+        sections:
+          - slug: first-steps
+            order: 1
+            names:
+              pt-BR: Primeiros passos
+              en-US: First steps
+              es: Primeros pasos
+    tags:
+      - slug: binary
+        names:
+          pt-BR: Binário
+          en-US: Binary
+          es: Binario
+      - slug: binary-conversion
+        parent: binary
+        names:
+          pt-BR: Conversão para binário
+          en-US: Binary conversion
+          es: Conversión a binario

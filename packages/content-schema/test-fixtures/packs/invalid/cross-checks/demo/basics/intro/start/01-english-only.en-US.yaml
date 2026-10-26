@@ -1,0 +1,5 @@
+slug: english-only
+title: English only
+blocks:
+  - type: text
+    body: This lesson has no pt-BR file.

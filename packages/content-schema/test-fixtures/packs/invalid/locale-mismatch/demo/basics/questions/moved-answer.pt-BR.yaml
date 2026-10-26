@@ -1,0 +1,9 @@
+key: moved-answer
+type: multiple_choice
+difficulty: easy
+prompt: Quanto é 1 + 1?
+options:
+  - text: "1"
+  - text: "2"
+    correct: true
+resolution: 1 + 1 = 2.

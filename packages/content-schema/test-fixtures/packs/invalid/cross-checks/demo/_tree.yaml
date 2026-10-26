@@ -1,0 +1,29 @@
+discipline:
+  slug: demo
+  order: 1
+  names: { pt-BR: Demonstração, en-US: Demo, es: Demostración }
+subjects:
+  - slug: basics
+    order: 1
+    names: { pt-BR: Básico, en-US: Basics, es: Básico }
+    topics:
+      - slug: intro
+        order: 1
+        names: { pt-BR: Introdução, en-US: Introduction, es: Introducción }
+        sections:
+          - slug: start
+            order: 1
+            names: { pt-BR: Início, en-US: Start, es: Inicio }
+    tags:
+      - slug: alpha
+        names: { pt-BR: Alfa, en-US: Alpha, es: Alfa }
+      - slug: orphan
+        parent: no-such-parent
+        names: { pt-BR: Órfã, en-US: Orphan, es: Huérfana }
+  - slug: extras
+    order: 2
+    names: { pt-BR: Extras, en-US: Extras, es: Extras }
+    topics:
+      - slug: intro
+        order: 1
+        names: { pt-BR: Repetido, en-US: Repeated, es: Repetido }

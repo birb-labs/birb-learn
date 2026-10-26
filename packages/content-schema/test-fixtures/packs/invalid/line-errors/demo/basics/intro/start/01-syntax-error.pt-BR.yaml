@@ -1,0 +1,5 @@
+slug: syntax-error
+title: Erro de sintaxe
+blocks:
+  - type: text
+    body: a: b: c

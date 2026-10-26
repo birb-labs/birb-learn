@@ -1,0 +1,11 @@
+key: two-correct-options
+type: multiple_choice
+difficulty: easy
+prompt: Qual é o primeiro número natural?
+# Mistake 4: a multiple_choice question needs exactly one correct option.
+options:
+  - text: "0"
+    correct: true
+  - text: "1"
+    correct: true
+resolution: Depende da convenção.

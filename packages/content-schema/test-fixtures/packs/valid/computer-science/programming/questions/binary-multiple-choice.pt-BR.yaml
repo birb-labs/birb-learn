@@ -1,0 +1,13 @@
+key: binary-multiple-choice
+type: multiple_choice
+difficulty: easy
+tags: [binary]
+prompt: |
+  Quanto vale o número binário 10 em decimal?
+options:
+  - text: "1"
+  - text: "2"
+    correct: true
+  - text: "10"
+resolution: |
+  O dígito 1 está na casa do 2, então 10 vale 2.

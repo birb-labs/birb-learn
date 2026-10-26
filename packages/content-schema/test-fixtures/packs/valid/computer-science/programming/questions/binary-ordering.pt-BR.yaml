@@ -1,0 +1,13 @@
+key: binary-ordering
+type: ordering
+difficulty: medium
+tags: [binary-conversion]
+prompt: |
+  Ordene os números binários do menor para o maior.
+items:
+  - "1"
+  - "10"
+  - "11"
+  - "100"
+resolution: |
+  Em decimal eles valem 1, 2, 3 e 4.

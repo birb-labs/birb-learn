@@ -1,0 +1,8 @@
+slug: two-blocks
+title: Dois blocos
+blocks:
+  - type: text
+    body: Primeiro bloco.
+  - type: curiosity
+    title: Curiosidade
+    body: Segundo bloco.

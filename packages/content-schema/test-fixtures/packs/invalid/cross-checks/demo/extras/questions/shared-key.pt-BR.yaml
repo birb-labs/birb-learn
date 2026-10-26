@@ -1,0 +1,6 @@
+key: shared-key
+type: true_false
+difficulty: easy
+prompt: Dois é par.
+correctAnswer: true
+resolution: Dois é divisível por 2.

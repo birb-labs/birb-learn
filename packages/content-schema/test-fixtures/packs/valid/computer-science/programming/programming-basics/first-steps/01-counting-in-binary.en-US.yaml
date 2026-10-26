@@ -1,0 +1,71 @@
+slug: counting-in-binary
+title: Counting in binary
+blocks:
+  - type: text
+    body: |
+      A **bit** is the smallest unit of information: it is either 0 or 1.
+  - type: curiosity
+    title: Where does the word bit come from?
+    body: |
+      It comes from *binary digit*.
+  - type: real_world_application
+    title: Network addresses
+    body: |
+      Network masks are written as sequences of bits.
+  - type: solved_exercise
+    title: What is 101 worth?
+    prompt: |
+      What is the binary number 101 in decimal?
+    resolution: |
+      We add 4 + 0 + 1 and get 5.
+  - type: simulator
+    simulatorKey: function-approach-grapher
+    simulatorParams:
+      expression: x^2
+      approachPoint: 1
+      domain: [-2, 2]
+    caption: Watch the curve approach the point.
+  - type: code_snippet
+    title: Counting in binary
+    caption: Each loop iteration prints one number in binary.
+    variants:
+      - language: python
+        runnable: true
+        expectedOutput: |
+          0
+          1
+          10
+        code: |
+          for n in range(3):
+              print(bin(n)[2:])
+        annotations:
+          - lines: "1"
+            mdx: "`range(3)` yields 0, 1 and 2."
+        walkthrough:
+          - lines: "1"
+            mdx: We start a loop.
+          - lines: "2"
+            mdx: "`bin(n)` returns the text with a `0b` prefix, which we cut off."
+      - language: javascript
+        code: |
+          for (let n = 0; n < 3; n++) console.log(n.toString(2));
+  - type: code_exercise
+    kind: write
+    language: python
+    title: Convert to binary
+    prompt: |
+      Read an integer and print it in binary.
+    starterCode: |
+      n = int(input())
+    solution: |
+      n = int(input())
+      print(bin(n)[2:])
+    tests:
+      - stdin: "5"
+        expectedStdout: "101"
+      - stdin: "0"
+        expectedStdout: "0"
+    hints:
+      - Python has a built-in function that converts to binary.
+    resolution: |
+      We use `bin` and remove the `0b` prefix.

@@ -1,0 +1,14 @@
+key: find-bug-range
+type: code
+difficulty: medium
+kind: find_bug
+language: python
+prompt: Encontre o erro.
+starterCode: |
+  print(1 + "1")
+solution: |
+  print(1 + 1)
+bugLines: "9"
+tests:
+  - expectedStdout: "2"
+resolution: Não se soma número com texto.

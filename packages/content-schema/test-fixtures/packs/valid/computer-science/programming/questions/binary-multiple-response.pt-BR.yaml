@@ -1,0 +1,14 @@
+key: binary-multiple-response
+type: multiple_response
+difficulty: medium
+tags: [binary]
+prompt: |
+  Quais destes números binários são pares?
+options:
+  - text: "110"
+    correct: true
+  - text: "111"
+  - text: "1000"
+    correct: true
+resolution: |
+  Um número binário é par quando termina em 0.

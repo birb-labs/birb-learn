@@ -1,0 +1,9 @@
+slug: missing-prompt
+title: Sem enunciado
+blocks:
+  - type: text
+    body: Texto.
+  - type: solved_exercise
+    title: Exercício
+    resolution: |
+      A resolução.

@@ -1,0 +1,9 @@
+key: binary-short-text
+type: short_text
+difficulty: easy
+answerFormat: text
+prompt: |
+  What is the smallest unit of information called?
+acceptedAnswers: [bit, a bit]
+resolution: |
+  It is the bit.

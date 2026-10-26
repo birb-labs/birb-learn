@@ -1,0 +1,9 @@
+key: binary-short-text
+type: short_text
+difficulty: easy
+answerFormat: text
+prompt: |
+  Como se chama a menor unidade de informação?
+acceptedAnswers: [bit, o bit]
+resolution: |
+  É o bit.

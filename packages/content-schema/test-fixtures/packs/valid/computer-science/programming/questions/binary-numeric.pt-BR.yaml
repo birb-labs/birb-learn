@@ -1,0 +1,9 @@
+key: binary-numeric
+type: numeric
+difficulty: easy
+tags: [binary-conversion]
+prompt: |
+  Quanto vale o número binário 1010 em decimal?
+correctAnswer: 10
+resolution: |
+  Somamos 8 + 2 e obtemos 10.

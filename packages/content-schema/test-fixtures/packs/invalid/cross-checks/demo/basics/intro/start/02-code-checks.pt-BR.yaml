@@ -1,0 +1,24 @@
+slug: code-checks
+title: Verificações de código
+blocks:
+  - type: text
+    body: Blocos de código com erros entre campos.
+  - type: code_snippet
+    variants:
+      - language: mysql
+        runnable: true
+        code: SELECT 1;
+  - type: code_exercise
+    kind: fill_blank
+    language: python
+    prompt: Complete o código.
+    starterCode: |
+      print(___1___)
+    solution: |
+      print(1)
+    tests:
+      - expectedStdout: "1"
+    blanks:
+      - id: 2
+        accepted: ["1"]
+    resolution: Imprimimos 1.

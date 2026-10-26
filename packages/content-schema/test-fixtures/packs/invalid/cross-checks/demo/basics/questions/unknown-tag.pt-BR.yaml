@@ -1,0 +1,7 @@
+key: unknown-tag
+type: true_false
+difficulty: easy
+tags: [alpha, nope]
+prompt: Zero é par.
+correctAnswer: true
+resolution: Zero é divisível por 2.

@@ -1,0 +1,71 @@
+slug: counting-in-binary
+title: Contando em binário
+blocks:
+  - type: text
+    body: |
+      Um **bit** é a menor unidade de informação: vale 0 ou 1.
+  - type: curiosity
+    title: De onde vem a palavra bit?
+    body: |
+      A palavra vem de *binary digit*, dígito binário.
+  - type: real_world_application
+    title: Endereços de rede
+    body: |
+      Máscaras de rede são escritas como sequências de bits.
+  - type: solved_exercise
+    title: Quanto vale 101?
+    prompt: |
+      Quanto vale o número binário 101 em decimal?
+    resolution: |
+      Somamos 4 + 0 + 1 e obtemos 5.
+  - type: simulator
+    simulatorKey: function-approach-grapher
+    simulatorParams:
+      expression: x^2
+      approachPoint: 1
+      domain: [-2, 2]
+    caption: Veja a curva se aproximar do ponto.
+  - type: code_snippet
+    title: Contando em binário
+    caption: Cada volta do laço imprime um número em binário.
+    variants:
+      - language: python
+        runnable: true
+        expectedOutput: |
+          0
+          1
+          10
+        code: |
+          for n in range(3):
+              print(bin(n)[2:])
+        annotations:
+          - lines: "1"
+            mdx: "`range(3)` gera 0, 1 e 2."
+        walkthrough:
+          - lines: "1"
+            mdx: Começamos um laço.
+          - lines: "2"
+            mdx: "`bin(n)` devolve o texto com o prefixo `0b`, que cortamos."
+      - language: javascript
+        code: |
+          for (let n = 0; n < 3; n++) console.log(n.toString(2));
+  - type: code_exercise
+    kind: write
+    language: python
+    title: Converta para binário
+    prompt: |
+      Leia um número inteiro e imprima-o em binário.
+    starterCode: |
+      n = int(input())
+    solution: |
+      n = int(input())
+      print(bin(n)[2:])
+    tests:
+      - stdin: "5"
+        expectedStdout: "101"
+      - stdin: "0"
+        expectedStdout: "0"
+    hints:
+      - Existe uma função pronta em Python que converte para binário.
+    resolution: |
+      Usamos `bin` e removemos o prefixo `0b`.

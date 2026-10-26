@@ -1,0 +1,6 @@
+key: missing-resolution
+type: true_false
+difficulty: easy
+prompt: Zero é par.
+correctAnswer: true
+# Mistake 3: no resolution.

@@ -1,0 +1,6 @@
+key: shared-key
+type: true_false
+difficulty: easy
+prompt: Um é ímpar.
+correctAnswer: true
+resolution: Um não é divisível por 2.

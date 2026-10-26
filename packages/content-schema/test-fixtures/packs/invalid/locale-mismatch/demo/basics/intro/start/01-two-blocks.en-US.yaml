@@ -1,0 +1,5 @@
+slug: two-blocks
+title: Two blocks
+blocks:
+  - type: text
+    body: First block.
