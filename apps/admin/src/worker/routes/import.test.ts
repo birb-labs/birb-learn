@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeAll, beforeEach } from 'vitest';
+import { describe, expect, it, beforeAll, beforeEach, vi } from 'vitest';
 import { env, applyD1Migrations, SELF } from 'cloudflare:test';
 import { emptyBundle, type PackBundle } from '@birb-learn/content-schema/src/packs/pack-schemas';
 
@@ -325,6 +325,23 @@ describe('POST /api/import', () => {
     } finally {
       await env.DB.prepare('DROP TRIGGER fail_import').run();
     }
+  });
+
+  it('answers a failing database read with a pt-BR JSON 500, writing nothing', async () => {
+    const batch = vi.spyOn(env.DB, 'batch').mockRejectedValueOnce(new Error('D1 is down'));
+    try {
+      const response = await post({ bundle: makeBundle(), replace: [] });
+      expect(response.status).toBe(500);
+      expect(response.headers.get('Content-Type')).toMatch(/application\/json/);
+      expect(await response.json()).toEqual({
+        error: 'Não foi possível preparar a importação; nada foi gravado: D1 is down',
+      });
+      // Only the read was attempted; the write batch never ran.
+      expect(batch).toHaveBeenCalledTimes(1);
+    } finally {
+      batch.mockRestore();
+    }
+    expect(allZero(await counts())).toBe(true);
   });
 
   it('returns 400 with the problems when checkPack fails, writing nothing', async () => {

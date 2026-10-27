@@ -409,6 +409,7 @@ export function planImport(bundle: PackBundle, existing: ExistingState, opts: { 
   const unknown = [...new Set(opts.replace.filter((target) => !known.has(target)))];
   if (unknown.length > 0) throw new UnknownReplaceTargetError(unknown);
 
+  // One namespace for lesson slugs and question keys: a name that matches both replaces both.
   const planner = new Planner(existing, new Set(opts.replace));
   for (const discipline of bundle.disciplines) {
     planner.treeItem('disciplines', 'discipline_translations', 'discipline_id', discipline, {});

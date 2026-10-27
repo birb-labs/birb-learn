@@ -74,6 +74,8 @@ importRoutes.post('/', async (c) => {
     return c.json({ error: 'O pacote tem problemas; nada foi importado.', problems }, 400);
   }
 
+  // Reading the database and planning share one try: either failing answers
+  // with pt-BR JSON, never Hono's plain-text 500. Nothing was written yet.
   let plan;
   try {
     plan = planImport(bundle, await readExistingState(c.env.DB), { replace });
@@ -85,7 +87,7 @@ importRoutes.post('/', async (c) => {
         400,
       );
     }
-    throw error;
+    return c.json({ error: `Não foi possível preparar a importação; nada foi gravado: ${(error as Error).message}` }, 500);
   }
 
   if (plan.statements.length > 0) {
