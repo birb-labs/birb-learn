@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from './env';
 import { authRoutes } from './routes/auth';
 import { exportRoutes } from './routes/export';
+import { importRoutes } from './routes/import';
 import { lessonsRoutes } from './routes/lessons';
 import { previewRoutes } from './routes/preview';
 import { publishRoutes } from './routes/publish';
@@ -16,6 +17,9 @@ app.route('/api/auth', authRoutes);
 // the human session cookie, since the caller is CI (Task 17's build
 // pipeline), not a logged-in admin — so it must stay above requireSession.
 app.route('/api/export', exportRoutes);
+// Same reason: `pnpm content:import --target admin` authenticates with its own
+// Bearer token against IMPORT_SECRET.
+app.route('/api/import', importRoutes);
 
 // Every other /api/* route added in later tasks is mounted below this
 // line and is therefore behind requireSession.

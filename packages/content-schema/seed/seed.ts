@@ -10,6 +10,9 @@ import {
   lessonBlocks,
   lessonTranslations,
   lessons,
+  questionAcceptedAnswers,
+  questionMatchingPairTranslations,
+  questionMatchingPairs,
   questionOptionTranslations,
   questionOptions,
   questionTranslations,
@@ -28,6 +31,11 @@ import {
 const db = getDb();
 
 db.delete(questionTags).run();
+// The seed writes none of these three, but a content-pack import does; with
+// foreign keys on, deleting the questions under them would fail.
+db.delete(questionAcceptedAnswers).run();
+db.delete(questionMatchingPairTranslations).run();
+db.delete(questionMatchingPairs).run();
 db.delete(questionOptionTranslations).run();
 db.delete(questionOptions).run();
 db.delete(questionTranslations).run();

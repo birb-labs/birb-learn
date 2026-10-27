@@ -11,7 +11,8 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "export-questions": "tsx scripts/export-questions.ts",
-    "content:validate": "tsx scripts/content-validate.ts"
+    "content:validate": "tsx scripts/content-validate.ts",
+    "content:import": "tsx scripts/content-import.ts"
   },
   "dependencies": {
     "@birb-learn/code-runner": "workspace:*",

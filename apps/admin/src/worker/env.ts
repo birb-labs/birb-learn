@@ -5,6 +5,7 @@ export interface Env {
   ADMIN_PASSWORD_HASH: string;
   SESSION_SECRET: string;
   EXPORT_SECRET: string;
+  IMPORT_SECRET: string;
   GITHUB_PAT: string;
 }
 

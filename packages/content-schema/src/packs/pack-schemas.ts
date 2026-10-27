@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { CODE_KINDS, LANGUAGES, type CodeKind, type Language } from '../code-languages';
 import { CodeTaskPayload, CodeVariant } from '../code-payloads';
 import { isValidNumericCorrectAnswer } from '../numeric-answer-validation';
-import { questions, type LessonBlockType, type Locale } from '../schema';
+import { LESSON_BLOCK_TYPES, LOCALES, questions, type LessonBlockType, type Locale } from '../schema';
 
 export const QUESTION_TYPES = questions.type.enumValues;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
@@ -400,6 +400,119 @@ export const QUESTION_SCHEMAS = {
 } satisfies Record<QuestionType, z.ZodType>;
 
 export type QuestionData = { [K in QuestionType]: z.output<(typeof QUESTION_SCHEMAS)[K]> }[QuestionType];
+
+// ---------------------------------------------------------------------------
+// Bundle shape (a bundle received over the network)
+// ---------------------------------------------------------------------------
+
+// `checkPack` assumes a well-formed bundle, so /api/import checks the shape of
+// the posted JSON with these first. Only the shape: the content rules are
+// checkPack's.
+const LocaleEnum = z.enum(LOCALES);
+const NullableText = z.string().nullable();
+const SourceShape = z.object({ file: z.string(), line: z.number().int().optional() });
+const LinesShape = z.record(z.string(), z.number().int());
+const NamesShape = z.object({ 'pt-BR': z.string(), 'en-US': z.string(), es: z.string() });
+const SlugList = z.array(Slug);
+// A left-out entry may be left out because of its slug, so any text is accepted here.
+const TreeProblemList = z.array(z.string());
+
+const LessonBlockShape = z.object({
+  type: z.enum(LESSON_BLOCK_TYPES),
+  simulatorKey: NullableText,
+  simulatorParams: NullableText,
+  codeKind: z.enum(CODE_KINDS).nullable(),
+  codeLanguage: z.enum(LANGUAGES).nullable(),
+});
+
+const LessonTranslationShape = z.object({
+  file: z.string(),
+  title: z.string(),
+  blocks: z.array(
+    z.object({
+      line: z.number().int().optional(),
+      lines: LinesShape,
+      title: NullableText,
+      bodyMdx: NullableText,
+      promptMdx: NullableText,
+      resolutionMdx: NullableText,
+      caption: NullableText,
+      payloadJson: NullableText,
+    }),
+  ),
+});
+
+const QuestionTranslationShape = z.object({
+  file: z.string(),
+  lines: LinesShape,
+  promptMdx: z.string(),
+  resolutionMdx: z.string(),
+  codeJson: NullableText,
+  options: z.array(z.object({ textMdx: z.string() })),
+  matchingPairs: z.array(z.object({ leftMdx: z.string(), rightMdx: z.string() })),
+  acceptedAnswers: z.array(z.string()),
+});
+
+const TreeDirectories = z.record(z.string(), z.string());
+
+export const PackBundleSchema = z.object({
+  disciplines: z.array(z.object({ slug: Slug, order: z.number().int(), names: NamesShape, source: SourceShape })),
+  subjects: z.array(
+    z.object({ slug: Slug, disciplineSlug: Slug, order: z.number().int(), names: NamesShape, source: SourceShape }),
+  ),
+  topics: z.array(z.object({ slug: Slug, subjectSlug: Slug, order: z.number().int(), names: NamesShape, source: SourceShape })),
+  sections: z.array(z.object({ slug: Slug, topicSlug: Slug, order: z.number().int(), names: NamesShape, source: SourceShape })),
+  tags: z.array(
+    z.object({ slug: Slug, subjectSlug: Slug, parentSlug: Slug.nullable(), names: NamesShape, source: SourceShape }),
+  ),
+  lessons: z.array(
+    z.object({
+      slug: Slug,
+      order: z.number().int(),
+      disciplineSlug: Slug,
+      subjectSlug: Slug,
+      topicSlug: Slug,
+      sectionSlug: Slug,
+      blocks: z.array(LessonBlockShape),
+      translations: z.partialRecord(LocaleEnum, LessonTranslationShape),
+    }),
+  ),
+  questions: z.array(
+    z.object({
+      key: Slug,
+      disciplineSlug: Slug,
+      subjectSlug: Slug,
+      type: z.enum(QUESTION_TYPES),
+      difficulty: z.enum(DIFFICULTIES),
+      correctAnswer: NullableText,
+      answerFormat: z.enum(['text', 'math']),
+      codeKind: z.enum(CODE_KINDS).nullable(),
+      codeLanguage: z.enum(LANGUAGES).nullable(),
+      tagSlugs: SlugList,
+      options: z.array(z.object({ isCorrect: z.boolean() })),
+      matchingPairCount: z.number().int().nonnegative(),
+      acceptedAnswersShared: z.array(z.string()),
+      translations: z.partialRecord(LocaleEnum, QuestionTranslationShape),
+    }),
+  ),
+  treeProblems: z.object({
+    disciplines: TreeProblemList,
+    subjects: TreeProblemList,
+    topics: TreeProblemList,
+    sections: TreeProblemList,
+    tags: TreeProblemList,
+    directories: z.object({
+      disciplines: TreeDirectories,
+      subjects: TreeDirectories,
+      topics: TreeDirectories,
+      sections: TreeDirectories,
+      tags: TreeDirectories,
+    }),
+  }),
+}) satisfies z.ZodType<PackBundle>;
+
+/** The body of `POST /api/import`. */
+export const ImportRequestSchema = z.object({ bundle: PackBundleSchema, replace: z.array(z.string()) });
 
 // ---------------------------------------------------------------------------
 // Messages
