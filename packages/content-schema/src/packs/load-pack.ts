@@ -30,6 +30,7 @@ import {
   type PackQuestionTranslation,
   type QuestionData,
   type QuestionType,
+  type TreeTable,
 } from './pack-schemas';
 
 const TREE_FILE = '_tree.yaml';
@@ -376,7 +377,10 @@ function rawList(raw: unknown, key: string): unknown[] {
  * missing. Children of a bad entry still load when its slug is readable.
  */
 function loadTree(yaml: YamlFile, dirName: string, bundle: PackBundle, problems: PackProblem[]): void {
-  const broken = bundle.treeProblems;
+  const markBroken = (table: TreeTable, slug: string) => {
+    bundle.treeProblems[table].push(slug);
+    bundle.treeProblems.directories[table][slug] = dirName;
+  };
   const source = (segments: readonly PathSegment[]) => ({ file: yaml.file, line: lineAt(yaml, segments) });
 
   // Reports unknown top-level fields; the known ones are read below either way.
@@ -394,7 +398,7 @@ function loadTree(yaml: YamlFile, dirName: string, bundle: PackBundle, problems:
   if (discipline && discipline.slug === dirName) {
     bundle.disciplines.push({ ...discipline, source: source(['discipline']) });
   } else {
-    broken.disciplines.push(dirName);
+    markBroken('disciplines', dirName);
   }
 
   rawList(yaml.value, 'subjects').forEach((rawSubject, subjectIndex) => {
@@ -410,7 +414,7 @@ function loadTree(yaml: YamlFile, dirName: string, bundle: PackBundle, problems:
         source: source(subjectPath),
       });
     } else if (subjectSlug) {
-      broken.subjects.push(subjectSlug);
+      markBroken('subjects', subjectSlug);
     }
     if (!subjectSlug) return;
 
@@ -421,7 +425,7 @@ function loadTree(yaml: YamlFile, dirName: string, bundle: PackBundle, problems:
       if (topic) {
         bundle.topics.push({ slug: topic.slug, subjectSlug, order: topic.order, names: topic.names, source: source(topicPath) });
       } else if (topicSlug) {
-        broken.topics.push(topicSlug);
+        markBroken('topics', topicSlug);
       }
       if (!topicSlug) return;
 
@@ -438,7 +442,7 @@ function loadTree(yaml: YamlFile, dirName: string, bundle: PackBundle, problems:
           });
         } else {
           const sectionSlug = rawSlug(rawSection);
-          if (sectionSlug) broken.sections.push(sectionSlug);
+          if (sectionSlug) markBroken('sections', sectionSlug);
         }
       });
     });
@@ -456,7 +460,7 @@ function loadTree(yaml: YamlFile, dirName: string, bundle: PackBundle, problems:
         });
       } else {
         const tagSlug = rawSlug(rawTag);
-        if (tagSlug) broken.tags.push(tagSlug);
+        if (tagSlug) markBroken('tags', tagSlug);
       }
     });
   });

@@ -3,15 +3,37 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { CaseOutcome, RemoteResultCache } from '@birb-learn/code-runner';
 
-const OUTCOME_KINDS = new Set<string>(['case', 'compile_error', 'unavailable']);
+type Fields = Record<string, unknown>;
 
+function isFields(value: unknown): value is Fields {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** True when `value` has the shape of a `CaseOutcome` of its `kind`; anything else in a cache file is a miss. */
 function isOutcome(value: unknown): value is CaseOutcome {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { kind?: unknown }).kind === 'string' &&
-    OUTCOME_KINDS.has((value as { kind: string }).kind)
-  );
+  if (!isFields(value)) return false;
+  switch (value.kind) {
+    case 'case': {
+      const { result } = value;
+      return (
+        typeof value.cacheable === 'boolean' &&
+        isFields(result) &&
+        typeof result.status === 'string' &&
+        typeof result.stdout === 'string' &&
+        typeof result.stderr === 'string'
+      );
+    }
+    case 'compile_error':
+      return typeof value.compileOutput === 'string';
+    case 'unavailable':
+      return (
+        typeof value.reason === 'string' &&
+        typeof value.message === 'string' &&
+        (value.retryAfterMs === undefined || typeof value.retryAfterMs === 'number')
+      );
+    default:
+      return false;
+  }
 }
 
 /**

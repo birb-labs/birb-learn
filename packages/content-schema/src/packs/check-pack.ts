@@ -12,7 +12,7 @@ import {
   type PackQuestion,
   type PackSource,
   type PackTag,
-  type TreeProblemSlugs,
+  type TreeTable,
 } from './pack-schemas';
 
 /**
@@ -52,13 +52,22 @@ function problemAt(source: PackSource, message: string): PackProblem {
  */
 function checkTreeProblems(bundle: PackBundle, problems: PackProblem[]): void {
   for (const table of ['disciplines', 'subjects', 'topics', 'sections', 'tags'] as const) {
-    const slugs = bundle.treeProblems?.[table] ?? [];
-    if (slugs.length === 0) continue;
-    const names = slugs.map((slug) => `"${slug}"`).join(', ');
-    problems.push({
-      file: '_tree.yaml',
-      message: `${table} ${names} were left out of _tree.yaml because of problems in their entries`,
-    });
+    // One problem per `_tree.yaml` file; a slug whose directory is unknown falls under the bare name.
+    const byFile = new Map<string, string[]>();
+    for (const slug of bundle.treeProblems?.[table] ?? []) {
+      const directory = bundle.treeProblems?.directories?.[table]?.[slug];
+      const file = directory === undefined ? '_tree.yaml' : treeFile(directory);
+      byFile.set(file, [...(byFile.get(file) ?? []), slug]);
+    }
+
+    for (const [file, slugs] of byFile) {
+      const names = slugs.map((slug) => `"${slug}"`).join(', ');
+      const left =
+        slugs.length === 1
+          ? `${table.slice(0, -1)} ${names} was left out because of problems in its entry`
+          : `${table} ${names} were left out because of problems in their entries`;
+      problems.push({ file, message: `${left} (see the ${file} problems above)` });
+    }
   }
 }
 
@@ -186,7 +195,7 @@ function treeFile(disciplineSlug: string): string {
 }
 
 /** True when the tree entry for `slug` had problems and was left out (they were reported when loading). */
-function hasTreeProblems(bundle: PackBundle, table: keyof TreeProblemSlugs, slug: string): boolean {
+function hasTreeProblems(bundle: PackBundle, table: TreeTable, slug: string): boolean {
   return bundle.treeProblems?.[table]?.includes(slug) ?? false;
 }
 

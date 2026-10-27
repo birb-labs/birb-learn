@@ -12,7 +12,12 @@ import {
 } from '@birb-learn/code-runner';
 import { highlightCode } from '@birb-learn/code-ui/highlight';
 import type { Language } from '@birb-learn/content-schema/src/code-languages';
-import { CodeSnippetPayload, CodeTaskPayload } from '@birb-learn/content-schema/src/code-payloads';
+import {
+  CodeSnippetPayload,
+  CodeTaskPayload,
+  validateCodeSnippet,
+  validateCodeTask,
+} from '@birb-learn/content-schema/src/code-payloads';
 import { checkPack } from '@birb-learn/content-schema/src/packs/check-pack';
 import { loadPacks } from '@birb-learn/content-schema/src/packs/load-pack';
 import { lookupLine, type PackProblem, type PackQuestion } from '@birb-learn/content-schema/src/packs/pack-schemas';
@@ -94,11 +99,8 @@ export async function validateContent(rootDir: string, opts: ValidateOptions): P
   const progress = (message: string) => opts.onProgress?.(message);
 
   const { bundle, problems: loadProblems } = await loadPacks(rootDir);
-  const packProblems = checkPack(bundle);
-  const problems: PackProblem[] = [...loadProblems, ...packProblems];
+  const problems: PackProblem[] = [...loadProblems, ...checkPack(bundle)];
   const notVerified: string[] = [];
-  // A file whose content is already reported as inconsistent is not worth running.
-  const reportedFiles = new Set(packProblems.map((problem) => problem.file));
 
   function add(ctx: FieldContext, fieldPath: string, message: string): void {
     const line = lookupLine(ctx.lines, fieldPath) ?? ctx.fallbackLine;
@@ -147,6 +149,8 @@ export async function validateContent(rootDir: string, opts: ValidateOptions): P
   }
 
   function addReport(ctx: FieldContext, report: VerifyReport): void {
+    // Warning-severity issues are recorded as problems too; that is only correct because `verify`
+    // has already waited out or converted every rate-limit warning, the only warning there is.
     for (const issue of report.issues) add(ctx, issue.path, issue.message);
     for (const entry of report.notVerified) notVerified.push(`${ctx.file}: ${qualify(ctx, entry)}`);
   }
@@ -164,7 +168,8 @@ export async function validateContent(rootDir: string, opts: ValidateOptions): P
       }
       await checkHighlight(ctx, `variants[${v}].code`, variant.code, variant.language);
     }
-    if (reportedFiles.has(ctx.file)) return;
+    // Code whose own payload is invalid is not run; that is already reported.
+    if (validateCodeSnippet(parsed).length > 0) return;
     addReport(ctx, await verify((runner) => verifyCodeSnippet(parsed, runner)));
   }
 
@@ -181,7 +186,7 @@ export async function validateContent(rootDir: string, opts: ValidateOptions): P
     for (const [n, hint] of parsed.hints.entries()) await checkMdx(ctx, `hints[${n}]`, hint);
     await checkHighlight(ctx, 'starterCode', parsed.starterCode, language);
     if (parsed.solution !== undefined) await checkHighlight(ctx, 'solution', parsed.solution, language);
-    if (reportedFiles.has(ctx.file)) return;
+    if (validateCodeTask(kind, language, parsed).length > 0) return;
     addReport(ctx, await verify((runner) => verifyCodeTask(kind, language, parsed, runner)));
   }
 
@@ -267,33 +272,52 @@ function formatProblem(rootArg: string, problem: PackProblem): string {
   return problem.line === undefined ? `${file} ${problem.message}` : `${file}:${problem.line} ${problem.message}`;
 }
 
-async function main(): Promise<number> {
-  // `pnpm --filter site exec` runs in apps/site; a relative path is meant from where pnpm was started.
-  const base = process.env.INIT_CWD ?? process.cwd();
-  const rootArg = process.argv[2] ? path.resolve(base, process.argv[2]) : path.join(REPO_ROOT, 'content');
+export interface CliOptions {
+  /** The command-line arguments after the script name: `[path]`. */
+  args: string[];
+  /** Directory a relative path is resolved against. */
+  baseDir: string;
+  /** Prints a result line (problems and the summary). */
+  out: (line: string) => void;
+  /** Prints a progress line. */
+  err: (line: string) => void;
+  /** Defaults to the Node engines plus Compiler Explorer with the on-disk cache (tests inject a fake). */
+  runner?: Runner;
+  /** Defaults to the site's `compileLessonMdx`. */
+  compileMdx?: ValidateOptions['compileMdx'];
+}
+
+/** Runs `pnpm content:validate [path]`; resolves to the process exit code (1 when any problem was found). */
+export async function runCli(options: CliOptions): Promise<number> {
+  const rootArg = options.args[0] ? path.resolve(options.baseDir, options.args[0]) : path.join(REPO_ROOT, 'content');
 
   // Loaded here so that importing this module (the tests) does not start the Node engines.
-  const { createNodeRunner } = await import('@birb-learn/code-runner/src/node');
-  const { compileLessonMdx } = await import('../src/lib/compile-lesson-mdx');
+  let runner = options.runner;
+  if (!runner) {
+    const { createNodeRunner } = await import('@birb-learn/code-runner/src/node');
+    runner = createRunner({
+      browser: createNodeRunner(),
+      remote: createCompilerExplorerRunner({ cache: createDiskRunCache(path.join(REPO_ROOT, '.cache', 'code-runner')) }),
+    });
+  }
+  const compileMdx = options.compileMdx ?? (await import('../src/lib/compile-lesson-mdx')).compileLessonMdx;
 
-  const runner = createRunner({
-    browser: createNodeRunner(),
-    remote: createCompilerExplorerRunner({ cache: createDiskRunCache(path.join(REPO_ROOT, '.cache', 'code-runner')) }),
-  });
-  const { problems, notVerified } = await validateContent(rootArg, {
-    runner,
-    compileMdx: compileLessonMdx,
-    onProgress: (message) => console.error(message),
-  });
+  const { problems, notVerified } = await validateContent(rootArg, { runner, compileMdx, onProgress: options.err });
 
-  for (const problem of problems) console.log(formatProblem(rootArg, problem));
-  for (const entry of notVerified) console.log(`not verified: ${path.join(rootArg, entry)}`);
-  console.log(`${problems.length} problems, ${notVerified.length} not verified`);
+  for (const problem of problems) options.out(formatProblem(rootArg, problem));
+  for (const entry of notVerified) options.out(`not verified: ${path.join(rootArg, entry)}`);
+  options.out(`${problems.length} problems, ${notVerified.length} not verified`);
   return problems.length > 0 ? 1 : 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().then(
+  runCli({
+    args: process.argv.slice(2),
+    // `pnpm --filter site exec` runs in apps/site; a relative path is meant from where pnpm was started.
+    baseDir: process.env.INIT_CWD ?? process.cwd(),
+    out: (line) => console.log(line),
+    err: (line) => console.error(line),
+  }).then(
     (code) => process.exit(code),
     (error: unknown) => {
       console.error(error);

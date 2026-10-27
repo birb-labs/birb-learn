@@ -243,7 +243,10 @@ describe('loadPacks collects every problem', () => {
     expect(bundle.lessons.map((lesson) => lesson.slug)).toEqual(['good-lesson']);
     expect(bundle.subjects.map((subject) => subject.slug)).toEqual(['basics']);
     expect(checkPack(bundle)).toEqual([
-      { file: '_tree.yaml', message: 'subjects "extras" were left out of _tree.yaml because of problems in their entries' },
+      {
+        file: 'demo/_tree.yaml',
+        message: 'subject "extras" was left out because of problems in its entry (see the demo/_tree.yaml problems above)',
+      },
     ]);
   });
 });
@@ -431,7 +434,10 @@ describe('loadPacks on edited copies of the valid fixture', () => {
     const { bundle, problems } = await loadAll();
     expect(problems).toEqual([
       { file: TREE_FILE, line: 31, message: 'subjects[0].tags[0].names.es: required (expected text)' },
-      { file: '_tree.yaml', message: 'tags "binary" were left out of _tree.yaml because of problems in their entries' },
+      {
+        file: TREE_FILE,
+        message: 'tag "binary" was left out because of problems in its entry (see the computer-science/_tree.yaml problems above)',
+      },
     ]);
     // Only the bad tag is left out; its subject, topics and sibling tags remain.
     expect(bundle.subjects.map((subject) => subject.slug)).toEqual(['programming']);
@@ -447,8 +453,8 @@ describe('loadPacks on edited copies of the valid fixture', () => {
     expect(bundle.topics).toHaveLength(1);
     expect(bundle.tags).toHaveLength(2);
     expect(problems[1]).toEqual({
-      file: '_tree.yaml',
-      message: 'subjects "programming" were left out of _tree.yaml because of problems in their entries',
+      file: TREE_FILE,
+      message: 'subject "programming" was left out because of problems in its entry (see the computer-science/_tree.yaml problems above)',
     });
     const rest = problems.slice(2);
     expect(rest.length).toBe(bundle.lessons.length + bundle.questions.length);
@@ -465,8 +471,8 @@ describe('loadPacks on edited copies of the valid fixture', () => {
     expect(problems[0]).toMatchObject({ file: TREE_FILE, line: 3, message: expect.stringContaining('discipline.order:') });
     expect(bundle.subjects).toHaveLength(1);
     expect(problems[1]).toEqual({
-      file: '_tree.yaml',
-      message: 'disciplines "computer-science" were left out of _tree.yaml because of problems in their entries',
+      file: TREE_FILE,
+      message: 'discipline "computer-science" was left out because of problems in its entry (see the computer-science/_tree.yaml problems above)',
     });
     for (const problem of problems.slice(2)) {
       expect(problem.message).toBe(
@@ -534,7 +540,14 @@ describe('loadPacks on a missing directory', () => {
       tags: [],
       lessons: [],
       questions: [],
-      treeProblems: { disciplines: [], subjects: [], topics: [], sections: [], tags: [] },
+      treeProblems: {
+        disciplines: [],
+        subjects: [],
+        topics: [],
+        sections: [],
+        tags: [],
+        directories: { disciplines: {}, subjects: {}, topics: {}, sections: {}, tags: {} },
+      },
     });
   });
 });

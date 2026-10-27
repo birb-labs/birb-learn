@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process';
 import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,7 +12,7 @@ import {
 } from '@birb-learn/code-runner';
 import { highlightCode } from '@birb-learn/code-ui/highlight';
 import { compileLessonMdx } from '../src/lib/compile-lesson-mdx';
-import { validateContent } from './content-validate';
+import { runCli, validateContent } from './content-validate';
 import { createDiskRunCache } from './lib/disk-run-cache';
 
 // Real highlighting, except where a test makes it fail.
@@ -192,13 +193,38 @@ describe('validateContent', () => {
     ]);
   });
 
-  it('does not run code of a file whose payload is already reported as invalid', async () => {
+  it('still runs the code of a question whose only other problem is elsewhere (a bad tag)', async () => {
+    await editFile(CODE_QUESTION, (text) =>
+      text.replace('tags: [binary-conversion]', 'tags: [no-such-tag]').replace('console.log(n.toString(2));', 'print(n)'),
+    );
+    const { problems } = await validateContent(root, { runner: createFakeRunner(), compileMdx: noMdx });
+    const own = problems.filter((problem) => problem.file === CODE_QUESTION);
+    expect(own).toHaveLength(2);
+    expect(own).toContainEqual(expect.objectContaining({ line: 4, message: expect.stringContaining('unknown tag "no-such-tag"') }));
+    expect(own).toContainEqual(
+      expect.objectContaining({ line: 11, message: expect.stringMatching(/^solution: solution fails test #1/) }),
+    );
+  });
+
+  it('does not run code whose own payload is invalid, and reports the payload once', async () => {
     await editFile(CODE_QUESTION, (text) => text.replace(/solution: \|\n {2}.*\n {2}.*\n/, ''));
     const runner = createFakeRunner();
     const { problems } = await validateContent(root, { runner, compileMdx: noMdx });
     expect(problems.filter((problem) => problem.file === CODE_QUESTION)).toHaveLength(1);
     expect(problems[0].message).toContain('solution: required for a write task');
     expect(runner.calls.some((call) => call.source.includes('toString(2)'))).toBe(false);
+  });
+
+  it('does not run a lesson snippet whose own payload is invalid, but still runs the other blocks', async () => {
+    // A walkthrough range past the end of the code makes the snippet payload invalid.
+    await editFile(LESSON, (text) => text.replace('lines: "2"', 'lines: "9"'));
+    await editFile(LESSON.replace('pt-BR', 'en-US'), (text) => text.replace('lines: "2"', 'lines: "9"'));
+    const runner = createFakeRunner();
+    const { problems } = await validateContent(root, { runner, compileMdx: noMdx });
+    expect(problems).toHaveLength(2);
+    expect(runner.calls.some((call) => call.source.includes('range(3)') && call.source.includes('bin('))).toBe(false);
+    // The exercise of the same file was still run.
+    expect(runner.calls.some((call) => call.source.includes('input()'))).toBe(true);
   });
 
   it('reports progress per file', async () => {
@@ -339,4 +365,93 @@ describe('validateContent', () => {
       expect(requests).toBe(1);
     });
   });
+});
+
+describe('runCli', () => {
+  const PACKS = path.resolve(VALID_PACK, '..');
+  const REPO = path.resolve(PACKS, '../../../..');
+
+  async function run(args: string[], baseDir: string, runner: Runner = createFakeRunner()) {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runCli({ args, baseDir, runner, out: (line) => out.push(line), err: (line) => err.push(line) });
+    return { code, out, err };
+  }
+
+  it('exits 0 on the valid pack, with a summary and without touching the network', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    try {
+      const { code, out } = await run([VALID_PACK], REPO);
+      expect(out).toEqual(['0 problems, 0 not verified']);
+      expect(code).toBe(0);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('exits 1 on an invalid pack and prints file:line message lines', async () => {
+    const { code, out } = await run([path.join(PACKS, 'invalid/collect')], REPO);
+    const tree = path.join(PACKS, 'invalid/collect/demo/_tree.yaml');
+    expect(code).toBe(1);
+    expect(out).toContain(`${tree}:19 subjects[1].order: expected a number, got the text "first"`);
+    expect(out.at(-1)).toBe('5 problems, 0 not verified');
+  });
+
+  it('resolves a relative path against the directory pnpm was started in', async () => {
+    const { code, out } = await run(['packages/content-schema/test-fixtures/packs/valid'], REPO);
+    expect(code).toBe(0);
+    expect(out).toEqual(['0 problems, 0 not verified']);
+
+    const other = await run(['valid'], PACKS);
+    expect(other.code).toBe(0);
+  });
+
+  it('lists code that could not be executed as not verified, with exit 0', async () => {
+    const mysqlRoot = await mkdtemp(path.join(tmpdir(), 'birb-cli-'));
+    try {
+      await cp(VALID_PACK, mysqlRoot, { recursive: true });
+      await writeFile(
+        path.join(mysqlRoot, CODE_QUESTION),
+        [
+          'key: binary-code',
+          'type: code',
+          'difficulty: medium',
+          'tags: [binary-conversion]',
+          'kind: predict_output',
+          'language: mysql',
+          'prompt: |',
+          '  Qual é a saída?',
+          'starterCode: |',
+          '  SELECT 1;',
+          'expectedOutput: |',
+          '  1',
+          'resolution: |',
+          '  O resultado é 1.',
+          '',
+        ].join('\n'),
+      );
+      const { code, out } = await run([mysqlRoot], REPO);
+      expect(code).toBe(0);
+      expect(out).toEqual([`not verified: ${path.join(mysqlRoot, CODE_QUESTION)}: expectedOutput`, '0 problems, 1 not verified']);
+    } finally {
+      await rm(mysqlRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('runs as a script: exit code 1 and the problems on stdout', async () => {
+    const script = path.resolve(import.meta.dirname, 'content-validate.ts');
+    const root = path.join(PACKS, 'invalid/collect');
+    const result = await new Promise<{ code: number | null; stdout: string }>((resolve) => {
+      execFile(
+        process.execPath,
+        ['--import', 'tsx', script, 'packages/content-schema/test-fixtures/packs/invalid/collect'],
+        { cwd: path.resolve(import.meta.dirname, '..'), env: { ...process.env, INIT_CWD: REPO }, timeout: 60_000 },
+        (error, stdout) => resolve({ code: error ? ((error as { code?: number }).code ?? 1) : 0, stdout }),
+      );
+    });
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain(`${path.join(root, 'demo/_tree.yaml')}:19 subjects[1].order:`);
+    expect(result.stdout).toContain('5 problems, 0 not verified');
+  }, 90_000);
 });

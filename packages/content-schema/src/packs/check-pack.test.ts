@@ -131,11 +131,35 @@ describe('checkPack on inconsistent bundles', () => {
 
   it('reports every tree entry that was left out because of its own problems', async () => {
     const { bundle } = await loadPacks(path.join(FIXTURES, 'valid'));
-    bundle.treeProblems.tags.push('broken-tag', 'other-tag');
-    bundle.treeProblems.subjects.push('broken-subject');
+    const { treeProblems } = bundle;
+    treeProblems.tags.push('broken-tag', 'other-tag', 'elsewhere-tag');
+    treeProblems.subjects.push('broken-subject');
+    Object.assign(treeProblems.directories.tags, { 'broken-tag': 'one', 'other-tag': 'one', 'elsewhere-tag': 'two' });
+    Object.assign(treeProblems.directories.subjects, { 'broken-subject': 'one' });
     expect(checkPack(bundle)).toEqual([
-      { file: '_tree.yaml', message: 'subjects "broken-subject" were left out of _tree.yaml because of problems in their entries' },
-      { file: '_tree.yaml', message: 'tags "broken-tag", "other-tag" were left out of _tree.yaml because of problems in their entries' },
+      {
+        file: 'one/_tree.yaml',
+        message: 'subject "broken-subject" was left out because of problems in its entry (see the one/_tree.yaml problems above)',
+      },
+      {
+        file: 'one/_tree.yaml',
+        message: 'tags "broken-tag", "other-tag" were left out because of problems in their entries (see the one/_tree.yaml problems above)',
+      },
+      {
+        file: 'two/_tree.yaml',
+        message: 'tag "elsewhere-tag" was left out because of problems in its entry (see the two/_tree.yaml problems above)',
+      },
+    ]);
+  });
+
+  it('falls back to the bare _tree.yaml name when the directory of a left-out entry is unknown', async () => {
+    const { bundle } = await loadPacks(path.join(FIXTURES, 'valid'));
+    bundle.treeProblems.topics.push('mystery');
+    expect(checkPack(bundle)).toEqual([
+      {
+        file: '_tree.yaml',
+        message: 'topic "mystery" was left out because of problems in its entry (see the _tree.yaml problems above)',
+      },
     ]);
   });
 

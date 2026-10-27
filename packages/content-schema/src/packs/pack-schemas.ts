@@ -170,12 +170,11 @@ export interface PackBundle {
   treeProblems: TreeProblemSlugs;
 }
 
-export interface TreeProblemSlugs {
-  disciplines: string[];
-  subjects: string[];
-  topics: string[];
-  sections: string[];
-  tags: string[];
+export type TreeTable = 'disciplines' | 'subjects' | 'topics' | 'sections' | 'tags';
+
+export interface TreeProblemSlugs extends Record<TreeTable, string[]> {
+  /** For each left-out slug, the discipline directory whose `_tree.yaml` holds the entry. */
+  directories: Record<TreeTable, Record<string, string>>;
 }
 
 export function emptyBundle(): PackBundle {
@@ -187,7 +186,14 @@ export function emptyBundle(): PackBundle {
     tags: [],
     lessons: [],
     questions: [],
-    treeProblems: { disciplines: [], subjects: [], topics: [], sections: [], tags: [] },
+    treeProblems: {
+      disciplines: [],
+      subjects: [],
+      topics: [],
+      sections: [],
+      tags: [],
+      directories: { disciplines: {}, subjects: {}, topics: {}, sections: {}, tags: {} },
+    },
   };
 }
 

@@ -64,11 +64,34 @@ describe('createDiskRunCache', () => {
     expect(await cache.get('k')).toEqual(OUTCOME);
   });
 
-  it('treats valid JSON of the wrong shape as a miss', async () => {
+  it('round-trips compile errors and unavailable outcomes', async () => {
+    const cache = createDiskRunCache(dir);
+    const compileError: CaseOutcome = { kind: 'compile_error', compileOutput: 'error: expected ;' };
+    const unavailable: CaseOutcome = { kind: 'unavailable', reason: 'rate_limited', message: 'slow down', retryAfterMs: 500 };
+    await cache.set('compile', compileError);
+    await cache.set('busy', unavailable);
+    expect(await cache.get('compile')).toEqual(compileError);
+    expect(await cache.get('busy')).toEqual(unavailable);
+  });
+
+  it.each([
+    ['an object without a kind', { hello: 'world' }],
+    ['null', null],
+    ['an array', [OUTCOME]],
+    ['an unknown kind', { kind: 'other' }],
+    ['a case without its result', { kind: 'case', cacheable: true }],
+    ['a case whose result has no status', { kind: 'case', cacheable: true, result: { stdout: '', stderr: '' } }],
+    ['a case whose result is not an object', { kind: 'case', cacheable: true, result: 'ok' }],
+    ['a case without cacheable', { kind: 'case', result: { status: 'ok', stdout: '', stderr: '' } }],
+    ['a compile error without its output', { kind: 'compile_error' }],
+    ['a compile error with a non-text output', { kind: 'compile_error', compileOutput: 3 }],
+    ['an unavailable outcome without a reason', { kind: 'unavailable', message: 'x' }],
+    ['an unavailable outcome with a non-numeric wait', { kind: 'unavailable', reason: 'offline', message: 'x', retryAfterMs: 'soon' }],
+  ])('treats %s as a miss', async (_label, content) => {
     const cache = createDiskRunCache(dir);
     await cache.set('k', OUTCOME);
     const [file] = await readdir(dir);
-    await writeFile(path.join(dir, file), JSON.stringify({ hello: 'world' }));
+    await writeFile(path.join(dir, file), JSON.stringify(content));
     expect(await cache.get('k')).toBeUndefined();
   });
 
