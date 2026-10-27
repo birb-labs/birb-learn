@@ -1,11 +1,11 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { checkPack } from './check-pack';
 import { loadPacks } from './load-pack';
-import type { PackProblem } from './pack-schemas';
+import type { PackBundle, PackProblem } from './pack-schemas';
 
 const FIXTURES = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../test-fixtures/packs');
 const fixture = (name: string) => path.join(FIXTURES, name);
@@ -401,6 +401,116 @@ describe('loadPacks messages', () => {
   });
 });
 
+describe('loadPacks on edited copies of the valid fixture', () => {
+  const TREE_FILE = 'computer-science/_tree.yaml';
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), 'birb-packs-'));
+    await cp(fixture('valid'), root, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  async function editFile(file: string, edit: (text: string) => string): Promise<void> {
+    const target = path.join(root, file);
+    await writeFile(target, edit(await readFile(target, 'utf8')));
+  }
+
+  async function loadAll(): Promise<{ bundle: PackBundle; problems: PackProblem[] }> {
+    const { bundle, problems } = await loadPacks(root);
+    return { bundle, problems: [...problems, ...checkPack(bundle)] };
+  }
+
+  it('reports a bad tag once, without cascading into its child tag or the questions using it', async () => {
+    await editFile(TREE_FILE, (text) => text.replace('          es: Binario\n', ''));
+    const { bundle, problems } = await loadAll();
+    expect(problems).toEqual([
+      { file: TREE_FILE, line: 31, message: 'subjects[0].tags[0].names.es: required (expected text)' },
+    ]);
+    // Only the bad tag is left out; its subject, topics and sibling tags remain.
+    expect(bundle.subjects.map((subject) => subject.slug)).toEqual(['programming']);
+    expect(bundle.sections.map((section) => section.slug)).toEqual(['first-steps']);
+    expect(bundle.tags.map((tag) => tag.slug)).toEqual(['binary-conversion']);
+  });
+
+  it('says a lesson or question sits under a subject whose tree entry has problems, not that it is missing', async () => {
+    await editFile(TREE_FILE, (text) => text.replace('  - slug: programming\n    order: 1', '  - slug: programming\n    order: first'));
+    const { bundle, problems } = await loadAll();
+    expect(problems[0]).toEqual({ file: TREE_FILE, line: 10, message: 'subjects[0].order: expected a number, got the text "first"' });
+    // The subject's topics, sections and tags still load.
+    expect(bundle.topics).toHaveLength(1);
+    expect(bundle.tags).toHaveLength(2);
+    const rest = problems.slice(1);
+    expect(rest.length).toBe(bundle.lessons.length + bundle.questions.length);
+    for (const problem of rest) {
+      expect(problem.message).toBe(
+        'subject "programming": its entry in computer-science/_tree.yaml has problems (reported above)',
+      );
+    }
+  });
+
+  it('keeps loading subjects when the discipline block has problems', async () => {
+    await editFile(TREE_FILE, (text) => text.replace('  order: 1\n  names:', '  order: 0\n  names:'));
+    const { bundle, problems } = await loadAll();
+    expect(problems[0]).toMatchObject({ file: TREE_FILE, line: 3, message: expect.stringContaining('discipline.order:') });
+    expect(bundle.subjects).toHaveLength(1);
+    for (const problem of problems.slice(1)) {
+      expect(problem.message).toBe(
+        'discipline "computer-science": its entry in computer-science/_tree.yaml has problems (reported above)',
+      );
+    }
+  });
+
+  it('keeps the source text of a numeric answer and rejects .inf', async () => {
+    const file = 'computer-science/programming/questions/binary-numeric.pt-BR.yaml';
+    await editFile(file, (text) => text.replace('correctAnswer: 10', 'correctAnswer: 0.0000001'));
+    const loaded = await loadAll();
+    expect(loaded.problems).toEqual([]);
+    expect(loaded.bundle.questions.find((question) => question.key === 'binary-numeric')!.correctAnswer).toBe('0.0000001');
+
+    await editFile(file, (text) => text.replace('correctAnswer: 0.0000001', 'correctAnswer: .inf'));
+    expect((await loadAll()).problems).toEqual([
+      { file, line: 7, message: expect.stringMatching(/^correctAnswer: YAML read .inf or .nan as a non-finite number; wrap it in quotes/) },
+    ]);
+  });
+
+  it('reports two lessons with the same order prefix in one section', async () => {
+    const dir = path.join(root, LESSON_DIR);
+    await writeFile(
+      path.join(dir, '01-another-lesson.pt-BR.yaml'),
+      'slug: another-lesson\ntitle: Outra\nblocks:\n  - type: text\n    body: Texto.\n',
+    );
+    expect((await loadAll()).problems).toEqual([
+      {
+        file: `${LESSON_DIR}/01-counting-in-binary.pt-BR.yaml`,
+        message: `lesson order 1 in section "first-steps" is already used by ${LESSON_DIR}/01-another-lesson.pt-BR.yaml`,
+      },
+    ]);
+  });
+
+  it('reports symbolic links and non-YAML files as unexpected, without reading them', async () => {
+    const dir = path.join(root, LESSON_DIR);
+    await symlink(path.join(root, 'computer-science'), path.join(dir, 'linked-dir'));
+    await symlink(path.join(root, 'nowhere.yaml'), path.join(dir, '02-dangling.pt-BR.yaml'));
+    await writeFile(path.join(dir, 'diagram.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0x3a, 0x09]));
+    await writeFile(path.join(root, 'computer-science/programming/questions/extra.pt-BR.yml'), 'key: extra\n');
+
+    const { problems } = await loadAll();
+    expect(problems).toEqual([
+      { file: `${LESSON_DIR}/02-dangling.pt-BR.yaml`, message: expect.stringContaining('symbolic links') },
+      { file: `${LESSON_DIR}/diagram.png`, message: expect.stringContaining('unexpected file') },
+      { file: `${LESSON_DIR}/linked-dir`, message: expect.stringContaining('symbolic links') },
+      {
+        file: 'computer-science/programming/questions/extra.pt-BR.yml',
+        message: expect.stringContaining('rename it to extra.pt-BR.yaml'),
+      },
+    ]);
+  });
+});
+
 describe('loadPacks on a missing directory', () => {
   it('returns an empty bundle and no problems', async () => {
     const { bundle, problems } = await loadPacks(fixture('does-not-exist/content'));
@@ -413,6 +523,7 @@ describe('loadPacks on a missing directory', () => {
       tags: [],
       lessons: [],
       questions: [],
+      treeProblems: { disciplines: [], subjects: [], topics: [], sections: [], tags: [] },
     });
   });
 });

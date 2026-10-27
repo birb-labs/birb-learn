@@ -162,10 +162,33 @@ export interface PackBundle {
   tags: PackTag[];
   lessons: PackLesson[];
   questions: PackQuestion[];
+  /**
+   * Slugs whose `_tree.yaml` entry had problems and was left out. They are
+   * already reported, so `checkPack` names the bad entry instead of calling
+   * every lesson, question or tag under it "missing".
+   */
+  treeProblems: TreeProblemSlugs;
+}
+
+export interface TreeProblemSlugs {
+  disciplines: string[];
+  subjects: string[];
+  topics: string[];
+  sections: string[];
+  tags: string[];
 }
 
 export function emptyBundle(): PackBundle {
-  return { disciplines: [], subjects: [], topics: [], sections: [], tags: [], lessons: [], questions: [] };
+  return {
+    disciplines: [],
+    subjects: [],
+    topics: [],
+    sections: [],
+    tags: [],
+    lessons: [],
+    questions: [],
+    treeProblems: { disciplines: [], subjects: [], topics: [], sections: [], tags: [] },
+  };
 }
 
 /**
@@ -200,29 +223,30 @@ const Order = z.number().int().positive();
 
 const Names = z.strictObject({ 'pt-BR': Text, 'en-US': Text, es: Text });
 
+// Each `_tree.yaml` entry is validated on its own, with its children as raw
+// lists, so one bad entry leaves out only itself.
 export const TreeDisciplineSchema = z.strictObject({ slug: Slug, order: Order, names: Names });
 
 export const TreeSubjectSchema = z.strictObject({
   slug: Slug,
   order: Order,
   names: Names,
-  topics: z
-    .array(
-      z.strictObject({
-        slug: Slug,
-        order: Order,
-        names: Names,
-        sections: z.array(z.strictObject({ slug: Slug, order: Order, names: Names })).default([]),
-      }),
-    )
-    .default([]),
-  tags: z.array(z.strictObject({ slug: Slug, names: Names, parent: Slug.optional() })).default([]),
+  topics: z.array(z.unknown()).default([]),
+  tags: z.array(z.unknown()).default([]),
 });
 
-/**
- * Top level of `_tree.yaml`. Subjects are validated one by one with
- * `TreeSubjectSchema`, so a mistake in one subject does not hide the others.
- */
+export const TreeTopicSchema = z.strictObject({
+  slug: Slug,
+  order: Order,
+  names: Names,
+  sections: z.array(z.unknown()).default([]),
+});
+
+export const TreeSectionSchema = z.strictObject({ slug: Slug, order: Order, names: Names });
+
+export const TreeTagSchema = z.strictObject({ slug: Slug, names: Names, parent: Slug.optional() });
+
+/** Top level of `_tree.yaml`. */
 export const TreeFileSchema = z.strictObject({
   discipline: z.unknown(),
   subjects: z.array(z.unknown()).default([]),
@@ -316,9 +340,21 @@ export const QUESTION_SCHEMAS = {
   numeric: z.strictObject({
     ...questionCommon,
     type: z.literal('numeric'),
+    // The loader passes a plain YAML number as its source text, so 0.0000001
+    // is kept as written instead of becoming "1e-7".
     correctAnswer: z
-      .union([z.number(), z.string()])
-      .transform((value) => String(value))
+      .unknown()
+      .transform((value, ctx) => {
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+        let message = `expected a number, got ${describeValue(value)}`;
+        if (value === undefined) message = 'required (expected a number)';
+        else if (typeof value === 'number') {
+          message = `YAML read .inf or .nan as a non-finite number; wrap it in quotes for a symbolic answer, like "∞"`;
+        }
+        ctx.addIssue({ code: 'custom', message });
+        return z.NEVER;
+      })
       .refine(
         (value) => value.trim() !== '' && isValidNumericCorrectAnswer(value),
         'expected a number written with a dot, like 1.5 (not "1,5"), or a symbolic answer without digits, like "∞"',

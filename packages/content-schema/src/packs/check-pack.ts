@@ -12,6 +12,7 @@ import {
   type PackQuestion,
   type PackSource,
   type PackTag,
+  type TreeProblemSlugs,
 } from './pack-schemas';
 
 /**
@@ -24,7 +25,8 @@ import {
 export function checkPack(bundle: PackBundle): PackProblem[] {
   const problems: PackProblem[] = [];
   checkUniqueSlugs(bundle, problems);
-  checkTagParents(bundle.tags, problems);
+  checkTagParents(bundle, problems);
+  checkLessonOrders(bundle.lessons, problems);
   for (const lesson of bundle.lessons) checkLesson(bundle, lesson, problems);
   for (const question of bundle.questions) checkQuestion(bundle, question, problems);
   return problems;
@@ -79,11 +81,14 @@ function tagsOfSubject(tags: PackTag[], subjectSlug: string): Map<string, PackTa
   return new Map(tags.filter((tag) => tag.subjectSlug === subjectSlug).map((tag) => [tag.slug, tag]));
 }
 
-function checkTagParents(tags: PackTag[], problems: PackProblem[]): void {
+function checkTagParents(bundle: PackBundle, problems: PackProblem[]): void {
+  const tags = bundle.tags;
   for (const tag of tags) {
     if (tag.parentSlug === null) continue;
     const subjectTags = tagsOfSubject(tags, tag.subjectSlug);
     if (!subjectTags.has(tag.parentSlug)) {
+      // A parent whose own entry is bad was already reported.
+      if (hasTreeProblems(bundle, 'tags', tag.parentSlug)) continue;
       problems.push(
         problemAt(tag.source, `tag "${tag.slug}": unknown parent tag "${tag.parentSlug}" in subject "${tag.subjectSlug}"`),
       );
@@ -100,6 +105,27 @@ function checkTagParents(tags: PackTag[], problems: PackProblem[]): void {
       }
       if (chain.length > subjectTags.size + 1) break; // a loop that does not include this tag
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lesson order
+// ---------------------------------------------------------------------------
+
+/** Two lessons of one section must not share an order prefix, or their order on the site is arbitrary. */
+function checkLessonOrders(lessons: PackLesson[], problems: PackProblem[]): void {
+  const first = new Map<string, PackLesson>();
+  for (const lesson of lessons) {
+    const key = `${lesson.disciplineSlug}/${lesson.subjectSlug}/${lesson.topicSlug}/${lesson.sectionSlug}#${lesson.order}`;
+    const existing = first.get(key);
+    if (!existing) {
+      first.set(key, lesson);
+      continue;
+    }
+    problems.push({
+      file: lessonFile(lesson),
+      message: `lesson order ${lesson.order} in section "${lesson.sectionSlug}" is already used by ${lessonFile(existing)}`,
+    });
   }
 }
 
@@ -137,12 +163,25 @@ function treeFile(disciplineSlug: string): string {
   return `${disciplineSlug}/_tree.yaml`;
 }
 
+/** True when the tree entry for `slug` had problems and was left out (they were reported when loading). */
+function hasTreeProblems(bundle: PackBundle, table: keyof TreeProblemSlugs, slug: string): boolean {
+  return bundle.treeProblems?.[table]?.includes(slug) ?? false;
+}
+
+function treeEntryProblem(noun: string, slug: string, disciplineSlug: string): string {
+  return `${noun} "${slug}": its entry in ${treeFile(disciplineSlug)} has problems (reported above)`;
+}
+
 /** Checks the subject chain; returns a problem message when a level is missing from the tree. */
 function findSubjectProblem(bundle: PackBundle, disciplineSlug: string, subjectSlug: string): string | null {
   if (!bundle.disciplines.some((discipline) => discipline.slug === disciplineSlug)) {
+    if (hasTreeProblems(bundle, 'disciplines', disciplineSlug)) {
+      return treeEntryProblem('discipline', disciplineSlug, disciplineSlug);
+    }
     return `discipline "${disciplineSlug}" is not defined; add ${treeFile(disciplineSlug)}`;
   }
   if (!bundle.subjects.some((subject) => subject.slug === subjectSlug && subject.disciplineSlug === disciplineSlug)) {
+    if (hasTreeProblems(bundle, 'subjects', subjectSlug)) return treeEntryProblem('subject', subjectSlug, disciplineSlug);
     return `subject "${subjectSlug}" is not in ${treeFile(disciplineSlug)}`;
   }
   return null;
@@ -215,9 +254,15 @@ function findSectionProblem(bundle: PackBundle, lesson: PackLesson): string | nu
   if (subjectProblem) return subjectProblem;
   const tree = treeFile(lesson.disciplineSlug);
   if (!bundle.topics.some((topic) => topic.slug === lesson.topicSlug && topic.subjectSlug === lesson.subjectSlug)) {
+    if (hasTreeProblems(bundle, 'topics', lesson.topicSlug)) {
+      return treeEntryProblem('topic', lesson.topicSlug, lesson.disciplineSlug);
+    }
     return `topic "${lesson.topicSlug}" is not in ${tree} under subject "${lesson.subjectSlug}"`;
   }
   if (!bundle.sections.some((section) => section.slug === lesson.sectionSlug && section.topicSlug === lesson.topicSlug)) {
+    if (hasTreeProblems(bundle, 'sections', lesson.sectionSlug)) {
+      return treeEntryProblem('section', lesson.sectionSlug, lesson.disciplineSlug);
+    }
     return `section "${lesson.sectionSlug}" is not in ${tree} under topic "${lesson.topicSlug}"`;
   }
   return null;
@@ -276,7 +321,8 @@ function checkQuestion(bundle: PackBundle, question: PackQuestion, problems: Pac
     const subjectTags = tagsOfSubject(bundle.tags, question.subjectSlug);
     const known = [...subjectTags.keys()];
     question.tagSlugs.forEach((slug, index) => {
-      if (subjectTags.has(slug)) return;
+      // A tag whose own entry is bad was already reported.
+      if (subjectTags.has(slug) || hasTreeProblems(bundle, 'tags', slug)) return;
       const path = `tags[${index}]`;
       const defined = known.length === 0 ? 'defines no tags' : `defines: ${known.join(', ')}`;
       const line = authority ? lookupLine(authority.lines, path) : undefined;

@@ -7,25 +7,26 @@ import { isMap, isScalar, isSeq, LineCounter, parseDocument, type Document } fro
 import type { z } from 'zod';
 import { formatZodIssues } from '../code-payloads';
 import { LESSON_BLOCK_TYPES, LOCALES, type LessonBlockType, type Locale } from '../schema';
+import { mergeLesson, mergeQuestion, type LessonFile, type LessonFileBlock, type QuestionFile, type QuestionStructure } from './merge-locales';
 import {
   emptyBundle,
   LESSON_BLOCK_SCHEMAS,
   LessonFileSchema,
-  lookupLine,
   packIssueMessage,
   QUESTION_SCHEMAS,
   QUESTION_TYPES,
   SLUG_PATTERN,
   TreeDisciplineSchema,
   TreeFileSchema,
+  TreeSectionSchema,
   TreeSubjectSchema,
+  TreeTagSchema,
+  TreeTopicSchema,
   type LessonBlockData,
   type PackBundle,
-  type PackLesson,
   type PackLessonBlock,
   type PackLessonBlockTranslation,
   type PackProblem,
-  type PackQuestion,
   type PackQuestionTranslation,
   type QuestionData,
   type QuestionType,
@@ -45,10 +46,10 @@ type PathSegment = string | number;
  * `<discipline>/<subject>/<topic>/<section>/<order>-<slug>.<locale>.yaml` and
  * question files at `<discipline>/<subject>/questions/<key>.<locale>.yaml`.
  *
- * Every problem is collected; a file with problems is left out of the bundle
- * and the rest still loads. Bad content never throws, only I/O failures do. A
- * missing `rootDir` is an empty bundle with no problems. Run `checkPack` on the
- * bundle for the checks that need all of it.
+ * Every problem is collected; a file or tree entry with problems is left out of
+ * the bundle and the rest still loads. Bad content never throws, only I/O
+ * failures do. A missing `rootDir` is an empty bundle with no problems. Run
+ * `checkPack` on the bundle for the checks that need all of it.
  */
 export async function loadPacks(rootDir: string): Promise<{ bundle: PackBundle; problems: PackProblem[] }> {
   const bundle = emptyBundle();
@@ -61,31 +62,42 @@ export async function loadPacks(rootDir: string): Promise<{ bundle: PackBundle; 
     return { bundle, problems };
   }
 
-  const files = await listFiles(rootDir);
+  const entries = await listEntries(rootDir);
   const lessonGroups = new Map<string, LessonFile[]>();
   const questionGroups = new Map<string, QuestionFile[]>();
   const disciplineDirs = new Set<string>();
   const treeDirs = new Set<string>();
 
-  for (const file of files) {
+  for (const entry of entries) {
+    const file = entry.path;
     const parts = file.split('/');
     if (parts.length > 1) disciplineDirs.add(parts[0]);
-    const kind = classify(parts);
-    if (kind === 'ignored') continue;
-    if (kind === 'unexpected') {
-      problems.push({ file, message: UNEXPECTED_FILE_MESSAGE });
+    if (!entry.regularFile) {
+      problems.push({ file, message: SPECIAL_ENTRY_MESSAGE });
       continue;
     }
 
-    const yaml = parseYamlFile(file, await readFile(path.join(rootDir, file), 'utf8'), problems);
+    // Classify by name before reading, so a stray binary is never parsed.
+    const kind = classify(parts);
+    if (kind === 'ignored') continue;
+    if (kind === 'unexpected') {
+      problems.push({ file, message: unexpectedFileMessage(parts[parts.length - 1]) });
+      continue;
+    }
+
     if (kind === 'tree') {
       treeDirs.add(parts[0]);
+      const yaml = parseYamlFile(file, await readFile(path.join(rootDir, file), 'utf8'), problems);
       if (yaml) loadTree(yaml, parts[0], bundle, problems);
     } else if (kind === 'lesson') {
-      const lesson = yaml && loadLessonFile(yaml, parts, problems);
+      const name = parseLessonName(file, parts[4], problems);
+      const yaml = name && parseYamlFile(file, await readFile(path.join(rootDir, file), 'utf8'), problems);
+      const lesson = yaml && name && loadLessonFile(yaml, parts, name, problems);
       if (lesson) pushToGroup(lessonGroups, `${parts.slice(0, 4).join('/')}/${lesson.slug}`, lesson);
     } else {
-      const question = yaml && loadQuestionFile(yaml, parts, problems);
+      const name = parseQuestionName(file, parts[3], problems);
+      const yaml = name && parseYamlFile(file, await readFile(path.join(rootDir, file), 'utf8'), problems);
+      const question = yaml && name && loadQuestionFile(yaml, parts, name, problems);
       if (question) pushToGroup(questionGroups, `${parts.slice(0, 2).join('/')}/${question.key}`, question);
     }
   }
@@ -109,10 +121,18 @@ export async function loadPacks(rootDir: string): Promise<{ bundle: PackBundle; 
 // Files and YAML
 // ---------------------------------------------------------------------------
 
-const UNEXPECTED_FILE_MESSAGE =
-  'unexpected file: packs only hold <discipline>/_tree.yaml, ' +
+const EXPECTED_FILES =
+  'packs only hold <discipline>/_tree.yaml, ' +
   '<discipline>/<subject>/<topic>/<section>/<order>-<lesson-slug>.<locale>.yaml and ' +
   '<discipline>/<subject>/questions/<question-key>.<locale>.yaml';
+
+const SPECIAL_ENTRY_MESSAGE =
+  'unexpected entry: symbolic links and special files are not read; copy the real file or directory into the pack';
+
+function unexpectedFileMessage(name: string): string {
+  if (name.endsWith('.yml')) return `unexpected file: pack files end in .yaml; rename it to ${name.slice(0, -'.yml'.length)}.yaml`;
+  return `unexpected file: ${EXPECTED_FILES}`;
+}
 
 async function statOrNull(target: string) {
   try {
@@ -123,23 +143,32 @@ async function statOrNull(target: string) {
   }
 }
 
-/** Every file under `rootDir`, relative with `/` separators, sorted. Dotfiles are skipped. */
-async function listFiles(rootDir: string, relative = ''): Promise<string[]> {
-  const entries = await readdir(path.join(rootDir, relative), { withFileTypes: true });
-  const files: string[] = [];
-  for (const entry of entries) {
-    if (entry.name.startsWith('.')) continue;
-    const child = relative === '' ? entry.name : `${relative}/${entry.name}`;
-    if (entry.isDirectory()) files.push(...(await listFiles(rootDir, child)));
-    else files.push(child);
+interface Entry {
+  /** Relative to the root, with `/` separators. */
+  path: string;
+  /** False for symbolic links, sockets and other special files, which are never read. */
+  regularFile: boolean;
+}
+
+/** Every entry under `rootDir` except directories, sorted by path. Dotfiles are skipped. */
+async function listEntries(rootDir: string, relative = ''): Promise<Entry[]> {
+  const dirents = await readdir(path.join(rootDir, relative), { withFileTypes: true });
+  const entries: Entry[] = [];
+  for (const dirent of dirents) {
+    if (dirent.name.startsWith('.')) continue;
+    const child = relative === '' ? dirent.name : `${relative}/${dirent.name}`;
+    // `Dirent` describes the link itself, so a symbolic link is never followed here.
+    if (dirent.isDirectory()) entries.push(...(await listEntries(rootDir, child)));
+    else entries.push({ path: child, regularFile: dirent.isFile() });
   }
-  return files.sort();
+  return entries.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
 function classify(parts: string[]): 'tree' | 'lesson' | 'question' | 'ignored' | 'unexpected' {
   const name = parts[parts.length - 1];
   if (name.endsWith('.md')) return 'ignored'; // notes and READMEs may sit next to the packs
   if (parts.length === 2 && name === TREE_FILE) return 'tree';
+  if (!name.endsWith('.yaml')) return 'unexpected';
   if (parts.length === 4 && parts[2] === QUESTIONS_DIR) return 'question';
   if (parts.length === 5) return 'lesson';
   return 'unexpected';
@@ -330,64 +359,105 @@ function checkType<T extends string>(
 // _tree.yaml
 // ---------------------------------------------------------------------------
 
-function loadTree(yaml: YamlFile, dirName: string, bundle: PackBundle, problems: PackProblem[]): void {
-  const top = validate(yaml, TreeFileSchema, yaml.value, [], problems);
-  if (!top) return;
-  const discipline = validate(yaml, TreeDisciplineSchema, top.discipline, ['discipline'], problems);
-  if (!discipline) return;
+/** The `slug` written in a raw entry, when it is text; used to name an entry that failed validation. */
+function rawSlug(raw: unknown): string | null {
+  return isRecord(raw) && typeof raw.slug === 'string' && raw.slug !== '' ? raw.slug : null;
+}
 
-  if (discipline.slug !== dirName) {
+/** A raw child list (`topics`, `sections`, `tags`); anything else is reported by the parent's schema. */
+function rawList(raw: unknown, key: string): unknown[] {
+  return isRecord(raw) && Array.isArray(raw[key]) ? raw[key] : [];
+}
+
+/**
+ * Loads one `_tree.yaml`. Every entry (discipline, subject, topic, section,
+ * tag) is validated on its own, so a bad entry leaves out only itself; its slug
+ * goes to `bundle.treeProblems` so `checkPack` does not call the items under it
+ * missing. Children of a bad entry still load when its slug is readable.
+ */
+function loadTree(yaml: YamlFile, dirName: string, bundle: PackBundle, problems: PackProblem[]): void {
+  const broken = bundle.treeProblems;
+  const source = (segments: readonly PathSegment[]) => ({ file: yaml.file, line: lineAt(yaml, segments) });
+
+  // Reports unknown top-level fields; the known ones are read below either way.
+  validate(yaml, TreeFileSchema, yaml.value, [], problems);
+  const rawDiscipline = isRecord(yaml.value) ? yaml.value.discipline : undefined;
+
+  // Lessons and questions name their discipline by directory, so the tree's
+  // entries hang under the directory name even when the discipline block is bad.
+  const discipline = validate(yaml, TreeDisciplineSchema, rawDiscipline, ['discipline'], problems);
+  if (discipline && discipline.slug !== dirName) {
     problems.push(
-      problemAt(
-        yaml,
-        ['discipline', 'slug'],
-        `discipline.slug: "${discipline.slug}" must match the directory name "${dirName}"`,
-      ),
+      problemAt(yaml, ['discipline', 'slug'], `discipline.slug: "${discipline.slug}" must match the directory name "${dirName}"`),
     );
   }
-  const source = (segments: readonly PathSegment[]) => ({ file: yaml.file, line: lineAt(yaml, segments) });
-  bundle.disciplines.push({ ...discipline, source: source(['discipline']) });
+  if (discipline && discipline.slug === dirName) {
+    bundle.disciplines.push({ ...discipline, source: source(['discipline']) });
+  } else {
+    broken.disciplines.push(dirName);
+  }
 
-  // Subjects are checked one by one, so one bad subject does not drop the rest.
-  top.subjects.forEach((raw, subjectIndex) => {
+  rawList(yaml.value, 'subjects').forEach((rawSubject, subjectIndex) => {
     const subjectPath = ['subjects', subjectIndex];
-    const subject = validate(yaml, TreeSubjectSchema, raw, subjectPath, problems);
-    if (!subject) return;
+    const subject = validate(yaml, TreeSubjectSchema, rawSubject, subjectPath, problems);
+    const subjectSlug = subject?.slug ?? rawSlug(rawSubject);
+    if (subject) {
+      bundle.subjects.push({
+        slug: subject.slug,
+        disciplineSlug: dirName,
+        order: subject.order,
+        names: subject.names,
+        source: source(subjectPath),
+      });
+    } else if (subjectSlug) {
+      broken.subjects.push(subjectSlug);
+    }
+    if (!subjectSlug) return;
 
-    bundle.subjects.push({
-      slug: subject.slug,
-      disciplineSlug: discipline.slug,
-      order: subject.order,
-      names: subject.names,
-      source: source(subjectPath),
-    });
-    subject.topics.forEach((topic, topicIndex) => {
+    rawList(rawSubject, 'topics').forEach((rawTopic, topicIndex) => {
       const topicPath = [...subjectPath, 'topics', topicIndex];
-      bundle.topics.push({
-        slug: topic.slug,
-        subjectSlug: subject.slug,
-        order: topic.order,
-        names: topic.names,
-        source: source(topicPath),
-      });
-      topic.sections.forEach((section, sectionIndex) => {
-        bundle.sections.push({
-          slug: section.slug,
-          topicSlug: topic.slug,
-          order: section.order,
-          names: section.names,
-          source: source([...topicPath, 'sections', sectionIndex]),
-        });
+      const topic = validate(yaml, TreeTopicSchema, rawTopic, topicPath, problems);
+      const topicSlug = topic?.slug ?? rawSlug(rawTopic);
+      if (topic) {
+        bundle.topics.push({ slug: topic.slug, subjectSlug, order: topic.order, names: topic.names, source: source(topicPath) });
+      } else if (topicSlug) {
+        broken.topics.push(topicSlug);
+      }
+      if (!topicSlug) return;
+
+      rawList(rawTopic, 'sections').forEach((rawSection, sectionIndex) => {
+        const sectionPath = [...topicPath, 'sections', sectionIndex];
+        const section = validate(yaml, TreeSectionSchema, rawSection, sectionPath, problems);
+        if (section) {
+          bundle.sections.push({
+            slug: section.slug,
+            topicSlug,
+            order: section.order,
+            names: section.names,
+            source: source(sectionPath),
+          });
+        } else {
+          const sectionSlug = rawSlug(rawSection);
+          if (sectionSlug) broken.sections.push(sectionSlug);
+        }
       });
     });
-    subject.tags.forEach((tag, tagIndex) => {
-      bundle.tags.push({
-        slug: tag.slug,
-        subjectSlug: subject.slug,
-        parentSlug: tag.parent ?? null,
-        names: tag.names,
-        source: source([...subjectPath, 'tags', tagIndex]),
-      });
+
+    rawList(rawSubject, 'tags').forEach((rawTag, tagIndex) => {
+      const tagPath = [...subjectPath, 'tags', tagIndex];
+      const tag = validate(yaml, TreeTagSchema, rawTag, tagPath, problems);
+      if (tag) {
+        bundle.tags.push({
+          slug: tag.slug,
+          subjectSlug,
+          parentSlug: tag.parent ?? null,
+          names: tag.names,
+          source: source(tagPath),
+        });
+      } else {
+        const tagSlug = rawSlug(rawTag);
+        if (tagSlug) broken.tags.push(tagSlug);
+      }
     });
   });
 }
@@ -396,52 +466,42 @@ function loadTree(yaml: YamlFile, dirName: string, bundle: PackBundle, problems:
 // Lesson files
 // ---------------------------------------------------------------------------
 
-interface LessonFileBlock {
-  structural: PackLessonBlock;
-  translation: PackLessonBlockTranslation;
-  data: LessonBlockData;
-}
-
-interface LessonFile {
-  file: string;
-  locale: Locale;
-  order: number;
-  slug: string;
-  dirParts: string[];
-  title: string;
-  blocksLine: number | undefined;
-  blocks: LessonFileBlock[];
-}
-
 /** Locale from a file name, or a problem when it is not one of ours. */
-function parseLocale(yaml: YamlFile, locale: string, problems: PackProblem[]): Locale | null {
+function parseLocale(file: string, locale: string, problems: PackProblem[]): Locale | null {
   if ((LOCALES as readonly string[]).includes(locale)) return locale as Locale;
-  problems.push({
-    file: yaml.file,
-    message: `unknown locale "${locale}" in the file name; expected one of ${LOCALE_LIST}`,
-  });
+  problems.push({ file, message: `unknown locale "${locale}" in the file name; expected one of ${LOCALE_LIST}` });
   return null;
 }
 
-function loadLessonFile(yaml: YamlFile, parts: string[], problems: PackProblem[]): LessonFile | null {
-  const name = parts[4];
+/** What a lesson file name says. `locale` is null when it is not one of ours (already reported). */
+interface LessonName {
+  order: number;
+  slug: string;
+  locale: Locale | null;
+}
+
+/** Reads `<order>-<slug>.<locale>.yaml`; null (reported) when the file cannot be a lesson. */
+function parseLessonName(file: string, name: string, problems: PackProblem[]): LessonName | null {
   const match = LESSON_FILE_PATTERN.exec(name);
   if (!match || !SLUG_PATTERN.test(match[2])) {
     problems.push({
-      file: yaml.file,
+      file,
       message: 'lesson file names look like <order>-<lesson-slug>.<locale>.yaml, for example 01-what-is-a-bit.pt-BR.yaml',
     });
     return null;
   }
-  const [, orderText, fileSlug, localeText] = match;
-  const locale = parseLocale(yaml, localeText, problems);
-  const order = Number(orderText);
-  let ok = locale !== null;
+  const order = Number(match[1]);
   if (order < 1) {
-    problems.push({ file: yaml.file, message: 'the order prefix of the file name must be 1 or more' });
-    ok = false;
+    problems.push({ file, message: 'the order prefix of the file name must be 1 or more' });
+    return null;
   }
+  // A bad locale is reported, and the content is still checked.
+  return { order, slug: match[2], locale: parseLocale(file, match[3], problems) };
+}
 
+function loadLessonFile(yaml: YamlFile, parts: string[], name: LessonName, problems: PackProblem[]): LessonFile | null {
+  const { order, slug: fileSlug, locale } = name;
+  let ok = locale !== null;
   const top = validate(yaml, LessonFileSchema, yaml.value, [], problems);
   if (top && top.slug !== fileSlug) {
     problems.push(problemAt(yaml, ['slug'], `slug: "${top.slug}" must match the file name, which says "${fileSlug}"`));
@@ -534,29 +594,39 @@ function loadBlock(yaml: YamlFile, raw: unknown, index: number, problems: PackPr
 // Question files
 // ---------------------------------------------------------------------------
 
-type QuestionStructure = Omit<PackQuestion, 'key' | 'disciplineSlug' | 'subjectSlug' | 'translations'>;
-
-interface QuestionFile {
-  file: string;
-  locale: Locale;
+/** What a question file name says. `locale` is null when it is not one of ours (already reported). */
+interface QuestionName {
   key: string;
-  dirParts: string[];
-  data: QuestionData;
-  structure: QuestionStructure;
-  translation: PackQuestionTranslation;
+  locale: Locale | null;
 }
 
-function loadQuestionFile(yaml: YamlFile, parts: string[], problems: PackProblem[]): QuestionFile | null {
-  const match = QUESTION_FILE_PATTERN.exec(parts[3]);
+/** Reads `<key>.<locale>.yaml`; null (reported) when the file cannot be a question. */
+function parseQuestionName(file: string, name: string, problems: PackProblem[]): QuestionName | null {
+  const match = QUESTION_FILE_PATTERN.exec(name);
   if (!match || !SLUG_PATTERN.test(match[1])) {
     problems.push({
-      file: yaml.file,
+      file,
       message: 'question file names look like <question-key>.<locale>.yaml, for example binary-to-decimal.pt-BR.yaml',
     });
     return null;
   }
-  const [, fileKey, localeText] = match;
-  const locale = parseLocale(yaml, localeText, problems);
+  return { key: match[1], locale: parseLocale(file, match[2], problems) };
+}
+
+/**
+ * A plain YAML number as written ("0.0000001" rather than JS's "1e-7"), so a
+ * numeric answer keeps the author's form. Anything else is returned as is.
+ */
+function numberAsWritten(yaml: YamlFile, segments: readonly PathSegment[], value: unknown): unknown {
+  const node = yaml.doc.getIn(segments, true);
+  if (isScalar(node) && typeof node.value === 'number' && Number.isFinite(node.value) && node.source) {
+    return node.source;
+  }
+  return value;
+}
+
+function loadQuestionFile(yaml: YamlFile, parts: string[], name: QuestionName, problems: PackProblem[]): QuestionFile | null {
+  const { key: fileKey, locale } = name;
 
   if (!isRecord(yaml.value)) {
     problems.push(problemAt(yaml, [], 'expected a mapping with key, type, difficulty, prompt and resolution'));
@@ -564,7 +634,11 @@ function loadQuestionFile(yaml: YamlFile, parts: string[], problems: PackProblem
   }
   const type = checkType<QuestionType>(yaml, yaml.value, [], QUESTION_TYPES, 'question', problems);
   if (!type) return null;
-  const data = validate(yaml, QUESTION_SCHEMAS[type], yaml.value, [], problems) as QuestionData | null;
+  const value =
+    type === 'numeric'
+      ? { ...yaml.value, correctAnswer: numberAsWritten(yaml, ['correctAnswer'], yaml.value.correctAnswer) }
+      : yaml.value;
+  const data = validate(yaml, QUESTION_SCHEMAS[type], value, [], problems) as QuestionData | null;
   if (!data) return null;
   if (data.key !== fileKey) {
     problems.push(problemAt(yaml, ['key'], `key: "${data.key}" must match the file name, which says "${fileKey}"`));
@@ -633,204 +707,4 @@ function loadQuestionFile(yaml: YamlFile, parts: string[], problems: PackProblem
   }
 
   return { file: yaml.file, locale, key: fileKey, dirParts: parts.slice(0, 2), data, structure, translation };
-}
-
-// ---------------------------------------------------------------------------
-// Merging locale files (spec §11.3: structure must match across locales)
-// ---------------------------------------------------------------------------
-
-function showValue(value: unknown): string {
-  if (value === null || value === undefined) return 'nothing';
-  if (Array.isArray(value)) return `[${value.map((item) => String(item)).join(', ')}]`;
-  return typeof value === 'string' ? JSON.stringify(value) : String(value);
-}
-
-function plural(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? '' : 's'}`;
-}
-
-/** Collects structural mismatches of one locale file against the authority file. */
-class MismatchCollector {
-  readonly problems: PackProblem[] = [];
-
-  constructor(
-    private readonly file: string,
-    private readonly authorityFile: string,
-    private readonly lineOf: (fieldPath: string) => number | undefined,
-  ) {}
-
-  value(fieldPath: string, here: unknown, there: unknown): boolean {
-    if (JSON.stringify(here) === JSON.stringify(there)) return true;
-    this.add(fieldPath, `${showValue(here)} here but ${showValue(there)} in ${this.authorityFile}`);
-    return false;
-  }
-
-  count(fieldPath: string, here: number, there: number, noun: string): boolean {
-    if (here === there) return true;
-    this.add(fieldPath, `${plural(here, noun)} here but ${there} in ${this.authorityFile}`);
-    return false;
-  }
-
-  add(fieldPath: string, detail: string): void {
-    this.problems.push({ file: this.file, line: this.lineOf(fieldPath), message: `${fieldPath}: ${detail}` });
-  }
-}
-
-/** pt-BR is the structural authority; without it, the first locale present. */
-function byLocale<T extends { locale: Locale; file: string }>(
-  files: T[],
-  noun: string,
-  problems: PackProblem[],
-): { files: Map<Locale, T>; authority: T } {
-  const map = new Map<Locale, T>();
-  for (const file of files) {
-    const existing = map.get(file.locale);
-    if (existing) {
-      problems.push({ file: file.file, message: `a second ${file.locale} file for this ${noun}; ${existing.file} is the first` });
-    } else {
-      map.set(file.locale, file);
-    }
-  }
-  const authority = LOCALES.map((locale) => map.get(locale)).find((file) => file !== undefined)!;
-  return { files: map, authority };
-}
-
-function mergeLesson(group: LessonFile[], problems: PackProblem[]): PackLesson {
-  const { files, authority } = byLocale(group, 'lesson', problems);
-  const [disciplineSlug, subjectSlug, topicSlug, sectionSlug] = authority.dirParts;
-  const lesson: PackLesson = {
-    slug: authority.slug,
-    order: authority.order,
-    disciplineSlug,
-    subjectSlug,
-    topicSlug,
-    sectionSlug,
-    blocks: authority.blocks.map((block) => block.structural),
-    translations: {},
-  };
-
-  for (const locale of LOCALES) {
-    const file = files.get(locale);
-    if (!file) continue;
-    if (file !== authority) {
-      const mismatches = compareLessons(file, authority);
-      if (mismatches.length > 0) {
-        // Left out, so the bundle never pairs translations with the wrong blocks.
-        problems.push(...mismatches);
-        continue;
-      }
-    }
-    lesson.translations[locale] = {
-      file: file.file,
-      title: file.title,
-      blocks: file.blocks.map((block) => block.translation),
-    };
-  }
-  return lesson;
-}
-
-function compareLessons(file: LessonFile, authority: LessonFile): PackProblem[] {
-  const blockLine = (fieldPath: string): number | undefined => {
-    const match = /^blocks\[(\d+)\]\.?(.*)$/.exec(fieldPath);
-    if (!match) return fieldPath === 'blocks' ? file.blocksLine : undefined;
-    const translation = file.blocks[Number(match[1])].translation;
-    return lookupLine(translation.lines, match[2]) ?? translation.line;
-  };
-  const check = new MismatchCollector(file.file, authority.file, blockLine);
-
-  if (file.order !== authority.order) {
-    check.problems.push({
-      file: file.file,
-      message: `the file name gives order ${file.order} but ${authority.file} gives ${authority.order}`,
-    });
-  }
-  if (!check.count('blocks', file.blocks.length, authority.blocks.length, 'block')) {
-    check.problems[check.problems.length - 1].message += '; every locale file needs the same blocks in the same order';
-    return check.problems;
-  }
-
-  file.blocks.forEach((block, index) => {
-    const here = block.data;
-    const there = authority.blocks[index].data;
-    const at = `blocks[${index}]`;
-    if (!check.value(`${at}.type`, here.type, there.type)) return;
-
-    if (here.type === 'simulator' && there.type === 'simulator') {
-      check.value(`${at}.simulatorKey`, here.simulatorKey, there.simulatorKey);
-      check.value(`${at}.simulatorParams`, block.structural.simulatorParams, authority.blocks[index].structural.simulatorParams);
-    } else if (here.type === 'code_exercise' && there.type === 'code_exercise') {
-      check.value(`${at}.kind`, here.kind, there.kind);
-      check.value(`${at}.language`, here.language, there.language);
-      check.count(`${at}.tests`, here.tests.length, there.tests.length, 'test');
-    } else if (here.type === 'code_snippet' && there.type === 'code_snippet') {
-      if (check.count(`${at}.variants`, here.variants.length, there.variants.length, 'variant')) {
-        here.variants.forEach((variant, variantIndex) => {
-          check.value(`${at}.variants[${variantIndex}].language`, variant.language, there.variants[variantIndex].language);
-        });
-      }
-    }
-  });
-  return check.problems;
-}
-
-function mergeQuestion(group: QuestionFile[], problems: PackProblem[]): PackQuestion {
-  const { files, authority } = byLocale(group, 'question', problems);
-  const [disciplineSlug, subjectSlug] = authority.dirParts;
-  const question: PackQuestion = {
-    key: authority.key,
-    disciplineSlug,
-    subjectSlug,
-    ...authority.structure,
-    translations: {},
-  };
-
-  for (const locale of LOCALES) {
-    const file = files.get(locale);
-    if (!file) continue;
-    if (file !== authority) {
-      const mismatches = compareQuestions(file, authority);
-      if (mismatches.length > 0) {
-        problems.push(...mismatches);
-        continue;
-      }
-    }
-    question.translations[locale] = file.translation;
-  }
-  return question;
-}
-
-function compareQuestions(file: QuestionFile, authority: QuestionFile): PackProblem[] {
-  const check = new MismatchCollector(file.file, authority.file, (fieldPath) => lookupLine(file.translation.lines, fieldPath));
-  const here = file.data;
-  const there = authority.data;
-
-  if (!check.value('type', here.type, there.type)) return check.problems;
-  check.value('difficulty', here.difficulty, there.difficulty);
-  check.value('tags', [...here.tags].sort(), [...there.tags].sort());
-
-  if ((here.type === 'numeric' || here.type === 'true_false') && (there.type === 'numeric' || there.type === 'true_false')) {
-    check.value('correctAnswer', file.structure.correctAnswer, authority.structure.correctAnswer);
-  } else if (here.type === 'short_text' && there.type === 'short_text') {
-    if (check.value('answerFormat', here.answerFormat, there.answerFormat) && here.answerFormat === 'math') {
-      check.value('acceptedAnswers', here.acceptedAnswers, there.acceptedAnswers);
-    }
-  } else if (
-    (here.type === 'multiple_choice' || here.type === 'multiple_response') &&
-    (there.type === 'multiple_choice' || there.type === 'multiple_response')
-  ) {
-    if (check.count('options', here.options.length, there.options.length, 'option')) {
-      here.options.forEach((option, index) => {
-        check.value(`options[${index}].correct`, option.correct, there.options[index].correct);
-      });
-    }
-  } else if (here.type === 'ordering' && there.type === 'ordering') {
-    check.count('items', here.items.length, there.items.length, 'item');
-  } else if (here.type === 'matching' && there.type === 'matching') {
-    check.count('pairs', here.pairs.length, there.pairs.length, 'pair');
-  } else if (here.type === 'code' && there.type === 'code') {
-    check.value('kind', here.kind, there.kind);
-    check.value('language', here.language, there.language);
-    check.count('tests', here.tests.length, there.tests.length, 'test');
-  }
-  return check.problems;
 }
