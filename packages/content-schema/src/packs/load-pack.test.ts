@@ -239,10 +239,12 @@ describe('loadPacks collects every problem', () => {
         },
       ]),
     );
-    // The valid parts still load, and the cross-checks add nothing.
+    // The valid parts still load, and the cross-checks only name the left-out entry.
     expect(bundle.lessons.map((lesson) => lesson.slug)).toEqual(['good-lesson']);
     expect(bundle.subjects.map((subject) => subject.slug)).toEqual(['basics']);
-    expect(checkPack(bundle)).toEqual([]);
+    expect(checkPack(bundle)).toEqual([
+      { file: '_tree.yaml', message: 'subjects "extras" were left out of _tree.yaml because of problems in their entries' },
+    ]);
   });
 });
 
@@ -429,6 +431,7 @@ describe('loadPacks on edited copies of the valid fixture', () => {
     const { bundle, problems } = await loadAll();
     expect(problems).toEqual([
       { file: TREE_FILE, line: 31, message: 'subjects[0].tags[0].names.es: required (expected text)' },
+      { file: '_tree.yaml', message: 'tags "binary" were left out of _tree.yaml because of problems in their entries' },
     ]);
     // Only the bad tag is left out; its subject, topics and sibling tags remain.
     expect(bundle.subjects.map((subject) => subject.slug)).toEqual(['programming']);
@@ -443,7 +446,11 @@ describe('loadPacks on edited copies of the valid fixture', () => {
     // The subject's topics, sections and tags still load.
     expect(bundle.topics).toHaveLength(1);
     expect(bundle.tags).toHaveLength(2);
-    const rest = problems.slice(1);
+    expect(problems[1]).toEqual({
+      file: '_tree.yaml',
+      message: 'subjects "programming" were left out of _tree.yaml because of problems in their entries',
+    });
+    const rest = problems.slice(2);
     expect(rest.length).toBe(bundle.lessons.length + bundle.questions.length);
     for (const problem of rest) {
       expect(problem.message).toBe(
@@ -457,7 +464,11 @@ describe('loadPacks on edited copies of the valid fixture', () => {
     const { bundle, problems } = await loadAll();
     expect(problems[0]).toMatchObject({ file: TREE_FILE, line: 3, message: expect.stringContaining('discipline.order:') });
     expect(bundle.subjects).toHaveLength(1);
-    for (const problem of problems.slice(1)) {
+    expect(problems[1]).toEqual({
+      file: '_tree.yaml',
+      message: 'disciplines "computer-science" were left out of _tree.yaml because of problems in their entries',
+    });
+    for (const problem of problems.slice(2)) {
       expect(problem.message).toBe(
         'discipline "computer-science": its entry in computer-science/_tree.yaml has problems (reported above)',
       );

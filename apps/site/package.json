@@ -10,7 +10,8 @@
     "build:from-admin": "pnpm --filter @birb-learn/content-schema run db:migrate && tsx scripts/hydrate-from-admin.ts && tsx scripts/export-questions.ts && next build",
     "test": "vitest run",
     "e2e": "playwright test",
-    "export-questions": "tsx scripts/export-questions.ts"
+    "export-questions": "tsx scripts/export-questions.ts",
+    "content:validate": "tsx scripts/content-validate.ts"
   },
   "dependencies": {
     "@birb-learn/code-runner": "workspace:*",

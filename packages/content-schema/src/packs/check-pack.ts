@@ -24,6 +24,7 @@ import {
  */
 export function checkPack(bundle: PackBundle): PackProblem[] {
   const problems: PackProblem[] = [];
+  checkTreeProblems(bundle, problems);
   checkUniqueSlugs(bundle, problems);
   checkTagParents(bundle, problems);
   checkLessonOrders(bundle.lessons, problems);
@@ -38,6 +39,27 @@ function formatSource(source: PackSource): string {
 
 function problemAt(source: PackSource, message: string): PackProblem {
   return source.line === undefined ? { file: source.file, message } : { file: source.file, line: source.line, message };
+}
+
+// ---------------------------------------------------------------------------
+// Tree entries left out
+// ---------------------------------------------------------------------------
+
+/**
+ * A `_tree.yaml` entry with problems is left out of the bundle, so a bundle
+ * with any of them must never pass as valid, even for a caller that only runs
+ * `checkPack` (the loader's own problems are the detailed ones).
+ */
+function checkTreeProblems(bundle: PackBundle, problems: PackProblem[]): void {
+  for (const table of ['disciplines', 'subjects', 'topics', 'sections', 'tags'] as const) {
+    const slugs = bundle.treeProblems?.[table] ?? [];
+    if (slugs.length === 0) continue;
+    const names = slugs.map((slug) => `"${slug}"`).join(', ');
+    problems.push({
+      file: '_tree.yaml',
+      message: `${table} ${names} were left out of _tree.yaml because of problems in their entries`,
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------

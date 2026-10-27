@@ -128,4 +128,19 @@ describe('checkPack on inconsistent bundles', () => {
       },
     ]);
   });
+
+  it('reports every tree entry that was left out because of its own problems', async () => {
+    const { bundle } = await loadPacks(path.join(FIXTURES, 'valid'));
+    bundle.treeProblems.tags.push('broken-tag', 'other-tag');
+    bundle.treeProblems.subjects.push('broken-subject');
+    expect(checkPack(bundle)).toEqual([
+      { file: '_tree.yaml', message: 'subjects "broken-subject" were left out of _tree.yaml because of problems in their entries' },
+      { file: '_tree.yaml', message: 'tags "broken-tag", "other-tag" were left out of _tree.yaml because of problems in their entries' },
+    ]);
+  });
+
+  it('reports nothing for a bundle without tree problems', async () => {
+    const { bundle } = await loadPacks(path.join(FIXTURES, 'valid'));
+    expect(checkPack(bundle)).toEqual([]);
+  });
 });

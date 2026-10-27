@@ -15,6 +15,7 @@
   "scripts": {
     "build": "pnpm --filter site build",
     "dev": "pnpm --filter site dev",
+    "content:validate": "pnpm --filter site exec tsx scripts/content-validate.ts",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   },

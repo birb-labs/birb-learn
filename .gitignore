@@ -8,6 +8,8 @@ dist
 content.db*
 apps/site/public/data/
 apps/admin/.dev.vars
+# Compiler Explorer results cached by `pnpm content:validate`.
+.cache/
 *.tsbuildinfo
 # Agent tooling scratch: worktrees, editor session state, and
 # subagent-driven-development workspaces (ledgers, briefs, review
