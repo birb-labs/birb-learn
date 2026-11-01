@@ -34,6 +34,60 @@ function stripKatexAnnotations() {
   };
 }
 
+interface MdastNode {
+  type: string;
+  value?: string;
+  children?: MdastNode[];
+  position?: { start: { offset?: number } };
+  data?: Record<string, unknown>;
+}
+
+/**
+ * remark-math only treats `$$` as display math when the delimiters sit on
+ * their own lines; `$$x$$` written on a single line becomes inline math.
+ * Authors (and the admin editor) routinely write a whole-paragraph
+ * `$$…$$` on one line and expect a centered display equation, so a
+ * paragraph whose only content is one `$$`-delimited inline math node is
+ * turned into the same display-math node remark-math builds for a fenced
+ * block. `$$x$$` inside a sentence stays inline.
+ */
+function promoteDoubleDollarParagraphs() {
+  return (tree: MdastNode, file: { value?: unknown }) => {
+    const source = typeof file.value === 'string' ? file.value : String(file.value ?? '');
+    function walk(node: MdastNode) {
+      if (!node.children) return;
+      node.children = node.children.map((child) => {
+        if (child.type !== 'paragraph' || !child.children) return child;
+        const content = child.children.filter((part) => !(part.type === 'text' && part.value?.trim() === ''));
+        const [only] = content;
+        const offset = only?.position?.start.offset;
+        if (content.length !== 1 || only.type !== 'inlineMath' || offset === undefined) return child;
+        if (source.slice(offset, offset + 2) !== '$$') return child;
+        const value = only.value ?? '';
+        return {
+          type: 'math',
+          value,
+          meta: null,
+          position: child.position,
+          data: {
+            hName: 'pre',
+            hChildren: [
+              {
+                type: 'element',
+                tagName: 'code',
+                properties: { className: ['language-math', 'math-display'] },
+                children: [{ type: 'text', value }],
+              },
+            ],
+          },
+        } as MdastNode;
+      });
+      for (const child of node.children) walk(child);
+    }
+    walk(tree);
+  };
+}
+
 /**
  * Compiles Markdown/MDX lesson source (with inline LaTeX math support via
  * remark-math + rehype-katex) into a React element ready to render inside a
@@ -50,7 +104,7 @@ export async function compileLessonMdx(source: string): Promise<ReactElement> {
     source,
     options: {
       mdxOptions: {
-        remarkPlugins: [remarkGfm, remarkMath],
+        remarkPlugins: [remarkGfm, remarkMath, promoteDoubleDollarParagraphs],
         rehypePlugins: [rehypeKatex, stripKatexAnnotations],
       },
     },

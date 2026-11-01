@@ -13,3 +13,8 @@ minimumReleaseAgeExclude:
   - wrangler@4.127.0
   - '@cloudflare/workers-types@5.20260827.1'
   - '@cortex-js/compute-engine@0.121.0'
+overrides:
+  # rehype-katex 7 and micromark-extension-math ask for katex ^0.16, but the
+  # site ships the katex 0.18 stylesheet; 0.18 renamed classes such as
+  # `.sizing` -> `.katex-sizing`, so rendering with 0.16 breaks sub/superscripts.
+  katex: 0.18.4
