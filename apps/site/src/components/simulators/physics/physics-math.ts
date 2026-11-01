@@ -161,7 +161,9 @@ export function initialTrackState(): TrackState {
  * mechanical energy is conserved exactly instead of drifting numerically.
  */
 export function stepTrack(config: TrackConfig, state: TrackState, dt: number): TrackState {
-  if (state.stopped) return state;
+  // requestAnimationFrame timestamps can precede the clock reading taken when
+  // the animation started, so the first frame may report a zero/negative dt.
+  if (state.stopped || !(dt > 0)) return state;
   const initialEnergy = config.mass * config.g * config.height;
   let { x, direction, dissipated } = state;
   const substeps = 20;

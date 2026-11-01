@@ -112,6 +112,14 @@ describe('stepTrack', () => {
     expect(mechanical).toBeCloseTo(50, 6);
   });
 
+  it('ignores a zero or negative time step instead of stopping the ball', () => {
+    const config = { ...base, friction: 2 };
+    const start = initialTrackState();
+    expect(stepTrack(config, start, -0.004)).toBe(start);
+    expect(stepTrack(config, start, 0)).toBe(start);
+    expect(stepTrack(config, start, 1 / 60).stopped).toBe(false);
+  });
+
   it('dissipates energy with friction and eventually stops', () => {
     const config = { ...base, friction: 2 };
     const { state, maxX } = run(config, 60);

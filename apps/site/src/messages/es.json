@@ -312,7 +312,7 @@
       "eccentricity": "Excentricidad (e)",
       "semiMajorAxis": "Semieje mayor (a)",
       "orbitTime": "Instante de la órbita",
-      "years": "años",
+      "years": "{count, plural, one {año} other {años}}",
       "auUnit": "UA",
       "orbitNote": "Órbita alrededor del Sol: con a en unidades astronómicas (UA) y T en años, T² = a³. Cada porción coloreada se barre en el mismo intervalo de tiempo y todas tienen la misma área.",
       "scenario": "Escenario",

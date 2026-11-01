@@ -35,7 +35,7 @@ export function KeplerOrbit({ params }: { params: KeplerOrbitParams }) {
     let frame = 0;
     let last = performance.now();
     const tick = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
+      const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
       last = now;
       setFraction((value) => (value + dt / SECONDS_PER_ORBIT) % 1);
       frame = requestAnimationFrame(tick);
@@ -101,7 +101,7 @@ export function KeplerOrbit({ params }: { params: KeplerOrbitParams }) {
       </div>
       <div className={styles.readouts}>
         <Readout>
-          T = a<sup>3/2</sup> = <strong>{format(period, 2)} {t('years')}</strong>
+          T = a<sup>3/2</sup> = <strong>{format(period, 2)} {t('years', { count: Number(period.toFixed(2)) })}</strong>
         </Readout>
         <Readout>
           T²/a³ = <strong>{format((period * period) / semiMajorAxis ** 3, 2)}</strong>

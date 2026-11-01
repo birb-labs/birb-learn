@@ -312,7 +312,7 @@
       "eccentricity": "Eccentricity (e)",
       "semiMajorAxis": "Semi-major axis (a)",
       "orbitTime": "Point in the orbit",
-      "years": "years",
+      "years": "{count, plural, one {year} other {years}}",
       "auUnit": "AU",
       "orbitNote": "Orbit around the Sun: with a in astronomical units (AU) and T in years, T² = a³. Each colored slice is swept in the same time interval and all have the same area.",
       "scenario": "Scenario",

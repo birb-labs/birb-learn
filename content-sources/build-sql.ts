@@ -6,14 +6,31 @@
  * Usage: tsx content-sources/build-sql.ts <discipline-dir> <out-dir> [--lessons] [--questions]
  *
  * Every foreign key is resolved with a sub-select on a unique slug, so the
- * script needs no knowledge of the target's current ids. See
- * `content-sources/README.md` for the source format.
+ * script needs no knowledge of the target's current ids.
+ *
+ * Source format:
+ * - `structure.json`: sections (with their lesson slugs, in order), section
+ *   reorders and question tags.
+ * - `lessons/<slug>/<locale>.md`: `---\ntitle: …\n---` front matter, then
+ *   blocks fenced as `:::<type> [args]` … `:::`. Types: `text`,
+ *   `curiosity <title>`, `real_world_application <title>`,
+ *   `solved_exercise [title]` (prompt, then `---resolution---`, then the
+ *   resolution) and `simulator <key> [json params]` (first body line is the
+ *   title, the rest the plain-text caption). Translations must repeat the
+ *   pt-BR block sequence; structural fields come from pt-BR.
+ * - `questions/<group>.<locale>.md`: `:::question <id> <type> <difficulty>
+ *   <tag,tag> [answer=…] [format=math]`, with the prompt, then `---options---`
+ *   (`- [x] correct` / `- [ ] wrong`; ordering items in the correct order),
+ *   `---pairs---` (`- left ||| right`), `---answers---` and `---resolution---`.
+ *   Translations only need `:::question <id>`.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 
 const LOCALES = ['pt-BR', 'en-US', 'es'] as const;
 type Locale = (typeof LOCALES)[number];
+// `--only-pt-BR` builds pt-BR translations only; the site falls back to pt-BR.
+let activeLocales: readonly Locale[] = LOCALES;
 const BLOCK_TYPES = ['text', 'curiosity', 'real_world_application', 'solved_exercise', 'simulator'] as const;
 type BlockType = (typeof BLOCK_TYPES)[number];
 const QUESTION_TYPES = ['multiple_choice', 'multiple_response', 'numeric', 'true_false', 'short_text', 'ordering', 'matching'] as const;
@@ -177,13 +194,13 @@ function parseLesson(file: string): Lesson {
 
 function loadLesson(dir: string, slug: string): Record<Locale, Lesson> {
   const lessons = {} as Record<Locale, Lesson>;
-  for (const locale of LOCALES) {
+  for (const locale of activeLocales) {
     const file = path.join(dir, 'lessons', slug, `${locale}.md`);
     if (!fs.existsSync(file)) fail(file, 'missing translation');
     lessons[locale] = parseLesson(file);
   }
   const base = lessons['pt-BR'];
-  for (const locale of LOCALES) {
+  for (const locale of activeLocales) {
     const lesson = lessons[locale];
     const file = path.join(dir, 'lessons', slug, `${locale}.md`);
     if (lesson.blocks.length !== base.blocks.length) {
@@ -248,7 +265,7 @@ function loadQuestions(dir: string, knownTags: Set<string>): Question[] {
   const seen = new Set<string>();
   for (const group of groups) {
     const byLocale = {} as Record<Locale, ReturnType<typeof parseQuestions>>;
-    for (const locale of LOCALES) {
+    for (const locale of activeLocales) {
       const file = path.join(questionDir, `${group}.${locale}.md`);
       if (!fs.existsSync(file)) fail(file, 'missing translation');
       byLocale[locale] = parseQuestions(file);
@@ -282,7 +299,7 @@ function loadQuestions(dir: string, knownTags: Set<string>): Question[] {
         text: {},
       };
       validateQuestionShape(baseFile, entry.line, question, entry.text);
-      for (const locale of LOCALES) {
+      for (const locale of activeLocales) {
         const localized = byLocale[locale].get(id);
         const file = path.join(questionDir, `${group}.${locale}.md`);
         if (!localized) fail(file, `missing question ${id}`);
@@ -294,7 +311,7 @@ function loadQuestions(dir: string, knownTags: Set<string>): Question[] {
           options: text.options.map((option) => option.replace(/^\[[x ]\] /, '')),
         };
       }
-      for (const locale of LOCALES) {
+      for (const locale of activeLocales) {
         if (locale !== 'pt-BR' && byLocale[locale].size !== byLocale['pt-BR'].size) {
           fail(path.join(questionDir, `${group}.${locale}.md`), 'question count differs from pt-BR');
         }
@@ -350,7 +367,7 @@ function buildLessonSql(dir: string, structure: Structure, out: string[], rollba
     section.lessons.forEach((slug, index) => {
       const lessons = loadLesson(dir, slug);
       out.push(`INSERT INTO lessons (section_id, slug, "order") VALUES (${sel('sections', section.slug)}, ${q(slug)}, ${index + 1});`);
-      for (const locale of LOCALES) {
+      for (const locale of activeLocales) {
         out.push(
           `INSERT INTO lesson_translations (lesson_id, locale, title) VALUES (${sel('lessons', slug)}, ${q(locale)}, ${q(lessons[locale].title)});`,
         );
@@ -361,7 +378,7 @@ function buildLessonSql(dir: string, structure: Structure, out: string[], rollba
           `INSERT INTO lesson_blocks (lesson_id, "order", type, simulator_key, simulator_params) VALUES (${sel('lessons', slug)}, ${order}, ${q(block.type)}, ${q(block.simulatorKey)}, ${q(block.simulatorParams)});`,
         );
         const blockId = `(SELECT id FROM lesson_blocks WHERE lesson_id = ${sel('lessons', slug)} AND "order" = ${order})`;
-        for (const locale of LOCALES) {
+        for (const locale of activeLocales) {
           const localized = lessons[locale].blocks[blockIndex];
           out.push(
             `INSERT INTO lesson_block_translations (block_id, locale, title, body_mdx, prompt_mdx, resolution_mdx, caption) VALUES (${blockId}, ${q(locale)}, ${q(localized.title)}, ${q(localized.bodyMdx)}, ${q(localized.promptMdx)}, ${q(localized.resolutionMdx)}, ${q(localized.caption)});`,
@@ -402,7 +419,7 @@ function buildQuestionSql(structure: Structure, questions: Question[], out: stri
     out.push(
       `INSERT INTO questions (type, difficulty, correct_answer, answer_format) VALUES (${q(question.type)}, ${q(question.difficulty)}, ${q(question.correctAnswer)}, ${q(question.answerFormat)});`,
     );
-    for (const locale of LOCALES) {
+    for (const locale of activeLocales) {
       const text = question.text[locale]!;
       out.push(
         `INSERT INTO question_translations (question_id, locale, prompt_mdx, resolution_mdx) VALUES (${lastQuestion}, ${q(locale)}, ${q(text.prompt)}, ${q(text.resolution)});`,
@@ -412,7 +429,7 @@ function buildQuestionSql(structure: Structure, questions: Question[], out: stri
     for (let index = 0; index < optionCount; index++) {
       const isCorrect = question.type === 'ordering' ? 1 : question.correctOptions[index] ? 1 : 0;
       out.push(`INSERT INTO question_options (question_id, is_correct, "order") VALUES (${lastQuestion}, ${isCorrect}, ${index + 1});`);
-      for (const locale of LOCALES) {
+      for (const locale of activeLocales) {
         out.push(
           `INSERT INTO question_option_translations (option_id, locale, text_mdx) VALUES ((SELECT max(id) FROM question_options), ${q(locale)}, ${q(question.text[locale]!.options[index])});`,
         );
@@ -421,14 +438,14 @@ function buildQuestionSql(structure: Structure, questions: Question[], out: stri
     const pairCount = question.text['pt-BR']!.pairs.length;
     for (let index = 0; index < pairCount; index++) {
       out.push(`INSERT INTO question_matching_pairs (question_id, "order") VALUES (${lastQuestion}, ${index + 1});`);
-      for (const locale of LOCALES) {
+      for (const locale of activeLocales) {
         const [left, right] = question.text[locale]!.pairs[index];
         out.push(
           `INSERT INTO question_matching_pair_translations (pair_id, locale, left_mdx, right_mdx) VALUES ((SELECT max(id) FROM question_matching_pairs), ${q(locale)}, ${q(left)}, ${q(right)});`,
         );
       }
     }
-    for (const locale of LOCALES) {
+    for (const locale of activeLocales) {
       for (const answer of question.text[locale]!.answers) {
         out.push(`INSERT INTO question_accepted_answers (question_id, text, locale) VALUES (${lastQuestion}, ${q(answer)}, ${q(locale)});`);
       }
@@ -466,8 +483,10 @@ function main() {
   const base = process.env.INIT_CWD ?? process.cwd();
   const dir = path.resolve(base, dirArg);
   const outDir = path.resolve(base, outArg);
-  const wantLessons = flags.length === 0 || flags.includes('--lessons');
-  const wantQuestions = flags.length === 0 || flags.includes('--questions');
+  if (flags.includes('--only-pt-BR')) activeLocales = ['pt-BR'];
+  const contentFlags = flags.filter((flag) => flag !== '--only-pt-BR');
+  const wantLessons = contentFlags.length === 0 || contentFlags.includes('--lessons');
+  const wantQuestions = contentFlags.length === 0 || contentFlags.includes('--questions');
   const structure = JSON.parse(fs.readFileSync(path.join(dir, 'structure.json'), 'utf8')) as Structure;
   const out: string[] = [];
   const rollback: string[] = [];
