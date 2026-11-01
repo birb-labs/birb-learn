@@ -1,0 +1,62 @@
+{
+  "subject": "fisica",
+  "topic": "mecanica",
+  "sections": [
+    {
+      "slug": "energia",
+      "order": 4,
+      "names": { "pt-BR": "Energia", "en-US": "Energy", "es": "Energía" },
+      "lessons": [
+        "energia-cinetica",
+        "teorema-da-energia-cinetica",
+        "energia-potencial-e-forcas-conservativas",
+        "energia-potencial-gravitacional",
+        "energia-potencial-elastica",
+        "energia-mecanica",
+        "sistemas-conservativos-e-nao-conservativos",
+        "energia-estrategias-de-resolucao"
+      ]
+    },
+    {
+      "slug": "gravitacao",
+      "order": 5,
+      "names": { "pt-BR": "Gravitação", "en-US": "Gravitation", "es": "Gravitación" },
+      "lessons": ["leis-de-kepler", "lei-da-gravitacao-universal", "gravidade"]
+    }
+  ],
+  "reorder": [{ "table": "sections", "slug": "revisao-de-mecanica", "order": 6, "previousOrder": 4 }],
+  "tags": [
+    { "slug": "energia", "names": { "pt-BR": "Energia", "en-US": "Energy", "es": "Energía" } },
+    {
+      "slug": "energia-cinetica",
+      "parent": "energia",
+      "names": { "pt-BR": "Energia cinética e teorema da energia cinética", "en-US": "Kinetic energy and the work–energy theorem", "es": "Energía cinética y teorema del trabajo y la energía" }
+    },
+    {
+      "slug": "energia-potencial",
+      "parent": "energia",
+      "names": { "pt-BR": "Energia potencial e forças conservativas", "en-US": "Potential energy and conservative forces", "es": "Energía potencial y fuerzas conservativas" }
+    },
+    {
+      "slug": "energia-mecanica",
+      "parent": "energia",
+      "names": { "pt-BR": "Energia mecânica e sua conservação", "en-US": "Mechanical energy and its conservation", "es": "Energía mecánica y su conservación" }
+    },
+    { "slug": "gravitacao", "names": { "pt-BR": "Gravitação", "en-US": "Gravitation", "es": "Gravitación" } },
+    {
+      "slug": "leis-de-kepler",
+      "parent": "gravitacao",
+      "names": { "pt-BR": "Leis de Kepler", "en-US": "Kepler's laws", "es": "Leyes de Kepler" }
+    },
+    {
+      "slug": "gravitacao-universal",
+      "parent": "gravitacao",
+      "names": { "pt-BR": "Lei da gravitação universal", "en-US": "Law of universal gravitation", "es": "Ley de gravitación universal" }
+    },
+    {
+      "slug": "gravidade",
+      "parent": "gravitacao",
+      "names": { "pt-BR": "Gravidade e satélites", "en-US": "Gravity and satellites", "es": "Gravedad y satélites" }
+    }
+  ]
+}
