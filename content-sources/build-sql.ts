@@ -427,6 +427,46 @@ function buildTranslationSql(dir: string, structure: Structure, locales: Locale[
   }
 }
 
+/**
+ * Adds translations for `locales` to questions inserted earlier. Questions
+ * have no slug, so each one is found by its (unique) pt-BR prompt.
+ */
+function buildQuestionTranslationSql(questions: Question[], locales: Locale[], out: string[], rollback: string[]) {
+  const prompts = new Set<string>();
+  for (const question of questions) {
+    const ptPrompt = question.text['pt-BR']!.prompt;
+    if (prompts.has(ptPrompt)) throw new SourceError(`${question.id}: pt-BR prompt is not unique`);
+    prompts.add(ptPrompt);
+    const questionId = `(SELECT question_id FROM question_translations WHERE locale = 'pt-BR' AND prompt_mdx = ${q(ptPrompt)})`;
+    out.push(`-- ${question.id}`);
+    for (const locale of locales) {
+      const text = question.text[locale]!;
+      out.push(
+        `INSERT INTO question_translations (question_id, locale, prompt_mdx, resolution_mdx) VALUES (${questionId}, ${q(locale)}, ${q(text.prompt)}, ${q(text.resolution)});`,
+      );
+      text.options.forEach((option, index) => {
+        const optionId = `(SELECT id FROM question_options WHERE question_id = ${questionId} AND "order" = ${index + 1})`;
+        out.push(`INSERT INTO question_option_translations (option_id, locale, text_mdx) VALUES (${optionId}, ${q(locale)}, ${q(option)});`);
+      });
+      text.pairs.forEach(([left, right], index) => {
+        const pairId = `(SELECT id FROM question_matching_pairs WHERE question_id = ${questionId} AND "order" = ${index + 1})`;
+        out.push(
+          `INSERT INTO question_matching_pair_translations (pair_id, locale, left_mdx, right_mdx) VALUES (${pairId}, ${q(locale)}, ${q(left)}, ${q(right)});`,
+        );
+      });
+      for (const answer of text.answers) {
+        out.push(`INSERT INTO question_accepted_answers (question_id, text, locale) VALUES (${questionId}, ${q(answer)}, ${q(locale)});`);
+      }
+      rollback.push(
+        `DELETE FROM question_option_translations WHERE locale = ${q(locale)} AND option_id IN (SELECT id FROM question_options WHERE question_id = ${questionId});`,
+        `DELETE FROM question_matching_pair_translations WHERE locale = ${q(locale)} AND pair_id IN (SELECT id FROM question_matching_pairs WHERE question_id = ${questionId});`,
+        `DELETE FROM question_accepted_answers WHERE locale = ${q(locale)} AND question_id = ${questionId};`,
+        `DELETE FROM question_translations WHERE locale = ${q(locale)} AND question_id = ${questionId};`,
+      );
+    }
+  }
+}
+
 function buildQuestionSql(structure: Structure, questions: Question[], out: string[], rollback: string[]) {
   for (const tag of structure.tags) {
     out.push(
@@ -513,6 +553,34 @@ function main() {
   const structure = JSON.parse(fs.readFileSync(path.join(dir, 'structure.json'), 'utf8')) as Structure;
   const out: string[] = [];
   const rollback: string[] = [];
+  const addQuestionLocalesFlag = flags.find((flag) => flag.startsWith('--add-question-locales='));
+  if (addQuestionLocalesFlag) {
+    // Translation-only run for questions inserted earlier with --only-pt-BR.
+    const locales = addQuestionLocalesFlag.split('=')[1].split(',') as Locale[];
+    for (const locale of locales) {
+      if (!(LOCALES as readonly string[]).includes(locale) || locale === 'pt-BR') {
+        console.error(`--add-question-locales: invalid locale ${locale}`);
+        process.exit(2);
+      }
+    }
+    activeLocales = ['pt-BR', ...locales];
+    try {
+      const questions = loadQuestions(dir, new Set(structure.tags.map((tag) => tag.slug)));
+      buildQuestionTranslationSql(questions, locales, out, rollback);
+      console.log(`questions: ${questions.length}`);
+    } catch (error) {
+      if (error instanceof SourceError) {
+        console.error(error.message);
+        process.exit(1);
+      }
+      throw error;
+    }
+    fs.mkdirSync(outDir, { recursive: true });
+    fs.writeFileSync(path.join(outDir, 'apply-question-translations.sql'), out.join('\n') + '\n');
+    fs.writeFileSync(path.join(outDir, 'rollback-question-translations.sql'), rollback.join('\n') + '\n');
+    console.log(`wrote ${out.length} statements to ${path.join(outDir, 'apply-question-translations.sql')}`);
+    return;
+  }
   const addLocalesFlag = flags.find((flag) => flag.startsWith('--add-lesson-locales='));
   if (addLocalesFlag) {
     // Translation-only run for lessons inserted earlier with --only-pt-BR.
