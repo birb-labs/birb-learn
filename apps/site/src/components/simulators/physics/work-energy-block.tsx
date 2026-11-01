@@ -62,7 +62,7 @@ export function WorkEnergyBlock({ params }: { params: WorkEnergyBlockParams }) {
           F
         </text>
         <text x={Math.max(14, blockX - 25 - frictionLength)} y={135} className={styles.svgText}>
-          fat
+          {t('symbols.friction')}
         </text>
       </svg>
       <div className={styles.controls}>
@@ -85,7 +85,7 @@ export function WorkEnergyBlock({ params }: { params: WorkEnergyBlockParams }) {
       />
       <div className={styles.readouts}>
         <Readout>
-          fat = μ·m·g = <strong>{format(result.frictionForce, 1)} N</strong>
+          {t('symbols.friction')} = μ·m·g = <strong>{format(result.frictionForce, 1)} N</strong>
         </Readout>
         <Readout>
           W<sub>total</sub> = {format(result.workForce, 1)} + ({format(result.workFriction, 1)}) = <strong>{format(result.workTotal, 1)} J</strong>

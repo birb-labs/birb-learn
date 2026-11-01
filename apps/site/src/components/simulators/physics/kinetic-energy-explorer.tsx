@@ -49,7 +49,7 @@ export function KineticEnergyExplorer({ params }: { params: KineticEnergyExplore
           v (m/s)
         </text>
         <text x={PAD + 6} y={PAD / 2 + 10} className={styles.svgText}>
-          Ec (J)
+          {t('symbols.kinetic')} (J)
         </text>
       </svg>
       <div className={styles.controls}>
@@ -58,7 +58,7 @@ export function KineticEnergyExplorer({ params }: { params: KineticEnergyExplore
       </div>
       <div className={styles.readouts}>
         <Readout>
-          Ec = ½ · {format(mass, 1)} · {format(speed, 1)}² = <strong>{format(energy, 1)} J</strong>
+          {t('symbols.kinetic')} = ½ · {format(mass, 1)} · {format(speed, 1)}² = <strong>{format(energy, 1)} J</strong>
         </Readout>
         <Readout>
           {t('doubleSpeed')}: <strong>{format(kineticEnergy(mass, 2 * speed), 1)} J</strong> (4×)

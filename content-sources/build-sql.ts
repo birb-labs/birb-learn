@@ -404,6 +404,29 @@ function buildLessonSql(dir: string, structure: Structure, out: string[], rollba
   }
 }
 
+/** Adds translations for `locales` to lessons that were already inserted. */
+function buildTranslationSql(dir: string, structure: Structure, locales: Locale[], out: string[], rollback: string[]) {
+  for (const section of structure.sections) {
+    for (const slug of section.lessons) {
+      const lessons = loadLesson(dir, slug);
+      const lessonId = sel('lessons', slug);
+      for (const locale of locales) {
+        out.push(`INSERT INTO lesson_translations (lesson_id, locale, title) VALUES (${lessonId}, ${q(locale)}, ${q(lessons[locale].title)});`);
+        lessons[locale].blocks.forEach((block, blockIndex) => {
+          const blockId = `(SELECT id FROM lesson_blocks WHERE lesson_id = ${lessonId} AND "order" = ${blockIndex + 1})`;
+          out.push(
+            `INSERT INTO lesson_block_translations (block_id, locale, title, body_mdx, prompt_mdx, resolution_mdx, caption) VALUES (${blockId}, ${q(locale)}, ${q(block.title)}, ${q(block.bodyMdx)}, ${q(block.promptMdx)}, ${q(block.resolutionMdx)}, ${q(block.caption)});`,
+          );
+        });
+        rollback.push(
+          `DELETE FROM lesson_block_translations WHERE locale = ${q(locale)} AND block_id IN (SELECT id FROM lesson_blocks WHERE lesson_id = ${lessonId});`,
+          `DELETE FROM lesson_translations WHERE locale = ${q(locale)} AND lesson_id = ${lessonId};`,
+        );
+      }
+    }
+  }
+}
+
 function buildQuestionSql(structure: Structure, questions: Question[], out: string[], rollback: string[]) {
   for (const tag of structure.tags) {
     out.push(
@@ -490,6 +513,32 @@ function main() {
   const structure = JSON.parse(fs.readFileSync(path.join(dir, 'structure.json'), 'utf8')) as Structure;
   const out: string[] = [];
   const rollback: string[] = [];
+  const addLocalesFlag = flags.find((flag) => flag.startsWith('--add-lesson-locales='));
+  if (addLocalesFlag) {
+    // Translation-only run for lessons inserted earlier with --only-pt-BR.
+    const locales = addLocalesFlag.split('=')[1].split(',') as Locale[];
+    for (const locale of locales) {
+      if (!(LOCALES as readonly string[]).includes(locale) || locale === 'pt-BR') {
+        console.error(`--add-lesson-locales: invalid locale ${locale}`);
+        process.exit(2);
+      }
+    }
+    activeLocales = ['pt-BR', ...locales];
+    try {
+      buildTranslationSql(dir, structure, locales, out, rollback);
+    } catch (error) {
+      if (error instanceof SourceError) {
+        console.error(error.message);
+        process.exit(1);
+      }
+      throw error;
+    }
+    fs.mkdirSync(outDir, { recursive: true });
+    fs.writeFileSync(path.join(outDir, 'apply-lesson-translations.sql'), out.join('\n') + '\n');
+    fs.writeFileSync(path.join(outDir, 'rollback-lesson-translations.sql'), rollback.join('\n') + '\n');
+    console.log(`wrote ${out.length} statements to ${path.join(outDir, 'apply-lesson-translations.sql')}`);
+    return;
+  }
   try {
     if (wantLessons) buildLessonSql(dir, structure, out, rollback);
     if (wantQuestions) {

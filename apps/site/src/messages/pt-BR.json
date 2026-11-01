@@ -294,7 +294,6 @@
       "potentialEnergy": "Potencial",
       "mechanicalEnergy": "Mecânica",
       "dissipatedEnergy": "Dissipada",
-      "dissipatedShort": "dis",
       "trackStopped": "A bola parou: toda a energia mecânica que faltava foi dissipada pelo atrito (virou principalmente energia térmica).",
       "trackNote": "Sem atrito, a energia mecânica fica constante e a bola volta à altura inicial. Com atrito, parte dela é dissipada (g = {g} m/s²).",
       "springLabel": "Bloco preso a uma mola",
@@ -341,6 +340,13 @@
         "venus": "Vênus",
         "jupiter": "Júpiter",
         "saturn": "Saturno"
+      },
+      "symbols": {
+        "kinetic": "Ec",
+        "elastic": "Epel",
+        "mechanical": "Em",
+        "dissipated": "Edis",
+        "friction": "fat"
       }
     }
   },

@@ -132,7 +132,7 @@ export function EnergyTrack({ params }: { params: EnergyTrackParams }) {
           v = <strong>{format(Math.sqrt((2 * kinetic) / mass), 2)} m/s</strong>
         </Readout>
         <Readout>
-          Em + E<sub>{t('dissipatedShort')}</sub> = <strong>{format(mechanical + state.dissipated, 1)} J</strong>
+          {t('symbols.mechanical')} + {t('symbols.dissipated')} = <strong>{format(mechanical + state.dissipated, 1)} J</strong>
         </Readout>
       </div>
       <p className={styles.note}>{state.stopped && friction > 0 ? t('trackStopped') : t('trackNote', { g: format(g, 2) })}</p>

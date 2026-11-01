@@ -294,7 +294,6 @@
       "potentialEnergy": "Potencial",
       "mechanicalEnergy": "Mecánica",
       "dissipatedEnergy": "Disipada",
-      "dissipatedShort": "dis",
       "trackStopped": "La bola se detuvo: toda la energía mecánica que quedaba fue disipada por el rozamiento (sobre todo como energía térmica).",
       "trackNote": "Sin rozamiento, la energía mecánica se mantiene constante y la bola vuelve a la altura inicial. Con rozamiento, una parte se disipa (g = {g} m/s²).",
       "springLabel": "Bloque unido a un resorte",
@@ -341,6 +340,13 @@
         "venus": "Venus",
         "jupiter": "Júpiter",
         "saturn": "Saturno"
+      },
+      "symbols": {
+        "kinetic": "Ec",
+        "elastic": "Epe",
+        "mechanical": "Em",
+        "dissipated": "Edis",
+        "friction": "Fr"
       }
     }
   },

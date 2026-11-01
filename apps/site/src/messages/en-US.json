@@ -294,7 +294,6 @@
       "potentialEnergy": "Potential",
       "mechanicalEnergy": "Mechanical",
       "dissipatedEnergy": "Dissipated",
-      "dissipatedShort": "dis",
       "trackStopped": "The ball has stopped: all the remaining mechanical energy was dissipated by friction (mostly into thermal energy).",
       "trackNote": "Without friction, mechanical energy stays constant and the ball returns to its starting height. With friction, part of it is dissipated (g = {g} m/s²).",
       "springLabel": "Block attached to a spring",
@@ -341,6 +340,13 @@
         "venus": "Venus",
         "jupiter": "Jupiter",
         "saturn": "Saturn"
+      },
+      "symbols": {
+        "kinetic": "KE",
+        "elastic": "PEel",
+        "mechanical": "ME",
+        "dissipated": "Ediss",
+        "friction": "f"
       }
     }
   },

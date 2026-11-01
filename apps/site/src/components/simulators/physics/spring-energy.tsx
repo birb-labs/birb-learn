@@ -82,7 +82,7 @@ export function SpringEnergy({ params }: { params: SpringEnergyParams }) {
           F = k·|x| = <strong>{format(force, 1)} N</strong>
         </Readout>
         <Readout>
-          E<sub>pel</sub> = k·x²/2 = <strong>{format(energy, 2)} J</strong>
+          {t('symbols.elastic')} = k·x²/2 = <strong>{format(energy, 2)} J</strong>
         </Readout>
         <Readout>
           {t('doubleDeformation')}: <strong>{format(elasticPotentialEnergy(k, 2 * x), 2)} J</strong> (4×)
